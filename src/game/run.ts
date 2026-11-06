@@ -131,6 +131,8 @@ export function advanceRun(run: SimState, untilUs: number, orderedInputs: Gestur
     const t0 = run.simUs;
     const t1 = t0 + TICK_US;
     tickStart(run, t0, emit);
+    const sBefore = run.s;
+    const pathBefore = run.pathId;
     let t = t0;
     while (t < t1 && !run.finished) {
       while (run.inputQueue.length > 0 && run.inputQueue[0].atUs <= t) applyFact(run, run.inputQueue.shift()!, t, emit);
@@ -139,6 +141,13 @@ export function advanceRun(run: SimState, untilUs: number, orderedInputs: Gestur
       t = nextIn;
     }
     run.simUs = t1;
+    // 空中で壁・柵・ゲートの上を越えた（E11）。演出用で、採点には使わない。
+    if (!run.finished && run.mode === 'air' && run.pathId === pathBefore) {
+      for (const so of currentPath(run).solids) {
+        if (so.kind === 'kicker' || so.kind === 'rail') continue;
+        if (so.s1 > sBefore && so.s1 <= run.s && run.x > so.x0 - FOOT_HALF_WIDTH && run.x < so.x1 + FOOT_HALF_WIDTH) emit('clear', t1, { kind: so.kind }, so.id);
+      }
+    }
   }
   return { state: run, events: out };
 }
