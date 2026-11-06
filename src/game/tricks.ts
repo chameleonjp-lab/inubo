@@ -265,7 +265,10 @@ export function scoreJump(res: TrickResolution, tUs: number, basePitch: number, 
   const base = res.rotations.reduce((a, r) => a + r.base, 0);
   const sum = base + (res.composite ? COMPOSITE_BONUS : 0);
   const points = Math.round((sum * tenths) / 10);
-  const names = res.rotations.map((r) => r.name);
+  // 技名は描き方（片手・2本指、認識の順）によらず、犬の回転 → 体の回転の順にそろえる。
+  const names = [...res.rotations]
+    .sort((a, b) => (a.channel === b.channel ? a.startUs - b.startUs : a.channel === 'dog' ? -1 : 1))
+    .map((r) => r.name);
   return { base, composite: res.composite, tenths, points, names, residualDeg, tiltDeg };
 }
 

@@ -38,7 +38,7 @@ export const DEFAULT_GESTURE: GestureConfig = {
   closeRatio: 0.28,
   closeMin: 0.035,
   lineMin: 0.08,
-  lineStraightness: 0.85,
+  lineStraightness: 0.9,
   verticalAspect: 1.25,
 };
 
@@ -235,7 +235,7 @@ export class GestureRecognizer {
       out.push({ kind: 'line', atUs: tEnd, strokeId: st.strokeId, dir8, afterCircle: st.circles > 0 });
       this.debugLog.push(`線 方向${dir8} 長さ${chord.toFixed(2)}${st.circles > 0 ? '（円の後）' : ''}`);
       if (tr) tr.label = tr.label ? `${tr.label}＋線` : '線';
-    } else if (st.circles === 0 && !st.forwardSent && !st.steering) {
+    } else if (st.circles === 0) {
       const reason = st.pathLen < this.cfg.tapMax ? 'short' : bbox(st.samples).w + bbox(st.samples).h < this.cfg.circleMinSize ? 'small' : 'open';
       out.push({ kind: 'reject', atUs: tEnd, strokeId: st.strokeId, reason });
       this.debugLog.push(`未成立 ${reason} 長さ${st.pathLen.toFixed(2)}`);

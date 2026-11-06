@@ -116,7 +116,9 @@ export function segmentMotion(run: SimState, t0: number): SegmentMotion {
   let reachUs = Infinity;
   if (!onRail && run.mode !== 'falling') {
     const d = run.targetX - run.x;
-    if (Math.abs(d) > 1e-9) {
+    // 側面に当たっている間は、その向きへは動かない（離れる向きには動ける）。
+    const pushingWall = run.blocked?.face === 'side' && Math.sign(d) === run.blocked.side;
+    if (Math.abs(d) > 1e-9 && !pushingWall) {
       const ls = lateralSpeedOf(run);
       latV = Math.sign(d) * ls;
       reachUs = (Math.abs(d) / ls) * 1e6;

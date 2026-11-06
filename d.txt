@@ -1,0 +1,212 @@
+  fact down 380000 {"kind":"down","atUs":380000,"strokeId":1000000}
+  fact steer 380000 {"kind":"steer","atUs":380000,"strokeId":1000000,"dx":0.2888888888888889}
+  fact up 380001 {"kind":"up","atUs":380001,"strokeId":1000000,"cancelled":false}
+2.215 checkpoint r1 u=20.00 x=2.60 y=1.00 cp-1 {}
+5.979 checkpoint r1 u=55.00 x=2.60 y=1.00 cp-2 {}
+  fact down 6090000 {"kind":"down","atUs":6090000,"strokeId":1000001}
+  fact forward 6090000 {"kind":"forward","atUs":6090000,"strokeId":1000001}
+  fact up 6090001 {"kind":"up","atUs":6090001,"strokeId":1000001,"cancelled":false}
+6.090 jump r1 u=56.03 x=2.60 y=1.00  {"jumpId":1,"kind":"flat"}
+  fact down 6110000 {"kind":"down","atUs":6110000,"strokeId":1000002}
+  fact circle 6260000 {"kind":"circle","atUs":6260000,"strokeId":1000002,"vertical":false,"clockwise":true,"aspect":1}
+  fact up 6280000 {"kind":"up","atUs":6280000,"strokeId":1000002,"cancelled":false}
+6.260 trickStart r1 u=57.61 x=2.60 y=1.75  {"name":"犬・横（右回り）","channel":"dog","startUs":6260000,"durUs":360000,"jumpId":1}
+6.517 sectionMiss r1 u=60.00 x=2.60 y=2.12  {"opp":"R1","section":"r1#0","streakBefore":0}
+6.763 sectionScore r1 u=62.29 x=2.60 y=1.60  {"opp":"R2","section":"r1#1","points":120,"streak":1}
+6.763 land r1 u=62.29 x=2.60 y=1.60  {"jumpId":1,"points":120,"tenths":12,"composite":false,"names":["犬・横（右回り）"],"sectionUsed":false,"onRail":"r-bank"}
+6.763 railOn r1 u=62.29 x=2.60 y=1.60 r-bank {"railId":"r-bank"}
+  fact down 10390000 {"kind":"down","atUs":10390000,"strokeId":1000004}
+  fact forward 10390000 {"kind":"forward","atUs":10390000,"strokeId":1000004}
+  fact up 10390001 {"kind":"up","atUs":10390001,"strokeId":1000004,"cancelled":false}
+10.390 railOff r1 u=96.02 x=2.60 y=1.60 r-bank {"railId":"r-bank","distMm":33736,"reason":"jump"}
+10.390 jump r1 u=96.02 x=2.60 y=1.60  {"jumpId":2,"kind":"rail"}
+  fact down 10430010 {"kind":"down","atUs":10430010,"strokeId":1000006}
+  fact line 10590000 {"kind":"line","atUs":10590000,"strokeId":1000006,"dir8":0,"afterCircle":false}
+  fact up 10590000 {"kind":"up","atUs":10590000,"strokeId":1000006,"cancelled":false}
+10.590 trickStart r1 u=97.88 x=2.60 y=2.32  {"name":"前宙","channel":"body","startUs":10590000,"durUs":480000,"jumpId":2}
+11.209 railScore r1 u=103.64 x=2.60 y=1.00 r-bank {"railId":"r-bank","points":100,"distMm":33736}
+11.209 land r1 u=103.64 x=2.60 y=1.00  {"jumpId":2,"points":0,"tenths":12,"composite":false,"names":["前宙"],"sectionUsed":true,"onRail":null}
+11.678 checkpoint r1 u=108.00 x=2.60 y=1.00 cp-3 {}
+  fact down 11680000 {"kind":"down","atUs":11680000,"strokeId":1000007}
+  fact steer 11680000 {"kind":"steer","atUs":11680000,"strokeId":1000007,"dx":-0.4}
+  fact up 11680001 {"kind":"up","atUs":11680001,"strokeId":1000007,"cancelled":false}
+  fact down 12540000 {"kind":"down","atUs":12540000,"strokeId":1000008}
+  fact steer 12540000 {"kind":"steer","atUs":12540000,"strokeId":1000008,"dx":-0.04444444444444443}
+  fact up 12540001 {"kind":"up","atUs":12540001,"strokeId":1000008,"cancelled":false}
+14.260 slope r1 u=132.01 x=-1.40 y=1.00  {"sign":1}
+14.717 jump r1 u=136.00 x=-1.40 y=1.60  {"jumpId":3,"kind":"kicker"}
+  fact down 14776967 {"kind":"down","atUs":14776967,"strokeId":1000009}
+  fact circle 14926967 {"kind":"circle","atUs":14926967,"strokeId":1000009,"vertical":true,"clockwise":true,"aspect":1.4}
+  fact line 15026967 {"kind":"line","atUs":15026967,"strokeId":1000009,"dir8":2,"afterCircle":true}
+  fact up 15026967 {"kind":"up","atUs":15026967,"strokeId":1000009,"cancelled":false}
+14.927 trickStart r1 u=137.71 x=-1.40 y=3.18  {"name":"犬・縦（前回り）","channel":"dog","startUs":14926967,"durUs":360000,"jumpId":3}
+15.027 trickStart r1 u=138.53 x=-1.40 y=3.71  {"name":"右ひねり","channel":"body","startUs":15026967,"durUs":480000,"jumpId":3}
+15.027 composite r1 u=138.53 x=-1.40 y=3.71  {"jumpId":3}
+16.066 sectionScore r1 u=146.99 x=-1.40 y=1.00  {"opp":"R3","section":"r1#2","points":420,"streak":2}
+16.066 land r1 u=146.99 x=-1.40 y=1.00  {"jumpId":3,"points":420,"tenths":12,"composite":true,"names":["犬・縦（前回り）","右ひねり"],"sectionUsed":false,"onRail":null}
+16.070 slope r1 u=147.03 x=-1.40 y=1.00  {"sign":0}
+  fact down 16190000 {"kind":"down","atUs":16190000,"strokeId":1000010}
+  fact steer 16190000 {"kind":"steer","atUs":16190000,"strokeId":1000010,"dx":0.26666666666666666}
+  fact up 16190001 {"kind":"up","atUs":16190001,"strokeId":1000010,"cancelled":false}
+17.493 fork lower u=160.00 x=-1.00 y=1.00  {"forkId":"R1","option":1,"label":"河原の手すり道","trick":true}
+17.495 slope lower u=160.02 x=-1.00 y=1.00  {"sign":-1}
+   state t=17.5 u=160.06 x=-1.00 y=1.00 mode=ground b=9.31 target=-1.00
+   state t=17.6 u=160.93 x=-1.00 y=0.96 mode=ground b=9.56 target=-1.00
+   state t=17.7 u=161.82 x=-1.00 y=0.92 mode=ground b=9.81 target=-1.00
+  fact down 17725000 {"kind":"down","atUs":17725000,"strokeId":1000011}
+  fact steer 17725000 {"kind":"steer","atUs":17725000,"strokeId":1000011,"dx":0.1111111111111111}
+  fact up 17725001 {"kind":"up","atUs":17725001,"strokeId":1000011,"cancelled":false}
+   state t=17.8 u=162.73 x=-0.61 y=0.88 mode=ground b=9.89 target=0.00
+   state t=17.9 u=163.66 x=-0.09 y=0.84 mode=ground b=9.88 target=0.00
+   state t=18 u=164.59 x=0.00 y=0.80 mode=ground b=9.87 target=0.00
+   state t=18.1 u=165.50 x=0.00 y=0.76 mode=ground b=9.87 target=0.00
+   state t=18.2 u=166.41 x=0.00 y=0.72 mode=ground b=9.86 target=0.00
+   state t=18.3 u=167.31 x=0.00 y=0.68 mode=ground b=9.86 target=0.00
+   state t=18.4 u=168.21 x=0.00 y=0.64 mode=ground b=9.85 target=0.00
+   state t=18.5 u=169.10 x=0.00 y=0.60 mode=ground b=9.85 target=0.00
+   state t=18.6 u=170.00 x=0.00 y=0.56 mode=ground b=9.86 target=0.00
+18.600 checkpoint lower u=170.00 x=0.00 y=0.56 cp-4b {}
+   state t=18.7 u=170.90 x=0.00 y=0.52 mode=ground b=9.86 target=0.00
+   state t=18.8 u=171.80 x=0.00 y=0.48 mode=ground b=9.86 target=0.00
+   state t=18.9 u=172.71 x=0.00 y=0.44 mode=ground b=9.87 target=0.00
+   state t=19 u=173.63 x=0.00 y=0.40 mode=ground b=9.87 target=0.00
+   state t=19.1 u=174.56 x=0.00 y=0.36 mode=ground b=9.88 target=0.00
+   state t=19.2 u=175.50 x=0.00 y=0.32 mode=ground b=9.88 target=0.00
+19.255 slope lower u=176.02 x=0.00 y=0.30  {"sign":0}
+   state t=19.3 u=176.44 x=0.00 y=0.30 mode=ground b=9.77 target=0.00
+   state t=19.4 u=177.35 x=0.00 y=0.30 mode=ground b=9.52 target=0.00
+   state t=19.5 u=178.24 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=19.6 u=179.13 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=19.7 u=180.01 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=19.8 u=180.89 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=19.9 u=181.78 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20 u=182.66 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20.1 u=183.55 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20.2 u=184.43 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20.3 u=185.31 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20.4 u=186.20 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20.5 u=187.08 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20.6 u=187.96 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20.7 u=188.85 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+   state t=20.8 u=189.73 x=0.00 y=0.30 mode=ground b=9.30 target=0.00
+  fact down 20835000 {"kind":"down","atUs":20835000,"strokeId":1000012}
+  fact forward 20835000 {"kind":"forward","atUs":20835000,"strokeId":1000012}
+  fact up 20835001 {"kind":"up","atUs":20835001,"strokeId":1000012,"cancelled":false}
+20.835 jump lower u=190.04 x=0.00 y=0.30  {"jumpId":4,"kind":"flat"}
+  fact down 20855000 {"kind":"down","atUs":20855000,"strokeId":1000013}
+  fact circle 21005000 {"kind":"circle","atUs":21005000,"strokeId":1000013,"vertical":false,"clockwise":false,"aspect":1}
+  fact up 21025000 {"kind":"up","atUs":21025000,"strokeId":1000013,"cancelled":false}
+   state t=20.9 u=190.62 x=0.00 y=0.63 mode=air b=9.30 target=0.00
+   state t=21 u=191.50 x=0.00 y=1.03 mode=air b=9.30 target=0.00
+21.005 trickStart lower u=191.54 x=0.00 y=1.05  {"name":"犬・横（左回り）","channel":"dog","startUs":21005000,"durUs":360000,"jumpId":4}
+   state t=21.1 u=192.38 x=0.00 y=1.29 mode=air b=9.30 target=0.00
+   state t=21.2 u=193.27 x=0.00 y=1.41 mode=air b=9.30 target=0.00
+   state t=21.3 u=194.15 x=0.00 y=1.39 mode=air b=9.30 target=0.00
+   state t=21.4 u=195.03 x=0.00 y=1.23 mode=air b=9.30 target=0.00
+   state t=21.5 u=195.92 x=0.00 y=0.93 mode=air b=9.30 target=0.00
+21.508 sectionScore lower u=196.00 x=0.00 y=0.90  {"opp":"R4","section":"lower#0","points":120,"streak":3}
+21.508 streak lower u=196.00 x=0.00 y=0.90  {"bonus":100}
+21.508 land lower u=196.00 x=0.00 y=0.90  {"jumpId":4,"points":120,"tenths":12,"composite":false,"names":["犬・横（左回り）"],"sectionUsed":false,"onRail":"r-long"}
+21.508 railOn lower u=196.00 x=0.00 y=0.90 r-long {"railId":"r-long"}
+   state t=21.6 u=196.82 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=21.7 u=197.70 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=21.8 u=198.58 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=21.9 u=199.47 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22 u=200.35 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.1 u=201.24 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.2 u=202.12 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.3 u=203.00 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.4 u=203.89 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.5 u=204.77 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.6 u=205.65 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.7 u=206.54 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.8 u=207.42 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=22.9 u=208.31 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23 u=209.19 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.1 u=210.07 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.2 u=210.96 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.3 u=211.84 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.4 u=212.72 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.5 u=213.61 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.6 u=214.49 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.7 u=215.38 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.8 u=216.26 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=23.9 u=217.14 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24 u=218.03 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.1 u=218.91 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.2 u=219.79 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.3 u=220.71 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.4 u=221.64 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.5 u=222.57 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.6 u=223.50 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.7 u=224.43 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.8 u=225.36 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=24.9 u=226.29 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25 u=227.22 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.1 u=228.15 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.2 u=229.08 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.3 u=230.01 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.4 u=230.94 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.5 u=231.87 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.6 u=232.80 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.7 u=233.73 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.8 u=234.66 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+   state t=25.9 u=235.59 x=0.00 y=0.90 mode=rail b=9.30 target=0.00
+25.944 railOff lower u=236.00 x=0.00 y=0.90 r-long {"railId":"r-long","distMm":41257,"reason":"end"}
+   state t=26 u=236.52 x=0.00 y=0.88 mode=air b=9.30 target=0.00
+   state t=26.1 u=237.45 x=0.00 y=0.73 mode=air b=9.30 target=0.00
+   state t=26.2 u=238.38 x=0.00 y=0.44 mode=air b=9.30 target=0.00
+26.237 railScore lower u=238.72 x=0.00 y=0.30 r-long {"railId":"r-long","points":100,"distMm":41257}
+26.237 land lower u=238.72 x=0.00 y=0.30  {"jumpId":5,"points":0,"tenths":12,"plain":true,"onRail":null}
+  fact down 26240000 {"kind":"down","atUs":26240000,"strokeId":1000015}
+  fact steer 26240000 {"kind":"steer","atUs":26240000,"strokeId":1000015,"dx":0.06666666666666667}
+  fact up 26240001 {"kind":"up","atUs":26240001,"strokeId":1000015,"cancelled":false}
+   state t=26.3 u=239.31 x=0.31 y=0.30 mode=ground b=9.30 target=0.60
+   state t=26.4 u=240.24 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=26.5 u=241.17 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=26.6 u=242.10 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=26.7 u=243.03 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=26.8 u=243.96 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=26.9 u=244.89 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=27 u=245.82 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=27.1 u=246.75 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=27.2 u=247.68 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=27.3 u=248.61 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=27.4 u=249.54 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+27.449 checkpoint lower u=250.00 x=0.60 y=0.30 cp-5 {}
+  fact down 27450000 {"kind":"down","atUs":27450000,"strokeId":1000016}
+  fact forward 27450000 {"kind":"forward","atUs":27450000,"strokeId":1000016}
+  fact up 27450001 {"kind":"up","atUs":27450001,"strokeId":1000016,"cancelled":false}
+27.450 jump lower u=250.01 x=0.60 y=0.30  {"jumpId":6,"kind":"flat"}
+  fact down 27490010 {"kind":"down","atUs":27490010,"strokeId":1000018}
+  fact line 27650000 {"kind":"line","atUs":27650000,"strokeId":1000018,"dir8":6,"afterCircle":false}
+  fact up 27650000 {"kind":"up","atUs":27650000,"strokeId":1000018,"cancelled":false}
+   state t=27.5 u=250.47 x=0.60 y=0.56 mode=air b=9.30 target=0.60
+   state t=27.6 u=251.40 x=0.60 y=0.98 mode=air b=9.30 target=0.60
+27.650 trickStart lower u=251.87 x=0.60 y=1.14  {"name":"左ひねり","channel":"body","startUs":27650000,"durUs":480000,"jumpId":6}
+   state t=27.7 u=252.33 x=0.60 y=1.26 mode=air b=9.30 target=0.60
+   state t=27.8 u=253.26 x=0.60 y=1.40 mode=air b=9.30 target=0.60
+   state t=27.9 u=254.19 x=0.60 y=1.40 mode=air b=9.30 target=0.60
+   state t=28 u=255.12 x=0.60 y=1.26 mode=air b=9.30 target=0.60
+   state t=28.1 u=256.05 x=0.60 y=0.98 mode=air b=9.30 target=0.60
+   state t=28.2 u=256.98 x=0.60 y=0.56 mode=air b=9.30 target=0.60
+28.250 sectionScore lower u=257.45 x=0.60 y=0.30  {"opp":"R5","section":"lower#1","points":180,"streak":1}
+28.250 land lower u=257.45 x=0.60 y=0.30  {"jumpId":6,"points":180,"tenths":12,"composite":false,"names":["左ひねり"],"sectionUsed":false,"onRail":null}
+   state t=28.3 u=257.91 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=28.4 u=258.84 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=28.5 u=259.77 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=28.6 u=260.70 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=28.7 u=261.63 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=28.8 u=262.56 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=28.9 u=263.49 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29 u=264.42 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.1 u=265.35 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.2 u=266.28 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.3 u=267.21 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.4 u=268.14 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.5 u=269.07 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.6 u=270.00 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.7 u=270.93 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.8 u=271.86 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=29.9 u=272.79 x=0.60 y=0.30 mode=ground b=9.30 target=0.60
+   state t=30 u=273.72 x=0.60 y=0.30 mode=ground b=9.30 target=0.60

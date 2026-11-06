@@ -23,7 +23,7 @@ import {
   updateBaseSpeed,
   type SegmentMotion,
 } from './motion';
-import { blocksAt, findContacts, insideExpanded, sMmOf, type Contact } from './contacts';
+import { blocksAt, findContacts, insideExpanded, orderContacts, sMmOf, type Contact } from './contacts';
 import { breakStreak, createScore, exitSection, finishRun, settleLanding } from './scoring';
 import { leaveRail, loseRail, mountRail } from './rails';
 import { resolveTricks, type TrickResolution } from './tricks';
@@ -221,7 +221,12 @@ function moveSegment(run: SimState, ta: number, tb: number, emit: Emit): void {
     const m = segmentMotion(run, t);
     if (t + m.reachUs < te) te = Math.min(te, t + Math.max(1, Math.ceil(m.reachUs - 1e-6)));
     const span = te - t;
-    const found = ++guard > 48 ? null : findContacts(run, m, span);
+    if (++guard > 64) {
+      // 同じ時刻の接触が続いて進めない場合は、その場で止める（接触を調べずに進めることはしない）。
+      t = tb;
+      break;
+    }
+    const found = findContacts(run, m, span);
     const tau = found ? found.tau : span;
     applyMotion(run, m, tau, t + tau);
     t += tau;
@@ -398,9 +403,20 @@ function processContact(run: SimState, c: Contact, t: number, emit: Emit): void 
   }
 }
 
+/** 試験用: その時刻にコース外へ落ちたことにする（落下の扱いを検査するため）。 */
+export function forceFall(run: SimState, t: number): SimEvent[] {
+  const out: SimEvent[] = [];
+  startFall(run, t, makeEmit(run, out));
+  return out;
+}
+
 function startFall(run: SimState, t: number, emit: Emit): void {
   run.mode = 'falling';
   run.fallUntilUs = t + FALL_US;
+  if (run.rail) {
+    // 滑っている途中で落ちた手すりも、無事に降りる前なので 0 点。
+    loseRail(run, { railId: run.rail.railId, distMm: Math.max(0, sMmOf(run.s) - run.rail.entryMm), fullLength: false }, t, emit);
+  }
   if (run.pendingRail) loseRail(run, run.pendingRail, t, emit);
   run.pendingRail = null;
   run.rail = null;
@@ -553,6 +569,38 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
   }
 }
 
+/** 計算済みの時刻ちょうどの入力（指の取り消しなど）を、時刻を進めずに反映する。 */
+function flushAt(run: SimState, t: number): void {
+  const out: SimEvent[] = [];
+  const emit = makeEmit(run, out);
+  while (run.inputQueue.length > 0 && run.inputQueue[0].atUs <= t) applyFact(run, run.inputQueue.shift()!, t, emit);
+}
+
+/** 外から通知された接触の形（試験と、通知の到着順を入れ替える検査に使う）。 */
+export type DeliveredContact =
+  | { type: 'land'; atUs: number; seq?: number }
+  | { type: 'goal'; atUs: number; seq?: number }
+  | { type: 'sectionEnd'; atUs: number; sectionKey: string; seq?: number };
+
+/**
+ * 通知の到着順にかかわらず、実際に触れた時刻（整数 µs）→ 同時刻の処理順で処理する。
+ * ゴールのあとに届いた着地は採点しない。同じ通知を2回受け取っても1回分しか数えない。
+ */
+export function deliverContacts(run: SimState, list: DeliveredContact[]): SimEvent[] {
+  const out: SimEvent[] = [];
+  const emit = makeEmit(run, out);
+  for (const d of orderContacts(list)) {
+    if (run.finished) break;
+    if (d.type === 'land') processContact(run, { type: 'land' }, d.atUs, emit);
+    else if (d.type === 'goal') processContact(run, { type: 'goal' }, d.atUs, emit);
+    else {
+      const sec = currentPath(run).sections.find((x) => x.key === d.sectionKey);
+      if (sec) processContact(run, { type: 'sectionEnd', section: sec }, d.atUs, emit);
+    }
+  }
+  return out;
+}
+
 /** 描画用: 計算済みの時刻より少し先の位置を、今の速さで外挿する。 */
 export function extrapolate(run: SimState, renderUs: number): { s: number; x: number; y: number } {
   const dt = Math.max(0, Math.min(TICK_US, renderUs - run.simUs)) / 1e6;
@@ -623,7 +671,12 @@ export class RunSession {
   /** 入力を受け取る。前の走行の遅れた入力は走行番号で捨てる。 */
   submit(runId: string, facts: GestureFact[]): void {
     if (runId !== this.runId) return;
-    if (this.phase !== 'running' || this.paused) return;
+    if (this.phase !== 'running') return;
+    if (this.paused) {
+      // 中断中は、指の取り消し（描きかけの指を捨てる通知）だけを、止まった時刻で受け取る。
+      for (const f of facts) if (f.kind === 'up') this.pending.push({ ...f, atUs: this.sim.simUs, cancelled: true });
+      return;
+    }
     this.pending.push(...facts);
   }
 
@@ -647,7 +700,7 @@ export class RunSession {
     if (!this.paused) {
       this.paused = true;
       // 描きかけの指は捨てる。計算済みの状態（物理・確定済みの角度）はそのまま保持する。
-      this.pending = [];
+      this.pending = this.pending.filter((f) => f.kind === 'up').map((f) => ({ ...f, atUs: this.sim.simUs, cancelled: true }));
       this.sessionEvent('pause', { reason });
     }
   }
@@ -681,7 +734,18 @@ export class RunSession {
     this.lastWallUs = wallUs;
     const out: SimEvent[] = this.sessionEvents;
     this.sessionEvents = [];
-    if (this.paused || this.phase === 'finished') return out;
+    if (this.phase === 'finished') return out;
+    if (this.paused) {
+      if (this.pending.length > 0) {
+        enqueueFacts(this.sim, this.pending);
+        this.pending = [];
+        // 時刻を進めずに、取り消しだけを反映する。
+        const { events } = advanceRun(this.sim, this.sim.simUs, []);
+        out.push(...events);
+        flushAt(this.sim, this.sim.simUs);
+      }
+      return out;
+    }
     if (this.phase === 'countdown') {
       this.countdownUs += delta;
       const n = 3 - Math.floor(this.countdownUs / 1_000_000);
