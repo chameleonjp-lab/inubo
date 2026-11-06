@@ -67,9 +67,9 @@ export function cueForEvent(ev: SimEvent): Cue | null {
   const d = ev.data ?? {};
   switch (ev.kind) {
     case 'countdown':
-      return cue(ev, 'E02', 'crouch', 'beat', { text: String(d.n ?? ''), priority: 2 });
+      return cue(ev, 'E02', 'crouch', 'beat');
     case 'start':
-      return cue(ev, 'E02', 'sandBurst', 'go', { text: 'スタート', priority: 2 });
+      return cue(ev, 'E02', 'sandBurst', 'go');
     case 'slope':
       return d.sign === 1 ? cue(ev, 'E05', 'riderLean', 'kickUp') : d.sign === -1 ? cue(ev, 'E05', 'windLines', 'windSlide') : null;
     case 'jump':
@@ -88,7 +88,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'trickReject':
       return cue(ev, 'E10', d.air ? 'practiceHint' : 'traceFade', d.air ? 'hintSoft' : null);
     case 'land': {
-      if (d.plain) return cue(ev, 'E13', 'sandRing', 'landSoft', { footMark: 'sandRing' });
+      if (d.plain) return cue(ev, 'E13', 'sandRing', 'landSoft');
       const pts = Number(d.points ?? 0);
       const names = Array.isArray(d.names) ? d.names.join('＋') : '';
       if (d.composite) return cue(ev, 'E09', 'pawTrails', 'chord2', { text: `${names} ${pts > 0 ? `＋${pts}` : '（採点済みの区間）'}`, priority: 2 });
@@ -102,7 +102,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'relaunch':
       return cue(ev, 'E15', 'brace', 'kick');
     case 'clear':
-      return cue(ev, 'E11', 'edgePaw', 'tap', { footMark: 'edgePaw' });
+      return cue(ev, 'E11', 'edgePaw', 'tap', { footMark: '越えた' });
     case 'railOn':
       return cue(ev, 'E12', 'railDot', 'railOn');
     case 'railOff':
@@ -110,7 +110,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'railScore':
       return Number(d.points ?? 0) > 0
         ? cue(ev, 'E12', 'railSpark', 'confirm', { text: `手すり ${Math.floor(Number(d.distMm ?? 0) / 1000)}m ＋${d.points}`, priority: 2 })
-        : cue(ev, 'E12', 'railLineEnd', null, { footMark: 'railLineEnd' });
+        : cue(ev, 'E12', 'railLineEnd', null);
     case 'railLost':
       return cue(ev, 'E14', 'stumble', 'recover', { text: '手すり 0点', priority: 1 });
     case 'food':
@@ -136,7 +136,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'respawn':
       return cue(ev, 'E17', 'respawnShow', 'respawn');
     case 'sectionScore':
-      return cue(ev, 'E21', 'markFill', 'stepUp', { footMark: 'markFill' });
+      return cue(ev, 'E21', 'markFill', 'stepUp');
     case 'sectionMiss':
       return null;
     case 'streak':

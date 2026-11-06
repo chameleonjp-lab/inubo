@@ -7,6 +7,8 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     sourcemap: false,
+    // 大半は Three.js。1つのファイルで配信する。
+    chunkSizeWarningLimit: 900,
   },
   test: {
     include: ['tests/**/*.test.ts'],

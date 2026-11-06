@@ -3,11 +3,13 @@ import { buildCourse, type CourseRt } from '../../game/track';
 import { park } from './park';
 import { shoppingStreet } from './shopping-street';
 import { riverside } from './riverside';
+import { practicePlaza } from './practice';
 
 export const COURSE_DEFS: Partial<Record<CourseId, CourseDef>> = {
   park,
   'shopping-street': shoppingStreet,
   riverside,
+  practice: practicePlaza,
 };
 
 /** ホームで選べる競技用のコース（練習広場は別）。 */
