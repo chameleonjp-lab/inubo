@@ -35,12 +35,14 @@ npm run report         # 自動再生の記録を docs/autoplay-report.md に書
 
 1. GitHub の **Settings → Pages → Build and deployment → Source** を **GitHub Actions** にする。
 2. `main` にマージすると自動検査が始まり、成功後に GitHub Pages へ配信される。配信先の URL を使って、ホームと結果の共有文を作る。
-3. ゲーム内ランキングを有効にするときは、イヌボー専用の Supabase に `supabase/migrations/` の SQL を適用し、以下の GitHub Actions のリポジトリ変数を設定して再配信する。変数がなければ端末内の記録で遊べる。
+3. イヌボーのゲーム内ランキングは、実験場と同じ Supabase プロジェクトを使う。`supabase/migrations/` の SQL が、イヌボー専用の受付と記録領域を用意する。GitHub Pages 用のビルドには実験場の公開ページで使う接続先とブラウザ用キーが入り、ゲーム内でランキングを表示する。実験場への掲載用データは登録しない。
 
 | 設定 | 働き |
 |---|---|
-| `INUBO_SUPABASE_URL` | 専用 Supabase の Project URL |
-| `INUBO_SUPABASE_PUBLISHABLE_KEY` | 専用 Supabase の公開用キー（`sb_publishable_` で始まるもの） |
+| `INUBO_SUPABASE_URL` | 接続先を切り替える場合の Project URL |
+| `INUBO_SUPABASE_PUBLISHABLE_KEY` | 接続先を切り替える場合の公開用キー（`sb_publishable_` で始まるもの） |
+
+接続先を切り替える場合は2つのリポジトリ変数を一緒に設定する。実機確認用・試験用のビルドはランキングの本番接続から分ける。
 
 最初のゲーム内ランキングは公園の総合点・最速タイムを各上位30人まで表示します。名前を入れて開始した走行のみを対象にし、実験場とは別に運用します。商店街と川沿いは実測して採点基準を固定してから順位を有効にします。サーバーは同一走行の再送、完走までの経過時間、得点の範囲と合計を確認します。
 
