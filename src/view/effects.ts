@@ -1,4 +1,5 @@
 import type { SimEvent } from '../game/types';
+import { DIR8_NAMES } from '../game/tricks';
 
 /**
  * 仕様書§8 の E01〜E24 を、計算側の出来事（SimEvent）と画面の操作に対応づける。
@@ -80,7 +81,12 @@ export function cueForEvent(ev: SimEvent): Cue | null {
         const vertical = name.includes('縦');
         return cue(ev, 'E07', vertical ? 'dogTrailNose' : 'dogTrailFeet', vertical ? 'dogSpinV' : 'dogSpinH', { text: vertical ? '犬・縦' : '犬・横', priority: 2 });
       }
-      return cue(ev, 'E08', 'shoulderTrail', String(d.name ?? '').includes('＋') ? 'bodyWhoosh2' : 'bodyWhoosh', { text: String(d.name ?? ''), priority: 2 });
+      {
+        // 払った方向の小さな矢印を添える（E08）。
+        const name = String(d.name ?? '');
+        const arrow = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'][DIR8_NAMES.indexOf(name)] ?? '';
+        return cue(ev, 'E08', 'shoulderTrail', name.includes('＋') ? 'bodyWhoosh2' : 'bodyWhoosh', { text: `${arrow} ${name}`.trim(), priority: 2 });
+      }
     case 'trickHeld':
       return cue(ev, 'E09', 'twoTrails', 'compositeCue');
     case 'composite':

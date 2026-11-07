@@ -6,7 +6,7 @@ import { RunSession } from '../game/run';
 import { RULES_VERSION } from '../game/rules';
 import { Autopilot } from '../game/autopilot';
 import { trickScore } from '../game/scoring';
-import { uAtS } from '../game/track';
+import { sampleAt, uAtS } from '../game/track';
 import { foodActive } from '../game/items';
 import { maxSpeed } from '../game/motion';
 import { GestureRecognizer } from '../input/gestures';
@@ -459,6 +459,8 @@ class GameRun {
   private demoStartMs = -1;
   private pauseCover: HTMLElement;
   private practicePanel: HTMLElement | null = null;
+  private wasSteering = false;
+  private wasSharp = false;
 
   constructor(
     private app: App,
@@ -661,6 +663,14 @@ class GameRun {
       if (this.session.phase === 'running') this.recorder.sample(sim);
     }
     const cues = events.map(cueForEvent).filter(Boolean) as Cue[];
+    // 左右移動の踏み替えと、強いカーブのすれ音（E04）は、計算の状態の変わり目から出す。
+    const moving = sim.lateralSpeed !== 0 && sim.mode === 'ground';
+    if (moving && !this.wasSteering) cues.push({ effect: 'E04', visual: 'weightShift', sound: 'stepSwitch', atUs: sim.simUs, runId: sim.id.runId });
+    this.wasSteering = moving;
+    const kappa = Math.abs(sampleAt(sim.course.paths.get(sim.pathId)!, sim.s).kappa);
+    const sharp = kappa > 0.025 && sim.forwardSpeed > 5 && sim.mode === 'ground';
+    if (sharp && !this.wasSharp) cues.push({ effect: 'E04', visual: 'leanSand', sound: 'skid', atUs: sim.simUs, runId: sim.id.runId });
+    this.wasSharp = sharp;
     this.handleCues(cues);
     for (const e of events) {
       if (e.kind === 'countdown') this.flashCountdown(String(e.data?.n ?? ''));

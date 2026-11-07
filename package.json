@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test --trace off",
-    "autoplay": "vite-node scripts/autoplay-report.ts"
+    "report": "REPORT_OUT=docs/autoplay-report.md vitest run tests/report.test.ts"
   },
   "dependencies": {
     "three": "0.186.1"

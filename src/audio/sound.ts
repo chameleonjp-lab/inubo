@@ -158,6 +158,8 @@ const TONES: Record<string, Tone[]> = {
   tick: [{ f: 880, t: 0, d: 0.04, g: 0.4 }],
   best3: [{ f: 659, t: 0, d: 0.1 }, { f: 880, t: 0.1, d: 0.1 }, { f: 1318, t: 0.2, d: 0.2 }],
   windSlide: [{ f: 200, t: 0, d: 0.3, type: 'sawtooth', g: 0.12 }],
+  stepSwitch: [{ f: 260, t: 0, d: 0.03, type: 'square', g: 0.18 }],
+  skid: [{ f: 180, t: 0, d: 0.12, type: 'sawtooth', g: 0.14 }],
 };
 
 /** すべての1回音に合成の定義があるかを検査で確かめるため、名前の一覧を出す。 */
