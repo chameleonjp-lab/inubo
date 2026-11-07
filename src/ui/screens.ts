@@ -16,24 +16,15 @@ import { GameView } from '../view/scene';
 import { CenterText, UI_CUES, cueForEvent, type Cue } from '../view/effects';
 import { ReplayRecorder } from '../view/replay';
 import { AudioEngine, SoundScheduler } from '../audio/sound';
-import { Records, browserStorage, loadProfile, loadSettings, newId, saveProfile, saveSettings, type Profile, type SaveOutcome, type Settings } from '../storage/records';
-import { RankingClient, type BoardState } from '../ranking/client';
-import { MockRankingServer } from '../ranking/mockServer';
+import { Records, browserStorage, loadProfile, loadSettings, newId, saveProfile, saveSettings, type Profile, type SaveOutcome, type Settings, type StorageLike } from '../storage/records';
+import { RankingClient, type BoardState, type SubmissionStatus, type Transport } from '../ranking/client';
+import type { PlayOptions } from '../app-options';
 import type { CourseId, DogId } from '../content/types';
 import type { GestureFact, RunIdentity, RunResult, SimEvent } from '../game/types';
 
 /**
  * 画面の流れ: ホーム（選択）→ 秒読み → 走行 → 結果。一時停止・再開と、練習広場・遊び方・設定・スタンプ帳。
  */
-
-export interface AppOptions {
-  /** 自動操縦で走らせる（検査用）。コースの手順名（safe / short / trick）。 */
-  autoplay: string | null;
-  /** 自動操縦のときの時間の速さ。 */
-  speed: number;
-  debug: boolean;
-  ranking: 'off' | 'mock';
-}
 
 const CLOTHES = ['#e4572e', '#2e86ab', '#f2c14e', '#6a4c93', '#3bb273'];
 const HELMETS = ['#2e86ab', '#e4572e', '#ffffff', '#222222', '#f2c14e'];
@@ -43,8 +34,8 @@ function nowMs(): number {
 }
 
 export class App {
-  private store = browserStorage();
-  readonly records = new Records(this.store);
+  private store: StorageLike;
+  readonly records: Records;
   settings: Settings;
   profile: Profile;
   readonly ranking: RankingClient;
@@ -56,28 +47,45 @@ export class App {
   game: GameRun | null = null;
   courseId: CourseId;
   dogId: DogId;
-  consent = false;
   lastResult: RunResult | null = null;
+  private updateRankingStatus: (() => void) | null = null;
 
   constructor(
     private root: HTMLElement,
-    readonly opts: AppOptions,
+    readonly opts: PlayOptions,
+    transport: Transport | null,
   ) {
+    this.store = browserStorage(opts.testBuild ? 'inubo-test:' : '');
+    this.records = new Records(this.store);
     this.settings = loadSettings(this.store);
     this.profile = loadProfile(this.store);
     this.courseId = this.profile.lastCourse;
     this.dogId = this.profile.lastDog;
     this.sound = new SoundScheduler(this.settings);
-    this.ranking = new RankingClient(new MockRankingServer(), this.store, opts.ranking === 'mock');
+    this.ranking = new RankingClient(transport, this.store, transport !== null);
     this.canvas = h('canvas', { class: 'gl', 'aria-hidden': 'true' });
     this.screenEl = h('div', { class: 'screens' });
     root.append(this.canvas, this.screenEl);
     const unlock = () => this.audio.unlock();
     root.addEventListener('pointerdown', unlock, { capture: true });
     window.addEventListener('resize', () => this.onResize());
+    if (this.ranking.enabled) {
+      const retryPending = () => {
+        if (!document.hidden && navigator.onLine && this.ranking.pendingCount() > 0) {
+          void this.ranking.flush().then(() => this.updateRankingStatus?.());
+        }
+      };
+      window.addEventListener('online', retryPending);
+      document.addEventListener('visibilitychange', retryPending);
+      window.setInterval(retryPending, 15_000);
+    }
     document.addEventListener('visibilitychange', () => this.game?.onVisibility(document.hidden));
     this.onResize();
     void this.ranking.flush();
+  }
+
+  private rankingFor(courseId: CourseId): boolean {
+    return this.ranking.enabled && (this.opts.testBuild || courseId === 'park');
   }
 
   ensureView(): GameView {
@@ -101,6 +109,7 @@ export class App {
   }
 
   private setScreen(el: HTMLElement): void {
+    this.updateRankingStatus = null;
     clear(this.screenEl);
     this.screenEl.append(el);
   }
@@ -169,25 +178,22 @@ export class App {
         h('span', { class: 'sw-label' }, label),
         list.map((c) => h('button', { class: `sw${c === cur ? ' selected' : ''}`, style: `background:${c}`, 'aria-label': `${label} ${c}`, onclick: () => (set(c), this.saveProfile(), this.showHome()) })),
       );
-    const nameBlock = this.ranking.enabled
+    const hasRanking = this.rankingFor(this.courseId);
+    const shareFallback = h('div', { class: 'share-fallback hidden', 'data-testid': 'home-share-fallback', 'aria-live': 'polite' });
+    const nameBlock = hasRanking
       ? h(
           'div',
           { class: 'name-block' },
           h('label', { for: 'player-name' }, '名前（任意・公開順位に参加するときだけ）'),
           (() => {
-            const inp = h('input', { id: 'player-name', maxlength: 16, value: this.profile.name, autocomplete: 'off', 'data-testid': 'name' }) as HTMLInputElement;
+            const inp = h('input', { id: 'player-name', maxlength: 16, value: this.profile.name, autocomplete: 'off', 'data-testid': 'name', 'aria-describedby': 'ranking-name-note' }) as HTMLInputElement;
             inp.addEventListener('input', () => {
               this.profile.name = inp.value.slice(0, 16);
               this.saveProfile();
             });
             return inp;
           })(),
-          (() => {
-            const cb = h('input', { type: 'checkbox', id: 'consent', 'data-testid': 'consent' }) as HTMLInputElement;
-            cb.checked = this.consent;
-            cb.addEventListener('change', () => (this.consent = cb.checked));
-            return h('label', { class: 'consent' }, cb, '名前を公開順位に載せる');
-          })(),
+          h('p', { id: 'ranking-name-note' }, '名前を入力すると、名前と記録がランキングに公開されます。空欄でも遊べます。'),
         )
       : null;
     this.setScreen(
@@ -215,9 +221,10 @@ export class App {
           h('button', { class: 'btn small', onclick: () => this.showHowTo() }, '遊び方'),
           h('button', { class: 'btn small', 'data-testid': 'settings', onclick: () => this.showSettings() }, '設定'),
           h('button', { class: 'btn small', onclick: () => this.showStamps() }, 'スタンプ帳'),
-          this.ranking.enabled ? h('button', { class: 'btn small', onclick: () => this.showRanking() }, 'ランキング') : null,
-          h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(officialUrl()), null) }, 'Xでシェア'),
+          hasRanking ? h('button', { class: 'btn small', onclick: () => this.showRanking() }, 'ランキング') : null,
+          h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(officialUrl()), shareFallback) }, 'Xでシェア'),
         ),
+        shareFallback,
       ),
     );
   }
@@ -321,8 +328,13 @@ export class App {
   showRanking(): void {
     const def = COURSE_DEFS[this.courseId]!;
     const board = h('div', { class: 'board' });
-    const load = (metric: 'total' | 'time') =>
-      void this.ranking.loadBoard({ courseId: this.courseId, courseVersion: def.version, rulesVersion: RULES_VERSION, metric }, (s) => renderBoardInto(board, s, metric, () => load(metric)));
+    let boardRequest = 0;
+    const load = (metric: 'total' | 'time') => {
+      const current = ++boardRequest;
+      void this.ranking.loadBoard({ courseId: this.courseId, courseVersion: def.version, rulesVersion: RULES_VERSION, metric }, (s) => {
+        if (current === boardRequest) renderBoardInto(board, s, metric, () => load(metric));
+      });
+    };
     this.setScreen(
       h(
         'section',
@@ -359,7 +371,7 @@ export class App {
     const courseId: CourseId = mode === 'practice' ? 'practice' : this.courseId;
     const course = getCourse(courseId);
     const name = this.profile.name.trim();
-    const opt = this.ranking.canParticipate(name, mode, this.consent);
+    const opt = this.rankingFor(courseId) && this.ranking.canParticipate(name, mode, true);
     const identity: RunIdentity = {
       runId: newId(),
       courseId,
@@ -391,7 +403,7 @@ export class App {
     this.lastResult = result;
     const saved: SaveOutcome = this.records.saveLocalResult(result, replay);
     this.ranking.finishRun(result);
-    void this.ranking.flush();
+    const sent = this.ranking.flush();
     const def = COURSE_DEFS[result.courseId]!;
     const fallbackHolder: { el: HTMLElement | null } = { el: null };
     const el = renderResults(result, def.name, saved, def.challenge?.label ?? null, {
@@ -404,13 +416,32 @@ export class App {
         if (!shareableResult(result)) return;
         void this.share(resultShareText(result, def.name, DOGS[result.dogId].name, officialUrl()), fallbackHolder.el);
       },
-      ranking: this.ranking.enabled
-        ? (metric, onState) => void this.ranking.loadBoard({ courseId: result.courseId, courseVersion: result.courseVersion, rulesVersion: result.rulesVersion, metric }, onState)
+      ranking: this.rankingFor(result.courseId)
+        ? (metric, onState) => {
+            onState({ kind: 'loading' });
+            void sent.then(() => this.ranking.loadBoard({ courseId: result.courseId, courseVersion: result.courseVersion, rulesVersion: result.rulesVersion, metric }, onState));
+          }
         : null,
     });
     fallbackHolder.el = el.querySelector('[data-testid="share-fallback"]');
     this.root.classList.remove('in-game');
     this.setScreen(el);
+    const status = h('p', { class: 'ranking-status', 'aria-live': 'polite' });
+    if (this.ranking.submissionStatus(result.runId) !== 'idle') {
+      let previous: SubmissionStatus = 'idle';
+      el.append(status);
+      this.updateRankingStatus = () => {
+        const state = this.ranking.submissionStatus(result.runId);
+        if (state === previous) return;
+        previous = state;
+        status.textContent = state === 'accepted' ? 'ランキングに登録しました。'
+          : state === 'rejected' ? 'この走行はランキングに登録できませんでした。'
+          : 'ランキングへの送信待ちです。通信と受付を確認して自動で再送します。';
+        if (state === 'accepted') el.querySelector('[data-testid="board"]')?.dispatchEvent(new Event('ranking-updated'));
+      };
+      this.updateRankingStatus();
+      void sent.then(() => { if (status.isConnected) this.updateRankingStatus?.(); });
+    }
     // 結果発表（E24）: 内訳ごとの小さな決定音、更新したときだけ上向きの三音。
     [200, 450, 700].forEach((ms) => setTimeout(() => this.uiSound('reveal'), ms));
     if (saved.newBestScore || saved.newBestTime) setTimeout(() => this.uiSound('best'), 950);

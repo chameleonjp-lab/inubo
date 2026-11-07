@@ -33,24 +33,24 @@ export class MemoryStorage implements StorageLike {
 }
 
 /** ブラウザの保存領域を、読み書きの失敗で止まらないように包む。使えなければ記憶領域を使う。 */
-export function browserStorage(): StorageLike {
+export function browserStorage(prefix = ''): StorageLike {
   try {
     const ls = globalThis.localStorage;
-    const k = '__inubo_probe__';
+    const k = prefix + '__inubo_probe__';
     ls.setItem(k, '1');
     ls.removeItem(k);
     return {
       getItem: (key) => {
         try {
-          return ls.getItem(key);
+          return ls.getItem(prefix + key);
         } catch {
           return null;
         }
       },
-      setItem: (key, value) => ls.setItem(key, value),
+      setItem: (key, value) => ls.setItem(prefix + key, value),
       removeItem: (key) => {
         try {
-          ls.removeItem(key);
+          ls.removeItem(prefix + key);
         } catch {
           /* 無視 */
         }

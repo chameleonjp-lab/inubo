@@ -35,10 +35,17 @@ export function renderResults(r: RunResult, courseName: string, saved: SaveOutco
 
   const board = h('div', { class: 'board hidden', 'data-testid': 'board' });
   let rankingBlock: HTMLElement | null = null;
+  let refreshBoard: (() => void) | null = null;
+  board.addEventListener('ranking-updated', () => refreshBoard?.());
   if (act.ranking) {
+    let boardRequest = 0;
     const show = (metric: 'total' | 'time') => {
       board.classList.remove('hidden');
-      act.ranking!(metric, (s) => renderBoard(board, s, metric, () => show(metric)));
+      refreshBoard = () => show(metric);
+      const current = ++boardRequest;
+      act.ranking!(metric, (s) => {
+        if (current === boardRequest) renderBoard(board, s, metric, () => show(metric));
+      });
     };
     rankingBlock = h(
       'div',

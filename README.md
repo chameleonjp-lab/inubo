@@ -23,6 +23,8 @@ npm run report         # 自動再生の記録を docs/autoplay-report.md に書
 
 ### 検査用の URL パラメーター
 
+`npm run build:e2e` で作った試験用の `dist-e2e/` だけで使えます。本番は `npm run build` で作る `dist/` を配信します。試験用の自己ベスト、スタンプ、送信待ちは試験用のキーで保存します。
+
 | パラメーター | 働き |
 |---|---|
 | `?debug=1` | 入力の長さ・軌跡・判定名と、走行の状態を画面に出す（試験時だけ） |
@@ -31,11 +33,16 @@ npm run report         # 自動再生の記録を docs/autoplay-report.md に書
 
 ### 公開するときの設定
 
-正式な URL と公開順位の接続先は、公開段階で確認してから設定します。それまでは共有文に URL を入れず、順位の送信と導線も止めています。
+1. GitHub の **Settings → Pages → Build and deployment → Source** を **GitHub Actions** にする。
+2. `main` にマージすると自動検査が始まり、成功後に GitHub Pages へ配信される。配信先の URL を使って、ホームと結果の共有文を作る。
+3. ゲーム内ランキングを有効にするときは、イヌボー専用の Supabase に `supabase/migrations/` の SQL を適用し、以下の GitHub Actions のリポジトリ変数を設定して再配信する。変数がなければ端末内の記録で遊べる。
 
 | 設定 | 働き |
 |---|---|
-| `VITE_OFFICIAL_URL` | 確認済みの正式 URL。ビルド時に設定すると「Xでシェア」の文に1回だけ入る |
+| `INUBO_SUPABASE_URL` | 専用 Supabase の Project URL |
+| `INUBO_SUPABASE_PUBLISHABLE_KEY` | 専用 Supabase の公開用キー（`sb_publishable_` で始まるもの） |
+
+最初のゲーム内ランキングは公園の総合点・最速タイムを各上位30人まで表示します。名前を入れて開始した走行のみを対象にし、実験場とは別に運用します。商店街と川沿いは実測して採点基準を固定してから順位を有効にします。サーバーは同一走行の再送、完走までの経過時間、得点の範囲と合計を確認します。
 
 ## 作りの概要
 
@@ -55,4 +62,4 @@ npm run report         # 自動再生の記録を docs/autoplay-report.md に書
 
 ## 進み具合
 
-P01〜P08 は実装と自動の試験まで済んでいます。P09（iPhone 17 Pro での実測と公開前の判定）は、[実機受入の記録](docs/acceptance-record.md)に記録表を用意した段階です。実機の欄、試作値の固定、正式 URL と公開順位の接続先の確認は、これから行います。
+P09 の iPhone 17 Pro による操作・効果音・配点の測定は、[実機受入の記録](docs/acceptance-record.md)に残します。プルリクエストの自動検査を通ると、配信可能な実機確認用の成果物も取得できます。

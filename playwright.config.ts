@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * 画面の一連の流れを確かめる通し試験。本番用にまとめたもの（dist）を配信して確かめる。
+ * 画面の一連の流れを確かめる通し試験。専用の dist-e2e を配信する。
  * 端末の操作感と聞こえ方の合否は、ここではなく iPhone 17 Pro の Safari で取る（docs/acceptance-record.md）。
  */
 export default defineConfig({
@@ -19,9 +19,9 @@ export default defineConfig({
     launchOptions: { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
   },
   webServer: {
-    command: 'npm run build && npx vite preview --port 4173 --strictPort',
+    command: 'npm run build:e2e && npx vite preview --mode e2e --port 4173 --strictPort',
     url: 'http://localhost:4173',
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
