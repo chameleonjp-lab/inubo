@@ -63,6 +63,19 @@ test('端末内の記録: 完走するとホームに最高点と最速（犬種
   await expect(page.locator('[data-testid="course-riverside"]')).toContainText('コーギー');
   await page.getByRole('button', { name: 'スタンプ帳' }).click();
   await expect(page.locator('table.stamps')).toContainText('🐾');
+  const keys = await page.evaluate(() => Object.keys(localStorage));
+  expect(keys.some((key) => key.startsWith('inubo-test:inubo:v1:bestTime:'))).toBe(true);
+  expect(keys.filter((key) => key.startsWith('inubo:v1:'))).toEqual([]);
+});
+
+test('ホーム: Xの投稿画面が開かずコピーも使えないとき、共有文を表示する', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.open = () => null;
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Xでシェア' }).click();
+  await expect(page.getByTestId('home-share-fallback').getByTestId('share-text')).toHaveValue(/イヌボー/);
 });
 
 test('V16 共有: 投稿画面を開けないときは、同じ文をコピーへ。コピーもできなければ文を画面に出す', async ({ page }) => {
@@ -181,10 +194,10 @@ test('画面の向きを変えると一時停止する', async ({ page }) => {
   await expect(page.locator('[data-testid="pause-cover"]')).toBeVisible();
 });
 
-test('V17・V18（試験用の接続先）: 名前と同意つきで走ると、結果の順位に開始時の名前で 1 件だけ出る', async ({ page }) => {
+test('V17・V18（試験用の接続先）: 名前を入れて走ると、結果の順位に開始時の名前で 1 件だけ出る', async ({ page }) => {
   await page.goto('/?ranking=mock&autoplay=safe&speed=12');
   await page.fill('[data-testid="name"]', 'テスト<犬>&');
-  await page.check('[data-testid="consent"]');
+  await expect(page.locator('#ranking-name-note')).toContainText('名前と記録がランキングに公開');
   await page.click('[data-testid="start"]');
   await page.waitForSelector('[data-testid="results"]', { timeout: 90_000 });
   await page.getByRole('button', { name: 'ランキング（総合）' }).click();

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { RankingClient, type BoardState, type FinishPayload } from '../src/ranking/client';
 import { MockRankingServer, buildBoard } from '../src/ranking/mockServer';
 import { MemoryStorage } from '../src/storage/records';
@@ -46,6 +46,24 @@ function start(client: RankingClient, name: string, mode: RunIdentity['mode'], p
 }
 
 describe('V17 任意の名前・再送', () => {
+  test('受付時刻前の完走は失敗にせず、同じ内容を再送して受理する', async () => {
+    const server = new MockRankingServer();
+    const actualFinish = server.postFinish.bind(server);
+    const finish = vi.spyOn(server, 'postFinish').mockResolvedValueOnce('tooEarly').mockImplementation(actualFinish);
+    const store = new MemoryStorage();
+    const client = new RankingClient(server, store, true);
+    const id = start(client, 'はなこ', 'competition', 'p-hana');
+    client.finishRun(makeResult(id, 7600, 1200));
+    await client.flush();
+    expect(client.submissionStatus(id.runId)).toBe('pending');
+    expect(server.rows.size).toBe(0);
+    await Promise.all([client.flush(), client.flush()]);
+    expect(client.submissionStatus(id.runId)).toBe('accepted');
+    expect(server.rows.size).toBe(1);
+    expect(finish).toHaveBeenCalledTimes(2);
+    expect(finish.mock.calls[0][0]).toEqual(finish.mock.calls[1][0]);
+  });
+
   test('空欄で開始 → 結果で名前を追記しても、個人記録の送信も送信待ちも 0 件。練習も 0 件', async () => {
     const server = new MockRankingServer();
     const store = new MemoryStorage();

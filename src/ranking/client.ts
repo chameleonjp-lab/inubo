@@ -34,7 +34,9 @@ export interface FinishPayload {
   total: number;
 }
 
-export type SendStatus = 'accepted' | 'duplicate' | 'conflict' | 'unknownStart' | 'rejected';
+export type SendStatus = 'accepted' | 'duplicate' | 'conflict' | 'unknownStart' | 'rejected' | 'tooEarly';
+
+export type SubmissionStatus = 'idle' | 'pending' | 'accepted' | 'rejected';
 
 export interface BoardQuery {
   courseId: CourseId;
@@ -46,11 +48,11 @@ export interface BoardQuery {
 
 export interface BoardRow {
   rank: number;
-  participantId: string;
+  participantId?: string;
   displayName: string;
   value: number;
   dogId: DogId;
-  achievedSeq: number;
+  achievedSeq?: number;
 }
 
 export interface Transport {
@@ -78,8 +80,10 @@ export type BoardState =
   | { kind: 'error'; message: string };
 
 export class RankingClient {
+  private flushQueue: Promise<unknown> = Promise.resolve();
+
   constructor(
-    private transport: Transport,
+    private transport: Transport | null,
     private store: StorageLike,
     readonly enabled: boolean,
   ) {}
@@ -113,6 +117,13 @@ export class RankingClient {
 
   outboxSize(): number {
     return Object.keys(this.readOutbox()).length;
+  }
+
+  submissionStatus(runId: string): SubmissionStatus {
+    const entry = this.readOutbox()[runId];
+    if (!entry?.finish) return 'idle';
+    if (entry.conflict) return 'rejected';
+    return entry.finishAcked ? 'accepted' : 'pending';
   }
 
   /** 走行の開始。参加しない走行は何も保存せず、何も送らない。 */
@@ -160,7 +171,15 @@ export class RankingClient {
   }
 
   /** 送信待ちを送る。開始が未受領なら、同じ開始を先に送る。通信に失敗したものは次の機会に同じ内容を再送する。 */
-  async flush(): Promise<{ sent: number; failed: number }> {
+  flush(): Promise<{ sent: number; failed: number }> {
+    const transport = this.transport;
+    if (!this.enabled || !transport) return Promise.resolve({ sent: 0, failed: 0 });
+    const request = this.flushQueue.then(() => this.flushOutbox(transport));
+    this.flushQueue = request.catch(() => undefined);
+    return request;
+  }
+
+  private async flushOutbox(transport: Transport): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     let failed = 0;
     for (const runId of Object.keys(this.readOutbox())) {
@@ -168,21 +187,22 @@ export class RankingClient {
       if (!e || e.conflict) continue;
       try {
         if (!e.startAcked) {
-          const st = await this.transport.postStart(e.start);
+          const st = await transport.postStart(e.start);
           sent++;
           if (st === 'conflict' || st === 'rejected') {
             this.update(runId, (x) => (x.conflict = true));
             continue;
           }
+          if (st !== 'accepted' && st !== 'duplicate') continue;
           this.update(runId, (x) => (x.startAcked = true));
         }
         const cur = this.readOutbox()[runId];
         if (cur?.finish && !cur.finishAcked) {
-          let st = await this.transport.postFinish(cur.finish);
+          let st = await transport.postFinish(cur.finish);
           sent++;
           if (st === 'unknownStart') {
-            await this.transport.postStart(cur.start);
-            st = await this.transport.postFinish(cur.finish);
+            await transport.postStart(cur.start);
+            st = await transport.postFinish(cur.finish);
             sent += 2;
           }
           if (st === 'accepted' || st === 'duplicate') this.update(runId, (x) => (x.finishAcked = true));
@@ -204,6 +224,7 @@ export class RankingClient {
 
   /** 順位表を読み込む。状態は 読み込み中 → 表示 / 空 / 失敗。失敗したら retry で同じ問い合わせをやり直す。 */
   async loadBoard(q: Omit<BoardQuery, 'limit'>, onState: (s: BoardState) => void): Promise<BoardState> {
+    if (!this.enabled || !this.transport) return { kind: 'idle' };
     onState({ kind: 'loading' });
     try {
       const rows = (await this.transport.getBoard({ ...q, limit: BOARD_LIMIT })).slice(0, BOARD_LIMIT);
