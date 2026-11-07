@@ -40,8 +40,9 @@ jobs:
         env:
           # Vite's relative base works at the Pages project subpath as well as at the preview root.
           VITE_OFFICIAL_URL: ${{ steps.pages.outputs.base_url }}/
-          VITE_INUBO_SUPABASE_URL: ${{ vars.INUBO_SUPABASE_URL }}
-          VITE_INUBO_SUPABASE_PUBLISHABLE_KEY: ${{ vars.INUBO_SUPABASE_PUBLISHABLE_KEY }}
+          # 実験場が公開ページで使っている接続先とブラウザ用キー。管理用キーはここに入れない。
+          VITE_INUBO_SUPABASE_URL: ${{ (vars.INUBO_SUPABASE_URL && vars.INUBO_SUPABASE_PUBLISHABLE_KEY && vars.INUBO_SUPABASE_URL) || 'https://mlpnjgezrnhdxsxolyzj.supabase.co' }}
+          VITE_INUBO_SUPABASE_PUBLISHABLE_KEY: ${{ (vars.INUBO_SUPABASE_URL && vars.INUBO_SUPABASE_PUBLISHABLE_KEY && vars.INUBO_SUPABASE_PUBLISHABLE_KEY) || 'sb_publishable_drzcy0v97knU6FgjqSgBHw_0A9XPdFM' }}
         run: |
           npm run build
           test -f dist/index.html
