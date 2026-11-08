@@ -13,7 +13,7 @@ export const COURSE_DEFS: Partial<Record<CourseId, CourseDef>> = {
 };
 
 /** ホームで選べる競技用のコース（練習広場は別）。 */
-export const RACE_COURSES: CourseId[] = ['park', 'shopping-street', 'riverside'];
+export const RACE_COURSES: CourseId[] = ['park'];
 
 const cache = new Map<string, CourseRt>();
 

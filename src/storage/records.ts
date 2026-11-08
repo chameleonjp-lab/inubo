@@ -254,7 +254,7 @@ export function loadProfile(store: StorageLike): Profile {
     clothes: typeof p.clothes === 'string' ? p.clothes : '#e4572e',
     helmet: typeof p.helmet === 'string' ? p.helmet : '#2e86ab',
     lastDog: p.lastDog === 'corgi' || p.lastDog === 'whippet' ? p.lastDog : 'shiba',
-    lastCourse: p.lastCourse === 'shopping-street' || p.lastCourse === 'riverside' ? p.lastCourse : 'park',
+    lastCourse: 'park',
   };
   if (!p.participantId) write(store, `${NS}:profile`, profile);
   return profile;

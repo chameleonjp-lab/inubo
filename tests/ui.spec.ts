@@ -25,9 +25,13 @@ async function finishAutoRun(page: Page, route = 'safe', course = 'park', dog = 
   await page.waitForTimeout(900);
 }
 
-test('ホーム: 3 コース・3 犬種を最初から選べ、服とヘルメットの色を選べる', async ({ page }) => {
+test('ホーム: 旧版で別コースを選んでいても公園が選択され、3 犬種と服装を選べる', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('inubo-test:inubo:v1:profile', JSON.stringify({
+    participantId: 'legacy-player', lastCourse: 'riverside',
+  })));
   await page.goto('/');
-  for (const c of ['park', 'shopping-street', 'riverside']) await expect(page.locator(`[data-testid="course-${c}"]`)).toBeVisible();
+  await expect(page.getByTestId('course-park')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-testid^="course-"]')).toHaveCount(1);
   for (const d of ['shiba', 'corgi', 'whippet']) await expect(page.locator(`[data-testid="dog-${d}"]`)).toBeEnabled();
   await page.click('[data-testid="dog-corgi"]');
   await expect(page.locator('[data-testid="dog-corgi"]')).toHaveAttribute('aria-pressed', 'true');
@@ -56,11 +60,11 @@ test('完走 → 結果: 総合点を大きく、その下にタイム・タイ�
 });
 
 test('端末内の記録: 完走するとホームに最高点と最速（犬種つき）が出て、スタンプ帳に印が付く。再読込後も残る', async ({ page }) => {
-  await finishAutoRun(page, 'safe', 'riverside', 'corgi');
+  await finishAutoRun(page, 'safe', 'park', 'corgi');
   await page.click('[data-testid="home"]');
   await page.reload();
-  await expect(page.locator('[data-testid="course-riverside"]')).toContainText('最高');
-  await expect(page.locator('[data-testid="course-riverside"]')).toContainText('コーギー');
+  await expect(page.getByTestId('course-park')).toContainText('最高');
+  await expect(page.getByTestId('course-park')).toContainText('コーギー');
   await page.getByRole('button', { name: 'スタンプ帳' }).click();
   await expect(page.locator('table.stamps')).toContainText('🐾');
   const keys = await page.evaluate(() => Object.keys(localStorage));

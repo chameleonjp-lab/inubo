@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { crossLinear } from '../src/game/contacts';
 import { advanceRun } from '../src/game/run';
 import { solidTop } from '../src/game/track';
 import { FOOT_FRONT, FALL_US, STEP_UP } from '../src/game/rules';
@@ -201,4 +202,8 @@ describe('V04 距離と復帰', () => {
     const kicker = apex([], 12_000_000);
     expect(kicker).toBeGreaterThan(a + 1);
   });
+});
+test('高速で復帰地点の直前に来ても、次の計算で地点を通過する', () => {
+  expect(crossLinear(2 - 1.1e-12, 13.95, 2, 5000)).toBe(1);
+  expect(crossLinear(2, 13.95, 2, 5000, true)).toBe(0);
 });

@@ -126,6 +126,8 @@ export interface CourseDef {
   version: string;
   name: string;
   theme: 'park' | 'street' | 'river' | 'plaza';
+  /** 通常の平地最高速に掛けるコース固有の倍率。省略時は 1。 */
+  speedMultiplier?: number;
   spine: { start: [number, number]; heading: number; segs: SpineSeg[] };
   height: Key[];
   paths: PathDef[];

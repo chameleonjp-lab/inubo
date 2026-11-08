@@ -11,7 +11,7 @@ import { newRun } from './helpers';
 import type { SimState } from '../src/game/types';
 
 /**
- * 自動再生の記録（P09 の「自動再生の9通り」の別表と、犬種差の区間タイムの自動測定）。
+ * 自動再生の記録（公園を全犬種で走らせた結果と、犬種差の区間タイムの自動測定）。
  * REPORT_OUT を指定すると Markdown に書き出す。実機の欄を埋める代わりには使わない。
  */
 
@@ -38,7 +38,7 @@ function segmentTime(courseId: 'park', dog: (typeof DOG_ORDER)[number], route: s
   return ((tOut ?? 0) - (tIn ?? 0)) / 1e6;
 }
 
-test('自動再生: 3 コース × 3 犬種（通常ジャンプだけ・技あり）と、犬種差の 3 区間', () => {
+test('自動再生: 公園を 3 犬種（技なし・技あり）で走り、犬種差を 3 区間で測る', () => {
   const lines: string[] = [];
   const sha = process.env.REPORT_COMMIT ?? '（未記入）';
   lines.push('# 自動再生の記録（自動操縦）', '');
