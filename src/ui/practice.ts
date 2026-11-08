@@ -48,7 +48,7 @@ export const PRACTICE_STEPS: PracticeStep[] = [
   {
     id: 'composite',
     title: '5. 複合技（円＋直線）',
-    hint: '跳んだら指を離し、空中で2本の指を置き直して円と直線をなぞります。1本なら、円を閉じたあと続けて直線を引いて離します。',
+    hint: '5番はゆっくり動きます。跳んだら指を離し、空中で丸印から左へ進んで円を1周。そのまま左へ線を引いて指を離し、着地しましょう。',
     retry: '円を閉じたら、すぐに線を引いて離しましょう。',
   },
 ];
@@ -63,7 +63,6 @@ interface DemoStroke {
 }
 
 const GOLD = '#ffd34f';
-const BLUE = '#83e2ff';
 const AIR_STROKE_START_US = 550_000;
 
 function line(a: PracticePoint, b: PracticePoint, startUs: number, durationUs: number, color = GOLD): DemoStroke {
@@ -80,13 +79,25 @@ function circle(cx: number, cy: number, r: number): DemoStroke {
 }
 
 const JUMP_STROKE = line([0.23, 0.18], [0.23, -0.12], 180_000, 340_000);
+const compositeCircle = circle(0, -0.03, 0.11);
+const compositeEnd = compositeCircle.points[compositeCircle.points.length - 1];
+const COMPOSITE_STROKE: DemoStroke = {
+  ...compositeCircle,
+  points: [...compositeCircle.points, ...line(compositeEnd, [-0.30, compositeEnd[1]], 0, 0).points.slice(1)],
+  durationUs: 420_000,
+};
 const DEMO_STROKES: Record<PracticeStepId, readonly DemoStroke[]> = {
   lateral: [line([0.15, -0.02], [-0.13, -0.02], 180_000, 320_000), line([-0.23, 0.16], [0.30, 0.16], 900_000, 370_000)],
   jump: [JUMP_STROKE],
   dog: [JUMP_STROKE, circle(-0.12, 0.02, 0.13)],
   body: [JUMP_STROKE, line([-0.16, 0.18], [-0.16, -0.13], AIR_STROKE_START_US, 350_000)],
-  composite: [JUMP_STROKE, circle(-0.21, 0.02, 0.11), line([0.20, 0.18], [0.20, -0.13], AIR_STROKE_START_US, 350_000, BLUE)],
+  composite: [JUMP_STROKE, COMPOSITE_STROKE],
 };
+
+/** 複合技を落ち着いて試せるよう、5番の練習時計だけを半速にする。 */
+export function practiceRate(step: PracticeStepId): number {
+  return step === 'composite' ? 0.5 : 1;
+}
 
 /** 地面では踏切の線、空中では指を置き直して描く形を出す。 */
 export function practiceGuide(step: PracticeStepId, airborne: boolean): readonly DemoStroke[] {
@@ -143,7 +154,7 @@ export class PracticeDemo {
     if (this.step === 'jump' || this.elapsedUs < AIR_STROKE_START_US) return 'お手本：上払いでジャンプ';
     if (this.step === 'dog') return 'お手本：空中で円を閉じる';
     if (this.step === 'body') return 'お手本：空中で線を引いて指を離す';
-    return 'お手本：空中で円と直線を描く';
+    return 'お手本：左へ進んで円を1周し、続けて左へ引いて離す';
   }
 
   get traces(): (DemoStroke & { progress: number })[] {
@@ -161,7 +172,9 @@ export class PracticeDemo {
       if (e.kind === 'jump' && this.step !== 'lateral') {
         this.jumped = true;
       } else if (e.kind === 'trickStart') {
-        this.caption = this.step === 'composite' ? 'お手本：犬の回転と体ごとの回転が同時に始まる' : e.data?.channel === 'dog' ? 'お手本：円が閉じたので、犬だけが回る' : 'お手本：線を引いて指を離すと、人と犬が回る';
+        this.caption = this.step === 'composite'
+          ? e.data?.channel === 'dog' ? 'お手本：円を閉じたら、そのまま左へ' : 'お手本：指を離すと、人と犬も回る'
+          : e.data?.channel === 'dog' ? 'お手本：円が閉じたので、犬だけが回る' : 'お手本：線を引いて指を離すと、人と犬が回る';
       } else if (e.kind === 'land' && this.step !== 'lateral') this.caption = 'お手本：着地';
     }
     return events;
