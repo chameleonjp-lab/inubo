@@ -1,15 +1,25 @@
-import type { CourseDef } from '../types';
+import type { CourseDef, ObjectDef } from '../types';
+
+/** 後半の踏切台は左右交互。中央には踏切台に乗らずに通れる道を残す。 */
+const extensionRamps = Array.from({ length: 30 }, (_, i): ObjectDef => ({
+  kind: 'kicker', id: `k-extra-${i + 1}`, path: 'extension',
+  u0: 790 + 24 * i, u1: 794 + 24 * i,
+  x0: i % 2 === 0 ? -2.8 : 0.55,
+  x1: i % 2 === 0 ? -0.55 : 2.8,
+  height: 0.6,
+}));
 
 /**
  * 公園。直線 → 階段と手すりの分岐（中央の階段・横の手すり・脇の坂）→ 合流 → 急カーブ
- * → 短い平道と少し長い手すり道の分岐 → 合流 → 高い壁（踏切台と横の抜け道）→ ゲート → ゴール。
- * 採点区間は 12 か所（分岐の左右は同じ採点機会の番号）。目安は 60〜90 秒、制限時間なし。
+ * → 短い平道と少し長い手すり道の分岐 → 合流 → 高い壁 → ゲート → 踏切台の多い後半 → ゴール。
+ * 旧版の中心線距離 757m に 757m を足す。採点区間は 18 か所、制限時間なし。
  */
 export const park: CourseDef = {
   id: 'park',
-  version: 'park-1',
+  version: 'park-2',
   name: '公園',
   theme: 'park',
+  speedMultiplier: 1.5,
   spine: {
     start: [0, 0],
     heading: -90,
@@ -23,6 +33,13 @@ export const park: CourseDef = {
       { len: 100 },
       { len: 50, turn: 40 },
       { len: 110 },
+      { len: 90 },
+      { len: 70, turn: -38 },
+      { len: 150 },
+      { len: 80, turn: 72 },
+      { len: 160 },
+      { len: 65, turn: -42 },
+      { len: 142 },
     ],
   },
   height: [
@@ -34,6 +51,14 @@ export const park: CourseDef = {
     { u: 300, v: 0 },
     { u: 340, v: 2 },
     { u: 780, v: 2 },
+    { u: 875, v: 2 },
+    { u: 965, v: 6 },
+    { u: 1050, v: 6 },
+    { u: 1160, v: 1 },
+    { u: 1270, v: 1 },
+    { u: 1395, v: 5 },
+    { u: 1480, v: 2 },
+    { u: 1537, v: 2 },
   ],
   paths: [
     {
@@ -123,10 +148,11 @@ export const park: CourseDef = {
       next: { kind: 'path', to: 'late' },
       route: '手すり道',
     },
-    { id: 'late', u0: 500, u1: 780, halfWidth: 4, next: { kind: 'end' } },
+    { id: 'late', u0: 500, u1: 780, halfWidth: 4, next: { kind: 'path', to: 'extension' } },
+    { id: 'extension', u0: 780, u1: 1537, halfWidth: 4, next: { kind: 'end' } },
   ],
   start: { path: 'start', u: 3 },
-  goal: { path: 'late', u: 760 },
+  goal: { path: 'extension', u: 1517 },
   objects: [
     // S1: 最初の直線。フードと、その場で越せる低い柵。
     { kind: 'food', id: 'food-1', path: 'start', u: 30, x: 1.5, h: 0.35 },
@@ -141,7 +167,7 @@ export const park: CourseDef = {
     { kind: 'checkpoint', id: 'cp-2', path: 'start', u: 135, x: 0 },
     // S3: 下り坂、道しるべ、踏切台。
     { kind: 'guide', id: 'guide-1', path: 'start', u: 160, x: 0, h: 0.4 },
-    { kind: 'kicker', id: 'k-2', path: 'start', u0: 176, u1: 180, x0: -1.2, x1: 1.2, height: 0.6 },
+    { kind: 'kicker', id: 'k-2', path: 'start', u0: 172, u1: 176, x0: -1.2, x1: 1.2, height: 0.6 },
     { kind: 'checkpoint', id: 'cp-3', path: 'start', u: 196, x: 0 },
     // F1: 中央の階段・横の手すり・脇の坂。
     { kind: 'stairs', id: 'st-c', path: 'f1-stairs', u0: 236, u1: 242, steps: 10 },
@@ -177,10 +203,28 @@ export const park: CourseDef = {
     { kind: 'food', id: 'food-3', path: 'late', u: 615, x: 0, h: 3.6 },
     { kind: 'arrow', id: 'ar-9', path: 'late', u: 612, side: 'left', dir: 'right' },
     { kind: 'arrow', id: 'ar-10', path: 'late', u: 618, side: 'left', dir: 'right' },
-    // S12: 骨形ゲートとゴール。
+    // S12: 骨形ゲート。
     { kind: 'checkpoint', id: 'cp-10', path: 'late', u: 680, x: 0 },
     { kind: 'gate', id: 'gate-1', path: 'late', u: 705, x0: -4, x1: 4, height: 0.9, periodUs: 4_400_000, offsetUs: 0 },
     { kind: 'poop', id: 'poop-2', path: 'late', u: 728, x: -2 },
+    // S13〜S18: 左右に踏切台が続く後半。左右どちらからでも中央の道に戻れる。
+    ...extensionRamps,
+    { kind: 'checkpoint', id: 'cp-11', path: 'extension', u: 782, x: 0 },
+    { kind: 'checkpoint', id: 'cp-12', path: 'extension', u: 903, x: 0 },
+    { kind: 'checkpoint', id: 'cp-13', path: 'extension', u: 1028, x: 0 },
+    { kind: 'checkpoint', id: 'cp-14', path: 'extension', u: 1153, x: 0 },
+    { kind: 'checkpoint', id: 'cp-15', path: 'extension', u: 1278, x: 0 },
+    { kind: 'checkpoint', id: 'cp-16', path: 'extension', u: 1403, x: 0 },
+    { kind: 'food', id: 'food-4', path: 'extension', u: 986, x: 2.8, h: 3.1 },
+    { kind: 'food', id: 'food-5', path: 'extension', u: 1327, x: -2.8, h: 0.35 },
+    { kind: 'poop', id: 'poop-3', path: 'extension', u: 1120, x: 2.1 },
+    { kind: 'poop', id: 'poop-4', path: 'extension', u: 1445, x: -2.1 },
+    { kind: 'arrow', id: 'ar-11', path: 'extension', u: 861, side: 'right', dir: 'left' },
+    { kind: 'arrow', id: 'ar-12', path: 'extension', u: 871, side: 'right', dir: 'left' },
+    { kind: 'arrow', id: 'ar-13', path: 'extension', u: 1081, side: 'left', dir: 'right' },
+    { kind: 'arrow', id: 'ar-14', path: 'extension', u: 1091, side: 'left', dir: 'right' },
+    { kind: 'arrow', id: 'ar-15', path: 'extension', u: 1321, side: 'right', dir: 'left' },
+    { kind: 'arrow', id: 'ar-16', path: 'extension', u: 1331, side: 'right', dir: 'left' },
   ],
   sections: [
     { path: 'start', u0: 0, u1: 70, opp: 'S1' },
@@ -199,8 +243,14 @@ export const park: CourseDef = {
     { path: 'late', u0: 500, u1: 590, opp: 'S10' },
     { path: 'late', u0: 590, u1: 670, opp: 'S11' },
     { path: 'late', u0: 670, u1: 780, opp: 'S12' },
+    { path: 'extension', u0: 780, u1: 905, opp: 'S13' },
+    { path: 'extension', u0: 905, u1: 1030, opp: 'S14' },
+    { path: 'extension', u0: 1030, u1: 1155, opp: 'S15' },
+    { path: 'extension', u0: 1155, u1: 1280, opp: 'S16' },
+    { path: 'extension', u0: 1280, u1: 1405, opp: 'S17' },
+    { path: 'extension', u0: 1405, u1: 1537, opp: 'S18' },
   ],
-  timeScore: { fullCs: 6000, zeroCs: 11000, provisional: false },
+  timeScore: { fullCs: 8000, zeroCs: 14667, provisional: false },
   challenge: { id: 'park-rail', label: '手すり道の長い手すりを端まで渡りきる', kind: 'railFull', target: 'r-long' },
   autoRoutes: {
     safe: [
@@ -218,6 +268,7 @@ export const park: CourseDef = {
       { at: 572, steer: 0 },
       { at: 592, steer: 2.6 },
       { at: 620, steer: 0 },
+      { at: 699, jump: true },
     ],
     short: [
       { at: 4, steer: 0 },
@@ -231,12 +282,13 @@ export const park: CourseDef = {
       { at: 502, steer: 0 },
       { at: 592, steer: 2.6 },
       { at: 620, steer: 0 },
+      { at: 699, jump: true },
     ],
     trick: [
       { at: 4, steer: 0 },
       { at: 46, jump: true },
       { at: 84, trick: { afterUs: 60_000, dog: { vertical: false, clockwise: true }, body: 2, style: 'two' } },
-      { at: 174, trick: { afterUs: 60_000, dog: { vertical: true, clockwise: true }, body: 1, style: 'one' } },
+      { at: 170, trick: { afterUs: 60_000, dog: { vertical: true, clockwise: true }, body: 1, style: 'one' } },
       { at: 200, steer: 5 },
       { at: 216, path: 'f1-rail', steer: 0 },
       { at: 227, path: 'f1-rail', jump: true },
@@ -252,8 +304,8 @@ export const park: CourseDef = {
       { at: 380, trick: { afterUs: 40_000, body: 6 } },
       { at: 412, steer: 2 },
       { at: 422, path: 'f2-rail', steer: 0 },
-      { at: 446, path: 'f2-rail', jump: true },
-      { at: 446, path: 'f2-rail', trick: { afterUs: 20_000, dog: { vertical: true, clockwise: true } } },
+      { at: 442.3, path: 'f2-rail', jump: true },
+      { at: 442.3, path: 'f2-rail', trick: { afterUs: 20_000, dog: { vertical: true, clockwise: true } } },
       { at: 480, path: 'f2-rail', jump: true },
       { at: 480, path: 'f2-rail', trick: { afterUs: 40_000, dog: { vertical: false, clockwise: false } } },
       { at: 502, steer: 0 },
@@ -263,6 +315,9 @@ export const park: CourseDef = {
       { at: 640, steer: 0 },
       { at: 690, jump: true },
       { at: 690, trick: { afterUs: 40_000, dog: { vertical: false, clockwise: true } } },
+      { at: 783, steer: -1.5 },
+      { at: 793, trick: { afterUs: 40_000, dog: { vertical: false, clockwise: true } } },
+      { at: 815, steer: 0 },
     ],
   },
 };

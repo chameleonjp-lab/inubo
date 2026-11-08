@@ -132,6 +132,8 @@ h2 {
   gap: 8px;
 }
 
+.course-cards { grid-template-columns: minmax(0, 1fr); }
+
 .card {
   appearance: none;
   border: 2px solid var(--line);
@@ -485,6 +487,20 @@ canvas.trails {
 .practice-panel .retry-hint {
   color: var(--bad);
   font-weight: 700;
+}
+
+.practice-panel .practice-demo-status {
+  color: #173751;
+  font-weight: 700;
+}
+
+.practice-panel .practice-demo-status:empty {
+  margin: 0;
+}
+
+.practice-demo-playing .countdown,
+.practice-demo-playing .center-text {
+  display: none;
 }
 
 .steps {

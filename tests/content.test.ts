@@ -4,7 +4,8 @@ import { DOGS, DOG_ORDER } from '../src/content/dogs';
 import { buildCourse, baseHeight, hwAt, supportHeight, solidTop } from '../src/game/track';
 import { runWithAutopilot } from '../src/game/autopilot';
 import { advanceRun } from '../src/game/run';
-import { BODY_ROT_US, DOG_SPIN_US, FOOT_FRONT, FOOT_HALF_WIDTH, JUMP_VY } from '../src/game/rules';
+import { BASE_SPEED, BODY_ROT_US, DOG_SPIN_US, FOOT_FRONT, FOOT_HALF_WIDTH, JUMP_VY } from '../src/game/rules';
+import { maxSpeed } from '../src/game/motion';
 import { newRun, testCourse } from './helpers';
 import type { CourseId, DogId } from '../src/content/types';
 
@@ -73,12 +74,21 @@ describe('コースのデータ', () => {
     });
   }
 
-  test('公園の採点区間は 12 か所', () => {
-    expect(getCourse('park').opportunities.length).toBe(12);
+  test('公園だけを競技に使い、旧版の倍の距離、35 基の踏切台、18 の採点区間を持つ', () => {
+    expect(RACE_COURSES).toEqual(['park']);
+    const course = getCourse('park');
+    expect(course.progressLength).toBe((760 - 3) * 2);
+    expect(course.def.objects.filter((o) => o.kind === 'kicker')).toHaveLength(5 + 30);
+    expect(course.opportunities).toHaveLength(18);
+    for (const dog of DOG_ORDER) {
+      const base = BASE_SPEED * DOGS[dog].speedIndex / 100;
+      expect(maxSpeed(newRun(course, dog))).toBeCloseTo(base * 1.5);
+      expect(maxSpeed(newRun(getCourse('practice'), dog))).toBeCloseTo(base);
+    }
   });
 });
 
-describe('3 コース × 3 犬種の完走（技を使わない走り）', () => {
+describe('公園を 3 犬種で完走（技を使わない走り）', () => {
   for (const cid of RACE_COURSES) {
     for (const dog of DOG_ORDER) {
       test(`${COURSE_DEFS[cid]!.name} × ${DOGS[dog].name}`, () => {
@@ -88,9 +98,8 @@ describe('3 コース × 3 犬種の完走（技を使わない走り）', () =>
         expect(run.finished).toBe(true);
         expect(run.result!.trickScore).toBe(0);
         if (cid === 'park') {
-          // R04: 公園の想定ルートは目安 60〜90 秒。
-          expect(run.result!.recordCs).toBeGreaterThanOrEqual(6000);
-          expect(run.result!.recordCs).toBeLessThanOrEqual(9000);
+          expect(run.result!.recordCs).toBeGreaterThanOrEqual(8000);
+          expect(run.result!.recordCs).toBeLessThanOrEqual(12000);
         }
       });
     }
@@ -111,7 +120,7 @@ describe('公園の近道と技の道', () => {
     });
   }
 
-  test('3 コースすべてで、技の道を全犬種が完走できる', () => {
+  test('公園の技の道を全犬種が完走できる', () => {
     for (const cid of RACE_COURSES) {
       for (const dog of DOG_ORDER) {
         const course = getCourse(cid as CourseId);

@@ -66,8 +66,9 @@ export function crossLinear(start: number, rate: number, target: number, spanUs:
   if (rate <= 0) return null;
   if (target < start - 1e-12) return null;
   if (target <= start + 1e-12) return allowZero ? 0 : null;
-  const tau = Math.ceil(((target - start) / rate) * 1e6 - 1e-6);
-  return tau <= spanUs ? Math.max(0, tau) : null;
+  // まだ手前にいるときは必ず時間を進める。同じ復帰地点を時刻 0 で拾い続けない。
+  const tau = Math.max(1, Math.ceil(((target - start) / rate) * 1e6 - 1e-6));
+  return tau <= spanUs ? tau : null;
 }
 
 /** 条件が最初に成り立つ整数 µs を二分探索で求める（0 では不成立、hi では成立）。 */

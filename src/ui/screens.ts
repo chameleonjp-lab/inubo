@@ -1,6 +1,6 @@
 import { h, clear, fmtInt } from './dom';
 import { renderBoard, renderResults } from './results';
-import { PRACTICE_STEPS, PracticeCoach } from './practice';
+import { PRACTICE_STEPS, PracticeCoach, PracticeDemo, practiceGuide, type PracticePoint } from './practice';
 import { formatTime, homeShareText, officialUrl, resultShareText, shareOnX, shareableResult } from './share';
 import { RunSession } from '../game/run';
 import { RULES_VERSION } from '../game/rules';
@@ -31,6 +31,30 @@ const HELMETS = ['#2e86ab', '#e4572e', '#ffffff', '#222222', '#f2c14e'];
 
 function nowMs(): number {
   return performance.now();
+}
+
+function traceLayout(w: number, h: number) {
+  const landscape = w > h;
+  return { cx: w * (landscape ? 0.67 : 0.50), cy: h * (landscape ? 0.36 : 0.39), unit: Math.min(w, h) };
+}
+
+function drawReference(g: CanvasRenderingContext2D, points: readonly PracticePoint[], { cx, cy, unit }: ReturnType<typeof traceLayout>, faint: boolean): void {
+  g.beginPath();
+  points.forEach(([x, y], i) => i ? g.lineTo(cx + x * unit, cy + y * unit) : g.moveTo(cx + x * unit, cy + y * unit));
+  g.setLineDash([6, 6]);
+  g.strokeStyle = faint ? 'rgba(27, 44, 60, .45)' : '#27364b';
+  g.lineWidth = 5;
+  g.stroke();
+  g.strokeStyle = faint ? 'rgba(255, 248, 221, .7)' : '#fff8dd';
+  g.lineWidth = 2.5;
+  g.stroke();
+  g.setLineDash([]);
+  if (faint) {
+    const [x, y] = points[0];
+    g.beginPath();
+    g.arc(cx + x * unit, cy + y * unit, 5, 0, 2 * Math.PI);
+    g.stroke();
+  }
 }
 
 export class App {
@@ -202,7 +226,7 @@ export class App {
         { class: 'screen home', 'data-testid': 'home' },
         h('h1', { class: 'logo' }, 'イヌボー', h('small', {}, '犬のスケボー')),
         h('h2', {}, 'コース'),
-        h('div', { class: 'cards' }, courseCards),
+        h('div', { class: 'cards course-cards' }, courseCards),
         h('h2', {}, '犬'),
         h('div', { class: 'cards' }, dogCards),
         h('h2', {}, '乗り手'),
@@ -487,7 +511,11 @@ class GameRun {
   private virtualWallUs = 0;
   private finishedAtMs: number | null = null;
   private destroyed = false;
-  private demoStartMs = -1;
+  private practiceDemo: PracticeDemo | null = null;
+  private demoButton: HTMLButtonElement | null = null;
+  private demoStatus: HTMLElement | null = null;
+  private demoFinished = false;
+  private demoReducedMotion: MediaQueryList | null = null;
   private pauseCover: HTMLElement;
   private practicePanel: HTMLElement | null = null;
   private wasSteering = false;
@@ -514,6 +542,7 @@ class GameRun {
     if (isPractice) {
       this.coach = new PracticeCoach();
       this.practicePanel = h('div', { class: 'practice-panel', 'data-testid': 'practice-panel' });
+      this.demoReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     }
     this.el = h(
       'section',
@@ -569,12 +598,16 @@ class GameRun {
   destroy(): void {
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
+    this.stopPracticeDemo(false);
+    if (this.session.paused) this.app.sound.setPaused(false, nowMs());
   }
 
   private resizeTrails(): void {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.trails.width = Math.round(window.innerWidth * dpr);
-    this.trails.height = Math.round(window.innerHeight * dpr);
+    const w = Math.round(window.innerWidth * dpr);
+    const h = Math.round(window.innerHeight * dpr);
+    if (this.trails.width !== w) this.trails.width = w;
+    if (this.trails.height !== h) this.trails.height = h;
   }
 
   private submit(facts: GestureFact[]): void {
@@ -589,6 +622,7 @@ class GameRun {
     };
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      if (this.practiceDemo) return;
       this.app.audio.unlock();
       this.session.pointerDown(e.pointerId);
       try {
@@ -629,6 +663,9 @@ class GameRun {
 
   pauseFor(reason: 'manual' | 'hidden' | 'orientation'): void {
     if (this.session.phase === 'finished' || this.destroyed) return;
+    if (this.practiceDemo) {
+      this.stopPracticeDemo(false);
+    }
     this.session.pause(reason);
     this.submit(this.recognizer.suspend(this.session.sim.simUs, nowMs()));
     this.app.sound.setPaused(true, nowMs());
@@ -676,6 +713,10 @@ class GameRun {
     const t = nowMs();
     const dtMs = Math.min(100, t - this.lastFrameMs);
     this.lastFrameMs = t;
+    if (this.practiceDemo) {
+      this.renderDemoFrame(this.practiceDemo, t, dtMs);
+      return;
+    }
     const sim = this.session.sim;
     let events: SimEvent[] = [];
     if (this.app.opts.autoplay) {
@@ -708,11 +749,13 @@ class GameRun {
       if (e.kind === 'start') this.flashCountdown('スタート');
     }
     if (this.coach) {
+      const lastHint = this.coach.lastHint;
       const progressed = this.coach.observe(events, sim);
       if (progressed) {
+        this.demoFinished = false;
         this.app.uiSound('stamp');
         this.renderPractice();
-      } else if (this.coach.lastHint) this.renderPractice();
+      } else if (lastHint !== this.coach.lastHint) this.renderPractice();
     }
     const renderUs = this.session.runClockUs(this.wallUs()) ?? sim.simUs;
     const loops = this.app.sound.loops(
@@ -770,12 +813,18 @@ class GameRun {
   }
 
   private drawTrails(t: number): void {
+    this.resizeTrails();
     const c = this.trails;
     const g = c.getContext('2d');
     if (!g) return;
     const dpr = c.width / Math.max(1, window.innerWidth);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    if (this.coach && !this.coach.done && !this.session.paused) {
+      const layout = traceLayout(window.innerWidth, window.innerHeight);
+      g.lineCap = g.lineJoin = 'round';
+      for (const stroke of practiceGuide(this.coach.step.id, this.session.sim.mode === 'air')) drawReference(g, stroke.points, layout, true);
+    }
     this.recognizer.pruneTrails(t, 700);
     for (const tr of this.recognizer.trailViews()) {
       const alpha = tr.ended ? Math.max(0, 1 - (t - tr.endedAtMs) / 700) : 1;
@@ -800,27 +849,93 @@ class GameRun {
         g.fillText(tr.label, last.x + 8, last.y - 8);
       }
     }
-    // 練習の手本（E22）: 指の跡をゆっくり示す。
-    if (this.coach && !this.coach.done && this.demoStartMs >= 0) {
-      const demo = this.coach.step.demo;
-      const unit = Math.min(window.innerWidth, window.innerHeight);
-      const cx = window.innerWidth / 2;
-      const cy = window.innerHeight / 2;
-      const prog = ((t - this.demoStartMs) % 2200) / 1600;
-      for (const pts of [demo.points, demo.second].filter(Boolean) as [number, number][][]) {
-        const n = Math.max(1, Math.floor(Math.min(1, prog) * (pts.length - 1)) + 1);
-        g.strokeStyle = 'rgba(255,220,80,.85)';
-        g.setLineDash([10, 8]);
-        g.lineWidth = 5;
+  }
+
+  private startPracticeDemo(): void {
+    if (!this.coach || this.coach.done || this.session.paused || this.session.pointersDown > 0) return;
+    this.demoFinished = false;
+    const { course, dog } = this.session.sim;
+    this.practiceDemo = new PracticeDemo(this.coach.step.id, this.identity, course, dog);
+    this.el.classList.add('practice-demo-playing');
+    this.app.uiSound('demo');
+    this.session.pause('manual');
+    this.submit(this.recognizer.suspend(this.session.sim.simUs, nowMs()));
+    this.app.sound.setPaused(true, nowMs());
+    this.view.resetEffects();
+    this.syncDemoControls();
+  }
+
+  private stopPracticeDemo(resume: boolean): void {
+    if (!this.practiceDemo) return;
+    this.practiceDemo = null;
+    this.el.classList.remove('practice-demo-playing');
+    this.view.resetEffects();
+    this.syncDemoControls();
+    if (!resume) return;
+    this.session.requestResume(this.wallUs());
+    if (!this.session.paused) this.app.sound.setPaused(false, nowMs());
+  }
+
+  private syncDemoControls(): void {
+    if (this.demoButton) this.demoButton.textContent = this.practiceDemo ? 'お手本を止める' : 'お手本を見る';
+    const message = this.practiceDemo?.status ?? (this.demoFinished ? 'お手本のあと、自分の指で試してみましょう。' : '');
+    if (this.demoStatus && this.demoStatus.textContent !== message) this.demoStatus.textContent = message;
+  }
+
+  private renderDemoFrame(demo: PracticeDemo, t: number, dtMs: number): void {
+    const cues = demo.advanceTo(demo.elapsedUs + dtMs * 1000).map(cueForEvent).filter(Boolean) as Cue[];
+    const reduced = this.demoReducedMotion?.matches ?? false;
+    this.app.audio.update(0, { steps: null, wind: null, grind: null }, t);
+    this.view.frame(demo.state, demo.elapsedUs, reduced ? [] : cues, { ...this.app.settings, shake: false }, t, dtMs);
+    if (this.demoStatus && this.demoStatus.textContent !== demo.status) this.demoStatus.textContent = demo.status;
+    this.drawDemoTraces(demo, reduced);
+    if (demo.done) {
+      this.demoFinished = true;
+      this.stopPracticeDemo(true);
+    }
+  }
+
+  private drawDemoTraces(demo: PracticeDemo, reduced: boolean): void {
+    this.resizeTrails();
+    const g = this.trails.getContext('2d');
+    if (!g) return;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const dpr = this.trails.width / Math.max(1, w);
+    const layout = traceLayout(w, h);
+    const { cx, cy, unit } = layout;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    g.lineCap = g.lineJoin = 'round';
+    for (const { points, color, progress } of demo.traces) {
+      drawReference(g, points, layout, false);
+
+      const n = points.length - 1;
+      const pos = n * (reduced && progress > 0 ? 1 : progress);
+      const i = Math.floor(pos);
+      const [x, y] = points[i];
+      const [x2, y2] = points[Math.min(i + 1, n)];
+      const endX = cx + (x + (x2 - x) * (pos - i)) * unit;
+      const endY = cy + (y + (y2 - y) * (pos - i)) * unit;
+      if (progress > 0) {
         g.beginPath();
-        pts.slice(0, n).forEach(([x, y], i) => (i ? g.lineTo(cx + x * unit, cy + y * unit) : g.moveTo(cx + x * unit, cy + y * unit)));
+        points.slice(0, i + 1).forEach(([px, py], j) => j ? g.lineTo(cx + px * unit, cy + py * unit) : g.moveTo(cx + px * unit, cy + py * unit));
+        g.lineTo(endX, endY);
+        g.strokeStyle = '#27364b';
+        g.lineWidth = 8;
         g.stroke();
-        g.setLineDash([]);
-        const [lx, ly] = pts[n - 1];
-        g.fillStyle = 'rgba(255,220,80,.95)';
+        g.strokeStyle = color;
+        g.lineWidth = 5;
+        g.stroke();
+      }
+      if (!reduced && progress < 1) {
         g.beginPath();
-        g.arc(cx + lx * unit, cy + ly * unit, 12, 0, Math.PI * 2);
+        g.arc(endX, endY, 8, 0, 2 * Math.PI);
+        g.fillStyle = color;
         g.fill();
+        g.strokeStyle = '#27364b';
+        g.lineWidth = 2;
+        g.stroke();
       }
     }
   }
@@ -829,30 +944,39 @@ class GameRun {
     if (!this.practicePanel || !this.coach) return;
     const c = this.coach;
     if (c.done) {
+      this.demoButton = null;
+      this.demoStatus = null;
       this.practicePanel.replaceChildren(
-        h('h3', {}, '5つの手順をすべて試しました'),
+        h('h3', {}, '練習の手順はここまで'),
         h('p', {}, 'このまま練習を続けるか、本番へ進みましょう。練習の記録は競技の記録に入りません。'),
         h('div', { class: 'row-btns' }, h('button', { class: 'btn primary', 'data-testid': 'to-race', onclick: () => this.app.startRun('competition') }, '本番へ'), h('button', { class: 'btn', onclick: () => this.retire() }, 'やめる')),
       );
-      this.demoStartMs = -1;
       return;
     }
     const st = c.step;
+    this.demoButton = h('button', { class: 'btn small', 'data-testid': 'practice-demo', onclick: () => this.practiceDemo ? this.stopPracticeDemo(true) : this.startPracticeDemo() });
+    this.demoStatus = h('p', { class: 'practice-demo-status', 'data-testid': 'practice-demo-status', 'aria-live': 'polite' });
+    this.syncDemoControls();
     this.practicePanel.replaceChildren(
       h('div', { class: 'steps' }, PRACTICE_STEPS.map((_, i) => h('span', { class: `dot${i < c.index ? ' done' : i === c.index ? ' cur' : ''}` }, String(i + 1)))),
       h('h3', { 'data-testid': 'practice-title' }, st.title),
       h('p', {}, st.hint),
       c.lastHint ? h('p', { class: 'retry-hint' }, c.lastHint) : '',
+      this.demoStatus,
       h(
         'div',
         { class: 'row-btns' },
-        h('button', { class: 'btn small', onclick: () => ((this.demoStartMs = nowMs()), this.app.uiSound('demo')) }, 'お手本'),
-        h('button', { class: 'btn small', 'data-testid': 'practice-next', onclick: () => (c.next(), this.renderPractice()) }, '次へ'),
+        this.demoButton,
+        h('button', { class: 'btn small', 'data-testid': 'practice-next', onclick: () => {
+          this.stopPracticeDemo(true);
+          this.demoFinished = false;
+          c.next();
+          this.renderPractice();
+        } }, '次へ'),
         h('button', { class: 'btn small primary', 'data-testid': 'to-race', onclick: () => this.app.startRun('competition') }, '本番へ'),
         h('button', { class: 'btn small', onclick: () => this.retire() }, 'やめる'),
       ),
     );
-    this.demoStartMs = nowMs();
   }
 }
 

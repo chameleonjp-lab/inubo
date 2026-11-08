@@ -293,12 +293,12 @@ function onKicker(run: SimState): boolean {
   return false;
 }
 
-function takeoff(run: SimState, t: number, kind: JumpRec['kind'], vy: number, emit: Emit, fromRail: string | null = null): void {
+function takeoff(run: SimState, t: number, kind: JumpRec['kind'], vy: number, emit: Emit, fromRail: string | null = null, viaSwipe = false): void {
   run.jumpCounter += 1;
   run.jump = { jumpId: run.jumpCounter, takeoffUs: t, kind, fromRail, strokes: [], resolution: EMPTY_RESOLUTION };
   run.mode = 'air';
   run.vy = vy;
-  if (kind !== 'drop') emit('jump', t, { jumpId: run.jumpCounter, kind });
+  if (kind !== 'drop') emit('jump', t, { jumpId: run.jumpCounter, kind, ...(viaSwipe ? { viaSwipe } : {}) });
 }
 
 function landedInsideCheck(run: SimState, t: number): void {
@@ -552,11 +552,12 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
       if (rec.tag !== 'ground' || rec.consumed) break;
       rec.consumed = true;
       if (run.mode === 'ground') {
-        takeoff(run, atUs, onKicker(run) ? 'kicker' : 'flat', onKicker(run) ? KICKER_VY : JUMP_VY, emit);
+        const ramp = onKicker(run);
+        takeoff(run, atUs, ramp ? 'kicker' : 'flat', ramp ? KICKER_VY : JUMP_VY, emit, null, true);
       } else if (run.mode === 'rail' && run.rail) {
         const railId = run.rail.railId;
         leaveRail(run, atUs, sMmOf(run.s), 'jump', emit);
-        takeoff(run, atUs, 'rail', RAIL_JUMP_VY, emit, railId);
+        takeoff(run, atUs, 'rail', RAIL_JUMP_VY, emit, railId, true);
       }
       break;
     case 'circle':

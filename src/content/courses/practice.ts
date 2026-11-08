@@ -6,7 +6,7 @@ import type { CourseDef } from '../types';
  */
 export const practicePlaza: CourseDef = {
   id: 'practice',
-  version: 'plaza-1',
+  version: 'plaza-2',
   name: '練習広場',
   theme: 'plaza',
   spine: {
@@ -18,14 +18,9 @@ export const practicePlaza: CourseDef = {
   paths: [{ id: 'loop', u0: 0, u1: 360, halfWidth: 5, next: { kind: 'path', to: 'loop' } }],
   start: { path: 'loop', u: 3 },
   goal: null,
-  objects: [
-    { kind: 'kicker', id: 'pk-1', path: 'loop', u0: 30, u1: 34, x0: -1.5, x1: 1.5, height: 0.6 },
-    { kind: 'kicker', id: 'pk-2', path: 'loop', u0: 62, u1: 66, x0: -1.5, x1: 1.5, height: 0.6 },
-    { kind: 'kicker', id: 'pk-3', path: 'loop', u0: 140, u1: 144, x0: -1.5, x1: 1.5, height: 0.6 },
-    { kind: 'kicker', id: 'pk-4', path: 'loop', u0: 210, u1: 214, x0: -1.5, x1: 1.5, height: 0.6 },
-    { kind: 'kicker', id: 'pk-5', path: 'loop', u0: 242, u1: 246, x0: -1.5, x1: 1.5, height: 0.6 },
-    { kind: 'kicker', id: 'pk-6', path: 'loop', u0: 320, u1: 324, x0: -1.5, x1: 1.5, height: 0.6 },
-  ],
+  objects: [15, 38, 63, 88, 114, 140, 166, 192, 218, 244, 270, 296, 321, 346].map((u0, i) => ({
+    kind: 'kicker', id: `pk-${i + 1}`, path: 'loop', u0, u1: u0 + 4, x0: -1.5, x1: 1.5, height: 0.6,
+  })),
   sections: [{ path: 'loop', u0: 0, u1: 360, opp: 'P' }],
   timeScore: { fullCs: 1, zeroCs: 2, provisional: true },
   challenge: null,
