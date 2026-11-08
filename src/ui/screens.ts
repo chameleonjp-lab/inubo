@@ -1,6 +1,6 @@
 import { h, clear, fmtInt } from './dom';
 import { renderBoard, renderResults } from './results';
-import { PRACTICE_STEPS, PracticeCoach, PracticeDemo, practiceGuide, type PracticePoint } from './practice';
+import { PRACTICE_STEPS, PracticeCoach, PracticeDemo, practiceGuide, practiceRate, type PracticePoint } from './practice';
 import { formatTime, homeShareText, officialUrl, resultShareText, shareOnX, shareableResult } from './share';
 import { RunSession } from '../game/run';
 import { RULES_VERSION } from '../game/rules';
@@ -53,6 +53,16 @@ function drawReference(g: CanvasRenderingContext2D, points: readonly PracticePoi
     const [x, y] = points[0];
     g.beginPath();
     g.arc(cx + x * unit, cy + y * unit, 5, 0, 2 * Math.PI);
+    g.stroke();
+    const i = Math.min(4, points.length - 1);
+    const [ax, ay] = points[i];
+    const [bx, by] = points[i - 1];
+    const direction = Math.atan2(ay - by, ax - bx);
+    const tipX = cx + ax * unit, tipY = cy + ay * unit;
+    g.beginPath();
+    g.moveTo(tipX - 10 * Math.cos(direction - 0.55), tipY - 10 * Math.sin(direction - 0.55));
+    g.lineTo(tipX, tipY);
+    g.lineTo(tipX - 10 * Math.cos(direction + 0.55), tipY - 10 * Math.sin(direction + 0.55));
     g.stroke();
   }
 }
@@ -580,7 +590,7 @@ class GameRun {
   }
 
   private wallUs(): number {
-    return this.app.opts.autoplay ? this.virtualWallUs : nowMs() * 1000;
+    return this.app.opts.autoplay || this.coach ? this.virtualWallUs : nowMs() * 1000;
   }
 
   start(): void {
@@ -731,6 +741,10 @@ class GameRun {
         if (this.session.phase === 'running') this.recorder.sample(sim);
       }
     } else {
+      if (this.coach) {
+        const rate = this.coach.done || this.session.phase !== 'running' ? 1 : practiceRate(this.coach.step.id);
+        this.virtualWallUs += dtMs * 1000 * rate;
+      }
       events = this.session.update(this.wallUs());
       if (this.session.phase === 'running') this.recorder.sample(sim);
     }
@@ -883,7 +897,7 @@ class GameRun {
   }
 
   private renderDemoFrame(demo: PracticeDemo, t: number, dtMs: number): void {
-    const cues = demo.advanceTo(demo.elapsedUs + dtMs * 1000).map(cueForEvent).filter(Boolean) as Cue[];
+    const cues = demo.advanceTo(demo.elapsedUs + dtMs * 1000 * practiceRate(demo.step)).map(cueForEvent).filter(Boolean) as Cue[];
     const reduced = this.demoReducedMotion?.matches ?? false;
     this.app.audio.update(0, { steps: null, wind: null, grind: null }, t);
     this.view.frame(demo.state, demo.elapsedUs, reduced ? [] : cues, { ...this.app.settings, shake: false }, t, dtMs);

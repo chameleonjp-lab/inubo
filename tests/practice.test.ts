@@ -5,6 +5,7 @@ import { RULES_VERSION } from '../src/game/rules';
 import { advanceRun, createRun } from '../src/game/run';
 import type { RunIdentity, SimEvent } from '../src/game/types';
 import * as practice from '../src/ui/practice';
+import { GestureRecognizer } from '../src/input/gestures';
 
 const course = getCourse('practice');
 const identity: RunIdentity = {
@@ -14,6 +15,28 @@ const identity: RunIdentity = {
 };
 
 describe('練習広場', () => {
+  it('5番のガイドを1本の指で円から線へなぞり、着地すると練習を完了できる', () => {
+    const guide = practice.practiceGuide('composite', true);
+    const points = guide.flatMap((stroke) => [...stroke.points]);
+    for (const dogId of DOG_ORDER) {
+      const ride = createRun({ ...identity, dogId }, course, DOGS[dogId]);
+      while (ride.mode !== 'air') advanceRun(ride, ride.simUs + 5000);
+      const start = ride.simUs + 100_000;
+      const input = new GestureRecognizer();
+      const facts = points.flatMap(([x, y], i) => {
+        const at = start + Math.round(500_000 * i / (points.length - 1));
+        if (i === 0) return input.pointerDown(1, x, y, at);
+        if (i === points.length - 1) return input.pointerUp(1, x, y, at);
+        return input.pointerMove(1, x, y, at);
+      });
+      const coach = new practice.PracticeCoach();
+      for (let i = 0; i < 4; i++) coach.next();
+      const { events } = advanceRun(ride, start + 1_500_000, facts);
+      expect(events.find((e) => e.kind === 'land')?.data?.composite).toBe(true);
+      expect(coach.observe(events, ride)).toBe(true);
+      expect(coach.done).toBe(true);
+    }
+  });
   it('スタート近くから踏切台が並び、周回しても長く待たずにもう一度試せる', () => {
     const path = course.paths.get(course.start.pathId)!;
     const ramps = path.solids.filter((s) => s.kind === 'kicker').map((s) => s.s0).sort((a, b) => a - b);
