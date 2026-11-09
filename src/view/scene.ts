@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { TrickLabStage } from './trick-lab';
+import type { LabEdge, LabFixtureId } from '../game/trick-lab-terrain';
+import type { Handle, LabPose } from '../game/trick-lab';
 import {
   baseHeight,
   gatePhase,
@@ -877,6 +880,26 @@ export class GameView {
     a.needsUpdate = true;
     this.impact.visible = true;
     this.impactUntil = nowMs + 350;
+  }
+
+  // ---------------------------------------------------------------- 技の練習
+  private lab: TrickLabStage | null = null;
+
+  /** 技の練習の場面へ切り替える。描画装置・犬種・服装・照明の設定は競技と共有する。 */
+  setTrickLabStage(fixture: LabFixtureId, edge: LabEdge | null, look: DogLook, clothes: string, helmet: string): void {
+    if (!this.lab) this.lab = new TrickLabStage();
+    this.lab.setRider(look, clothes, helmet);
+    this.lab.setFixture(fixture, edge);
+  }
+
+  frameTrickLab(pose: LabPose, highlight: Handle | null, dtMs: number, reducedMotion: boolean, band: { left: number; top: number; right: number; bottom: number }): void {
+    this.lab?.frame(this.renderer, pose, highlight, dtMs, reducedMotion, band);
+  }
+
+  /** 技の練習を出るときに、練習用の立体を片付ける。 */
+  clearTrickLabStage(): void {
+    this.lab?.dispose();
+    this.lab = null;
   }
 
   dispose(): void {
