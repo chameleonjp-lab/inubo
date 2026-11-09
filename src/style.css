@@ -750,3 +750,265 @@ ol.sections {
     width: min(420px, 55vw);
   }
 }
+
+/* ---------- 技の練習 ---------- */
+.screen.trick-lab {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.trick-lab .lab-surface {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.trick-lab .lab-top,
+.trick-lab .lab-controls {
+  position: relative;
+  pointer-events: auto;
+  background: rgba(255, 253, 247, 0.94);
+  margin: 6px 8px;
+  border-radius: 14px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.trick-lab .lab-top {
+  margin-top: calc(6px + var(--safe-top));
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.trick-lab .lab-row .lab-select {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.trick-lab .lab-info details summary {
+  font-weight: 700;
+  font-size: 14px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.trick-lab .lab-controls {
+  margin-bottom: calc(6px + var(--safe-bottom));
+}
+
+.trick-lab .lab-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.trick-lab .lab-row + .lab-row {
+  margin-top: 6px;
+}
+
+.trick-lab .pause-btn {
+  position: static;
+}
+
+.trick-lab .lab-select {
+  flex: 1 1 140px;
+  min-height: 40px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 2px solid var(--ink);
+  background: var(--card);
+  color: var(--ink);
+  padding: 4px 6px;
+}
+
+.trick-lab .lab-info h3 {
+  margin: 6px 0 2px;
+  font-size: 15px;
+}
+
+.trick-lab .lab-en {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.trick-lab .lab-info p {
+  margin: 2px 0;
+}
+
+.trick-lab .lab-tag {
+  color: var(--muted);
+}
+
+.trick-lab .lab-order {
+  font-weight: 700;
+  color: #173751;
+}
+
+.trick-lab .lab-setup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 4px;
+}
+
+.trick-lab .lab-setup label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.trick-lab .lab-setup select {
+  min-height: 34px;
+  font-size: 13px;
+  max-width: 7.5em;
+}
+
+.trick-lab .lab-setup.locked {
+  opacity: 0.6;
+}
+
+.trick-lab .lab-status {
+  margin: 4px 0 0;
+  font-weight: 700;
+  color: #173751;
+  min-height: 1em;
+}
+
+.trick-lab .lab-result h3 {
+  margin: 6px 0 2px;
+  font-size: 16px;
+}
+
+.trick-lab .lab-result h3[data-outcome='success'] {
+  color: var(--good);
+}
+
+.trick-lab .lab-result h3[data-outcome='fail'] {
+  color: var(--bad);
+}
+
+.trick-lab .lab-result p {
+  margin: 2px 0;
+}
+
+.trick-lab .lab-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.trick-lab .lab-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* ボタンの位置と大きさは、表示が変わっても動かさない。 */
+.trick-lab .lab-btn {
+  appearance: none;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 2px solid var(--ink);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  padding: 4px;
+}
+
+.trick-lab .lab-btn:active {
+  background: #ffe6c7;
+}
+
+.trick-lab .lab-btn.start {
+  background: var(--accent);
+  border-color: #b45d0c;
+  color: var(--accent-ink);
+  flex: 1 1 auto;
+}
+
+.trick-lab .lab-btn.grab.holding {
+  background: #2266ff;
+  border-color: #123a99;
+  color: #ffffff;
+}
+
+.trick-lab .lab-btn.grab[aria-busy='true'] {
+  background: #dde6ff;
+}
+
+.trick-lab .lab-btn.demo-next {
+  outline: 4px solid #ffb000;
+  outline-offset: 1px;
+}
+
+.trick-lab .lab-btn:disabled {
+  opacity: 0.55;
+}
+
+.trick-lab .lab-load-label {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.trick-lab.lab-demo-playing .lab-controls {
+  background: rgba(255, 244, 214, 0.96);
+}
+
+.trick-lab .pause-cover {
+  pointer-events: auto;
+  z-index: 5;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .screen.trick-lab {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  .trick-lab .lab-top {
+    width: min(360px, 45vw);
+    max-height: calc(100vh - 12px);
+  }
+  .trick-lab .lab-controls {
+    width: min(330px, 42vw);
+    align-self: flex-end;
+  }
+  .trick-lab .lab-btn {
+    min-height: 40px;
+  }
+}
+
+.trick-lab .lab-setup .lab-select {
+  flex: none;
+  min-height: 34px;
+  font-size: 13px;
+  max-width: 7.5em;
+  border-width: 1px;
+  border-radius: 4px;
+}
+
+.trick-lab .lab-grid .lab-btn {
+  font-size: 14px;
+  white-space: nowrap;
+  letter-spacing: -0.02em;
+}
+
+.trick-lab .pause-cover h2 {
+  color: #ffffff;
+}

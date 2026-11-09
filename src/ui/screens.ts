@@ -1,6 +1,7 @@
 import { h, clear, fmtInt } from './dom';
 import { renderBoard, renderResults } from './results';
-import { PRACTICE_STEPS, PracticeCoach, PracticeDemo, practiceGuide, practiceRate, type PracticePoint } from './practice';
+import { PRACTICE_STEPS, PracticeCoach, PracticeDemo, practiceGuide, practiceRate, type PracticePoint, type PracticeStepId } from './practice';
+import { TrickLabScreen } from './trick-lab';
 import { formatTime, homeShareText, officialUrl, resultShareText, shareOnX, shareableResult } from './share';
 import { RunSession } from '../game/run';
 import { RULES_VERSION } from '../game/rules';
@@ -79,6 +80,10 @@ export class App {
   private canvas: HTMLCanvasElement;
   private screenEl: HTMLElement;
   game: GameRun | null = null;
+  /** 練習広場から開く「技の練習」。競技の走行とは別の画面で、記録や送信には触れない。 */
+  lab: TrickLabScreen | null = null;
+  /** 技の練習から戻ったときに復元する、練習広場の段階（メモリーだけに持つ）。 */
+  practiceMemory: { index: number; completed: PracticeStepId[] } | null = null;
   courseId: CourseId;
   dogId: DogId;
   lastResult: RunResult | null = null;
@@ -113,7 +118,11 @@ export class App {
       document.addEventListener('visibilitychange', retryPending);
       window.setInterval(retryPending, 15_000);
     }
-    document.addEventListener('visibilitychange', () => this.game?.onVisibility(document.hidden));
+    document.addEventListener('visibilitychange', () => {
+      // 現在の画面にだけ通知する。
+      if (this.lab) this.lab.onVisibility(document.hidden);
+      else this.game?.onVisibility(document.hidden);
+    });
     this.onResize();
     void this.ranking.flush();
   }
@@ -138,7 +147,10 @@ export class App {
     this.view?.resize(w, hgt);
     this.game?.recognizer.setViewport(w, hgt);
     const portrait = hgt >= w;
-    if (this.lastPortrait !== null && portrait !== this.lastPortrait) this.game?.pauseFor('orientation');
+    if (this.lastPortrait !== null && portrait !== this.lastPortrait) {
+      if (this.lab) this.lab.onOrientationChange();
+      else this.game?.pauseFor('orientation');
+    }
     this.lastPortrait = portrait;
   }
 
@@ -161,6 +173,8 @@ export class App {
 
   // ---------------------------------------------------------------- ホーム
   showHome(): void {
+    this.closeTrickLab();
+    this.practiceMemory = null;
     this.game?.destroy();
     this.game = null;
     this.root.classList.remove('in-game');
@@ -401,7 +415,10 @@ export class App {
 
   // ---------------------------------------------------------------- 走行
   startRun(mode: 'competition' | 'practice'): void {
+    this.closeTrickLab();
+    if (mode === 'competition') this.practiceMemory = null;
     this.game?.destroy();
+    this.game = null;
     const courseId: CourseId = mode === 'practice' ? 'practice' : this.courseId;
     const course = getCourse(courseId);
     const name = this.profile.name.trim();
@@ -431,6 +448,40 @@ export class App {
     this.game = new GameRun(this, identity, view);
     this.setScreen(this.game.el);
     this.game.start();
+  }
+
+  // ---------------------------------------------------------------- 技の練習
+  /**
+   * 練習広場から「技の練習」を開く。競技の走行（startRun・finishRun）とは別の経路で、
+   * 走行番号・自己ベスト・スタンプ・送信待ちを作らない。
+   */
+  startTrickLab(memory: { index: number; completed: PracticeStepId[] } | null): void {
+    this.practiceMemory = memory;
+    // 旧画面の描画予約・入力・音を終えてから新しい画面を始める。
+    this.game?.destroy();
+    this.game = null;
+    this.closeTrickLab();
+    this.sound.setPaused(false, nowMs());
+    const view = this.ensureView();
+    const lab = new TrickLabScreen({
+      view,
+      dogId: this.dogId,
+      look: DOGS[this.dogId].look,
+      clothes: this.profile.clothes,
+      helmet: this.profile.helmet,
+      uiSound: (name) => this.uiSound(name),
+      exit: () => this.startRun('practice'),
+    });
+    this.lab = lab;
+    this.root.classList.add('in-game');
+    this.setScreen(lab.el);
+    lab.start();
+  }
+
+  private closeTrickLab(): void {
+    if (!this.lab) return;
+    this.lab.destroy();
+    this.lab = null;
   }
 
   finishRun(result: RunResult, replay: ReturnType<ReplayRecorder['finish']> | null): void {
@@ -551,6 +602,12 @@ class GameRun {
     const isPractice = identity.mode === 'practice';
     if (isPractice) {
       this.coach = new PracticeCoach();
+      const memory = app.practiceMemory;
+      if (memory) {
+        this.coach.index = memory.index;
+        this.coach.completed = [...memory.completed];
+        app.practiceMemory = null;
+      }
       this.practicePanel = h('div', { class: 'practice-panel', 'data-testid': 'practice-panel' });
       this.demoReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     }
@@ -954,6 +1011,15 @@ class GameRun {
     }
   }
 
+  /** 練習広場の各段階と完了画面から「技の練習」を開く。 */
+  private trickLabButton(): HTMLButtonElement {
+    return h('button', { class: 'btn small', 'data-testid': 'trick-lab', onclick: () => {
+      const c = this.coach!;
+      this.app.uiSound('decide');
+      this.app.startTrickLab({ index: c.index, completed: [...c.completed] });
+    } }, '技の練習');
+  }
+
   private renderPractice(): void {
     if (!this.practicePanel || !this.coach) return;
     const c = this.coach;
@@ -963,7 +1029,7 @@ class GameRun {
       this.practicePanel.replaceChildren(
         h('h3', {}, '練習の手順はここまで'),
         h('p', {}, 'このまま練習を続けるか、本番へ進みましょう。練習の記録は競技の記録に入りません。'),
-        h('div', { class: 'row-btns' }, h('button', { class: 'btn primary', 'data-testid': 'to-race', onclick: () => this.app.startRun('competition') }, '本番へ'), h('button', { class: 'btn', onclick: () => this.retire() }, 'やめる')),
+        h('div', { class: 'row-btns' }, h('button', { class: 'btn primary', 'data-testid': 'to-race', onclick: () => this.app.startRun('competition') }, '本番へ'), this.trickLabButton(), h('button', { class: 'btn', onclick: () => this.retire() }, 'やめる')),
       );
       return;
     }
@@ -988,6 +1054,7 @@ class GameRun {
           this.renderPractice();
         } }, '次へ'),
         h('button', { class: 'btn small primary', 'data-testid': 'to-race', onclick: () => this.app.startRun('competition') }, '本番へ'),
+        this.trickLabButton(),
         h('button', { class: 'btn small', onclick: () => this.retire() }, 'やめる'),
       ),
     );
