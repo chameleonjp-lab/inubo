@@ -68,4 +68,7 @@ npm run report         # 自動再生の記録を docs/autoplay-report.md に書
 
 ## 進み具合
 
+38技の見た目・接触・画面操作の仕上げと、15言語対応、既存記録の保全、iPhoneでの確認は[後続対応の実装計画書](docs/followup-implementation-plan.md)にまとめています。計画の検証と修正は[敵対的検証記録](docs/followup-adversarial-review.md)を参照してください。これらの文書追加は、ゲームの実装完了を意味しません。
+
 P09 の iPhone 17 Pro による操作・効果音・配点の測定は、[実機受入の記録](docs/acceptance-record.md)に残します。プルリクエストの自動検査を通ると、配信可能な実機確認用の成果物も取得できます。
+

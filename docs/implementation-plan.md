@@ -4,6 +4,8 @@
 
 38技の追加は[イヌボー スケートボード38技の実装計画書](trick-motion-implementation-plan.md)で扱う。競技と記録を保ちながら、技を試せる練習を追加する計画である。
 
+**2026年11月14日の追記:** 現在は公園1コースで、ゲーム内ランキング接続と自動公開は対応済み。本書のP08・P09には初期計画時の記述が残る。残作業と検収対象は[後続対応の実装計画書](followup-implementation-plan.md)を優先する。実機での合格は未確認であり、未実施の欄を合格へ変更していない。
+
 ### 公園の改定版（park-2）
 
 1. ホームの競技コースを公園に絞る。以前に商店街や川沿いを選んでいた端末では公園を選んだ状態で開く。
@@ -191,3 +193,4 @@
 **文書段階の検算。** 80件の番号・採用記号・選択文を原案と突合し、80件すべてに主担当を1工程ずつ割り当てた。演出表は24場面。独立した参照計算で、完走の丸め8件、着地8件、手すり7件、同時刻の4イベントの全24順列、ゴール直後・重複通知3件、分岐の連続4件、効果の終了5件、総合点4件の計63件を照合した。実装版がこの期待値を満たすかはP01〜P09で検査する。
 
 入力・中断・音を実装する際は、複数指の識別とブラウザに操作が引き取られた場合、ページが背面に移る場合、ユーザー操作から音を開始する場合の挙動を確認する。 [複数指の入力](https://developer.mozilla.org/ja/docs/Web/API/Pointer_events/Multi-touch_interaction) ／ [タッチ操作の対象範囲](https://developer.mozilla.org/ja/docs/Web/CSS/Reference/Properties/touch-action) ／ [ページの可視状態](https://developer.mozilla.org/ja/docs/Web/API/Page_Visibility_API) ／ [ブラウザの音](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Best_practices)
+
