@@ -1,0 +1,41 @@
+:root { font-family: system-ui, -apple-system, sans-serif; color: #203c37; background: #f4f2e9; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, select { font: inherit; color: inherit; }
+.free-review { max-width: 1050px; margin: auto; min-height: 100dvh; padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 8px; }
+.free-header { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.free-header h1 { margin: 0; font-size: 20px; font-weight: 850; letter-spacing: -.02em; }
+.free-header p { margin: 2px 0 0; font-size: 12px; color: #536861; }
+.free-badge { white-space: nowrap; font-size: 11px; background: #dce9df; border-radius: 20px; padding: 7px 9px; }
+.free-note { margin: 0; font-size: 11px; color: #59665e; }
+.free-work { display: grid; gap: 8px; }
+.free-viewport { height: clamp(210px, 35dvh, 400px); position: relative; border: 1px solid #a4b9ab; border-radius: 18px; overflow: hidden; }
+.free-stage, .free-stage canvas { display: block; width: 100%; height: 100%; }
+.free-hud { position: absolute; left: 10px; right: 10px; top: 9px; pointer-events: none; font-size: 11px; }
+.free-status { margin: 0 0 4px; padding: 5px 8px; border-radius: 9px; background: #fcfaf1ed; font-size: 12px; font-weight: 700; }
+.free-readings { display: flex; justify-content: space-between; gap: 8px; }
+.free-readings output { padding: 3px 6px; border-radius: 6px; background: #fcfaf1df; font-variant-numeric: tabular-nums; }
+.free-control { display: flex; flex-direction: column; gap: 6px; }
+.free-targets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.free-review button, .free-review select { min-height: 42px; border: 1px solid #bbc6b9; background: #fffdf5; border-radius: 11px; padding: 6px 9px; font-size: 13px; touch-action: manipulation; cursor: pointer; }
+.free-review button[aria-pressed=true] { background: #254f46; color: #fffbed; border-color: #254f46; }
+.free-review button:disabled { opacity: .45; cursor: default; }
+.free-pad { position: relative; height: clamp(145px, 23dvh, 230px); border: 1px solid #aabcae; border-radius: 16px; background: radial-gradient(circle at center, transparent 36%, #d1e0d444 37%, transparent 38%), #e9eee3; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; user-select: none; -webkit-user-select: none; touch-action: none; overflow: hidden; }
+.free-pad[data-active=true] { border-color: #477b62; background-color: #e2ecdd; }
+.free-pad span { font-weight: 700; font-size: 15px; pointer-events: none; }
+.free-pad small { font-size: 11px; color: #5c7767; pointer-events: none; }
+.free-pad svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.free-pad polyline { fill: none; stroke: #295b4d; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.free-pad .trail-dog { stroke: #b3792f; } .free-pad .trail-rider { stroke: #c75e40; }
+.free-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.free-actions .free-primary { background: #d96a3a; border-color: #c25b2e; color: white; font-weight: 750; }
+.free-review details { font-size: 11px; line-height: 1.7; padding: 0 3px; }
+.free-review summary { cursor: pointer; min-height: 28px; }
+.free-review code { overflow-wrap: anywhere; font-size: 10px; }
+@media (orientation: landscape) and (min-width: 600px) {
+  .free-header h1 { font-size: 17px; } .free-header p { display: none; }
+  .free-work { grid-template-columns: 1.55fr 1fr; }
+  .free-viewport { height: max(210px, calc(100dvh - 158px)); }
+  .free-control { min-height: 0; } .free-pad { height: auto; flex: 1; min-height: 145px; }
+  .free-actions { grid-template-columns: repeat(6, 1fr); }
+}

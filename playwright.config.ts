@@ -7,6 +7,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests',
   testMatch: /.*\.spec\.ts$/,
+  testIgnore: /free-review\.spec\.ts$/,
   timeout: 120_000,
   fullyParallel: false,
   workers: 1,
@@ -16,7 +17,7 @@ export default defineConfig({
     viewport: { width: 402, height: 700 },
     hasTouch: true,
     trace: 'off',
-    launchOptions: { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
+    launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
   },
   webServer: {
     command: 'npm run build:e2e && npx vite preview --mode e2e --port 4173 --strictPort',

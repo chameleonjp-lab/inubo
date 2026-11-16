@@ -24,6 +24,17 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - run: npm run test:review
+      - name: Upload freestyle browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: inubo-freestyle-browser-evidence
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Check review isolation
+        run: node scripts/check-review-build.mjs
       - name: Build for iPhone testing
         if: github.event_name == 'pull_request'
         env:
@@ -37,5 +48,13 @@ jobs:
         with:
           name: inubo-iphone-preview
           path: dist/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload the freestyle review build
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: inubo-freestyle-review
+          path: dist-review/
           if-no-files-found: error
           retention-days: 7
