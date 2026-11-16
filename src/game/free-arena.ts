@@ -67,10 +67,13 @@ export class FreeArena {
     if (this.phase === 'settling') { this.finish('crash', '安定を確認する前に再ジャンプ'); this.previousResult = this.result; }
     const start = this.phase === 'settling' || this.phase === 'done' ? this.motion.timeUs : 0;
     const pose = copyFreePose(this.motion.pose);
+    const feet = dogFeet.map(p => atBody(pose.dog, p));
+    // 支持点を移しても身体を移動させず、空中の共通支点へ切り替える。
+    pose.pivot = add3(scale3(feet.reduce((sum, p) => add3(sum, p), [0, 0, 0] as Vec3), 1 / feet.length), [0, 0.70, 0]);
     const floor = Math.min(...freeParts(pose).map(p => p.p[1] - p.radius));
-    const lift: Vec3 = [-pose.pivot[0], 0.0001 - floor, -pose.pivot[2]];
+    const lift: Vec3 = [0, 0.0001 - floor, 0];
     pose.pivot = add3(pose.pivot, lift); pose.dog.p = add3(pose.dog.p, lift); pose.rider.p = add3(pose.rider.p, lift);
-    this.motion = createFreeMotion({ pose, timeUs: start, velocity: [2, high ? 9 : 5.6, 0], acceleration: [0, -9.8, 0] });
+    this.motion = createFreeMotion({ pose, omega: this.motion.omega, timeUs: start, velocity: [2, high ? 9 : 5.6, 0], acceleration: [0, -9.8, 0] });
     this.phase = 'air'; this.cutoffUs = null; this.result = null; this.airHistory = []; this.contact = null;
   }
   advance(untilUs: number, inputs: readonly FreeMotionInput[] = []): void {

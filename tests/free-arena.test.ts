@@ -72,3 +72,12 @@ test('安定に必要な時間と距離を、同じ支持点から測って150ms
   a.advance(1_300_000); expect(a.phase).toBe('done');
   expect(a.motion.timeUs - cutoff).toBe(150_000);
 });
+test('再ジャンプでは位置と勢いを保ち、共通支点を足元から0.75m上へ戻す', () => {
+  const a = new FreeArena(); a.jump();
+  a.advance(1_250_000, [{ seq: 1, atUs: 0, target: 'common', rotation: [0, 0.2, 0] }]);
+  const x = a.motion.pose.dog.p[0], omega = a.motion.omega.common[1];
+  a.jump();
+  expect(a.motion.pose.pivot[1]).toBeCloseTo(0.7501, 8);
+  expect(a.motion.pose.dog.p[0]).toBe(x);
+  expect(a.motion.omega.common[1]).toBe(omega);
+});
