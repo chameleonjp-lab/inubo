@@ -29,6 +29,7 @@ import type { GestureFact, RunIdentity, RunResult, SimEvent } from '../game/type
 
 const CLOTHES = ['#e4572e', '#2e86ab', '#f2c14e', '#6a4c93', '#3bb273'];
 const HELMETS = ['#2e86ab', '#e4572e', '#ffffff', '#222222', '#f2c14e'];
+const reviewPath: string = import.meta.env.VITE_REVIEW_URL ?? '';
 
 function nowMs(): number {
   return performance.now();
@@ -262,6 +263,8 @@ export class App {
           { class: 'actions' },
           h('button', { class: 'btn primary big', 'data-testid': 'start', onclick: () => (this.uiSound('decide'), this.startRun('competition')) }, 'スタート'),
           h('button', { class: 'btn', 'data-testid': 'practice', onclick: () => (this.uiSound('decide'), this.startRun('practice')) }, '練習広場'),
+          /^\.\/review\/[a-f0-9]{40}\/[0-9]+-[0-9]+\/$/.test(reviewPath)
+            ? h('a', { class: 'btn', href: reviewPath, 'data-testid': 'free-review-link' }, '自由操作を試す') : null,
         ),
         h(
           'div',
