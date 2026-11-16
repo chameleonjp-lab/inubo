@@ -25,6 +25,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm run test:review
+      - name: Upload freestyle browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: inubo-freestyle-browser-evidence
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Check review isolation
         run: node scripts/check-review-build.mjs
       - name: Build for iPhone testing

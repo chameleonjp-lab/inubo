@@ -57,3 +57,18 @@ test('確認中の再ジャンプは直前の未確定点を0点で閉じ、次�
   expect(a.previousResult?.landing).toBe('crash'); expect(a.previousResult?.points).toBe(0);
   expect(a.phase).toBe('air'); expect(a.cutoffUs).toBeNull(); expect(a.airHistory).toEqual([]);
 });
+test('合法な共通＋個別の高速水平回転でも接触計算が止まらない', () => {
+  const a = new FreeArena(); a.jump();
+  expect(() => a.advance(1_400_000, [
+    { seq: 1, atUs: 1_000_000, target: 'common', rotation: [0, Math.PI, 0] },
+    { seq: 2, atUs: 1_001_000, target: 'dog', rotation: [0, Math.PI, 0] },
+    { seq: 3, atUs: 1_002_000, target: 'rider', rotation: [0, Math.PI, 0] },
+  ])).not.toThrow();
+  expect(a.result?.landing).toBe('clean');
+});
+test('安定に必要な時間と距離を、同じ支持点から測って150msちょうどで確定する', () => {
+  const a = new FreeArena(); a.jump(); a.advance(1_250_000);
+  const cutoff = a.cutoffUs!;
+  a.advance(1_300_000); expect(a.phase).toBe('done');
+  expect(a.motion.timeUs - cutoff).toBe(150_000);
+});

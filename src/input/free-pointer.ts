@@ -28,7 +28,9 @@ export class FreePointerController {
       const pa = this.project(a), pb = this.project(b);
       const angle = Math.acos(clamp(dot(pa, pb), -1, 1));
       // 画面上の直線の中点を通す。対蹠点の外積は軸として使わない。
-      if (angle > 15 * DEG && depth < 16) {
+      // 球の内外境界では投影経路が曲がる。15度の上限より細かく取り、
+      // 端末が途中のイベントを省いても速度加算の誤差を抑える。
+      if (angle > 0.5 * DEG && depth < 20) {
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         visit(a, mid, depth + 1); visit(mid, b, depth + 1); return;
       }

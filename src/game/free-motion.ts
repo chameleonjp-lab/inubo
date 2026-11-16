@@ -85,12 +85,12 @@ function applyDue(s: FreeMotionState): void {
 }
 
 /** 固定の刻みだけを進める。接触は同時刻の入力より先に履歴を閉じる。 */
-export function advanceFreeMotion(s: FreeMotionState, untilUs: number, inputs: readonly FreeMotionInput[] = [], stopAt?: (span: FreeSpan) => number | null): void {
+export function advanceFreeMotion(s: FreeMotionState, untilUs: number, inputs: readonly FreeMotionInput[] = [], stopAt?: (span: FreeSpan) => number | null, exactBoundary = false): void {
   if (s.halted) return;
   if (!Number.isSafeInteger(untilUs) || untilUs < s.timeUs) throw new Error('Invalid motion clock');
   acceptInputs(s, inputs);
   applyDue(s);
-  const target = Math.floor(untilUs / FREE_TICK_US) * FREE_TICK_US;
+  const target = exactBoundary ? untilUs : Math.floor(untilUs / FREE_TICK_US) * FREE_TICK_US;
   while (s.timeUs < target) {
     const tickEnd = Math.min(target, (Math.floor(s.timeUs / FREE_TICK_US) + 1) * FREE_TICK_US);
     while (s.timeUs < tickEnd) {

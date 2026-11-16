@@ -11,7 +11,7 @@ const commonSpeed = (page: Page) => page.getByTestId('free-speed').getAttribute(
 test('生のスワイプ・指離しの慣性・逆入力・停止再開・未知の動きの着地を画面から通す', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto('/'); await expect(page.getByTestId('free-jump')).toBeEnabled();
-  await page.getByTestId('free-high').click(); await swipe(page, -15, 15);
+  await page.getByTestId('free-high').click(); await swipe(page, -25, 25);
   const initial = await commonSpeed(page); expect(initial).toBeGreaterThan(50);
   await page.waitForTimeout(150);
   const released = await commonSpeed(page); expect(released).toBeGreaterThan(15); expect(released).toBeLessThan(initial);

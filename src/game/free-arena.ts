@@ -29,20 +29,26 @@ function clearance(parts: FreePart[], boxes: FreeBox[], includeFloor: boolean): 
   }
   return best;
 }
-/** 速度上限から安全な間隔で接近し、刻みの途中の接触も検出する。 */
+/** 移動範囲で接触しない区間を除き、残りを前半から調べる。 */
 export function firstFreeContact(span: FreeSpan, boxes: FreeBox[], includeFloor = true): Contact | null {
   const w = span.from.omega;
   const speedBound = length(span.from.velocity) + length(span.acceleration) * (span.endUs - span.startUs) / 1e6 +
     4 * (length(w.common) + Math.max(length(w.dog), length(w.rider))) + 1;
-  let t = span.startUs;
-  for (let n = 0; n < 160; n++) {
-    const c = clearance(freeParts(sampleFreeSpan(span, t).pose), boxes, includeFloor);
-    if (c.distance <= 1e-7) return { atUs: Math.ceil(t), part: c.part, surface: c.surface };
-    if (t >= span.endUs) return null;
-    const stepUs = c.distance / speedBound * 1e6 * 0.9;
-    t = Math.min(span.endUs, t + Math.max(0.001, stepUs));
-  }
-  throw new Error('Contact solver did not converge');
+  const sample = (t: number) => clearance(freeParts(sampleFreeSpan(span, t).pose), boxes, includeFloor);
+  const search = (a: number, b: number, ca: ReturnType<typeof sample>, cb: ReturnType<typeof sample>, depth: number): Contact | null => {
+    if (ca.distance <= 1e-7) return { atUs: Math.ceil(a), part: ca.part, surface: ca.surface };
+    // どの時点も近い方の端点から区間の半分以内。両端が離れていても途中を省かない。
+    if (Math.min(ca.distance, cb.distance) > speedBound * (b - a) / 2e6 + 1e-7) return null;
+    if (depth >= 32) {
+      // 5ms / 2^32 < 0.000002us。保守上限の残差は数値許容差へ含める。
+      // 閾値の直前に残る丸め誤差で合法な回転の処理を停止させない。
+      const near = ca.distance <= cb.distance ? ca : cb;
+      return { atUs: Math.ceil(b), part: near.part, surface: near.surface };
+    }
+    const mid = (a + b) / 2, cm = sample(mid);
+    return search(a, mid, ca, cm, depth + 1) ?? search(mid, b, cm, cb, depth + 1);
+  };
+  return search(span.startUs, span.endUs, sample(span.startUs), sample(span.endUs), 0);
 }
 
 /** 記録・通信を持たない、自由操作を試す1回の跳躍。 */
@@ -77,11 +83,11 @@ export class FreeArena {
       });
       if (!this.motion.halted) return;
       this.cutoffUs = this.motion.timeUs; this.airHistory = this.motion.history;
-      this.contactX = this.motion.pose.pivot[0];
       const hit = this.contact!;
       if (hit.surface !== 'floor' || !hit.part.load || !this.validAttitude()) { this.finish('crash', hit.surface === 'floor' ? '足から支えられず転倒' : '障害物に接触'); return; }
       // 空中履歴を切り離し、支持点へ支点を移す。向き・位置・回転速度は連続に保つ。
       const p = copyFreePose(this.motion.pose); p.pivot = [hit.part.p[0], 0, hit.part.p[2]];
+      this.contactX = p.pivot[0];
       const pending = this.motion.pending.filter(i => i.atUs > this.cutoffUs!);
       this.motion = createFreeMotion({ pose: p, omega: this.motion.omega, timeUs: this.cutoffUs, velocity: [2, 0, 0] });
       advanceFreeMotion(this.motion, this.motion.timeUs, pending);
@@ -93,9 +99,10 @@ export class FreeArena {
       advanceFreeMotion(this.motion, this.motion.timeUs, later);
       const target = Math.floor(untilUs / FREE_TICK_US) * FREE_TICK_US;
       while (this.motion.timeUs < target && this.phase === 'settling') {
-        const end = Math.min(target, (Math.floor(this.motion.timeUs / FREE_TICK_US) + 1) * FREE_TICK_US);
+        const boundaries = [40_000, 150_000].map(dt => this.cutoffUs! + dt).filter(t => t > this.motion.timeUs);
+        const end = Math.min(target, (Math.floor(this.motion.timeUs / FREE_TICK_US) + 1) * FREE_TICK_US, ...boundaries);
         const before = this.motion.timeUs;
-        advanceFreeMotion(this.motion, end, [], span => firstFreeContact(span, freeBoxes(this.scenario), false)?.atUs ?? null);
+        advanceFreeMotion(this.motion, end, [], span => firstFreeContact(span, freeBoxes(this.scenario), false)?.atUs ?? null, true);
         if (this.motion.halted) { this.finish('crash', '着地の確認中に障害物へ接触'); break; }
         // 法線方向の押し返しと接地摩擦。姿勢を正解角へ補正しない。
         const ground = Math.min(...freeParts(this.motion.pose).map(p => p.p[1] - p.radius));

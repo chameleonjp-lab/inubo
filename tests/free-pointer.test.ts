@@ -1,5 +1,8 @@
 import { expect, test } from 'vitest';
 import { FreePointerController } from '../src/input/free-pointer';
+import { advanceFreeMotion, createFreeMotion } from '../src/game/free-motion';
+import { qDistance } from '../src/game/free-math';
+import { DEG } from '../src/game/math';
 
 test('未完成のスワイプでも離す前に回転入力を送り、押す・離すだけでは入力を足さない', () => {
   const p = new FreePointerController(); p.setSurface(200, 200);
@@ -40,4 +43,13 @@ test('操作対象は指ごとに固定し、同じ身体を二重に操作さ�
   p.clear();
   expect(p.activeCount).toBe(0);
   expect(p.move(2, 160, 100, 1)).toEqual([]);
+});
+test('球の外周を跨ぐ直線も、端末のイベント数で0.5度以上変わらない', () => {
+  const run = (parts: number) => {
+    const p = new FreePointerController(); p.setSurface(200, 200); p.down(1, 130, 183, 'common');
+    const s = createFreeMotion();
+    for (let k = 1; k <= parts; k++) advanceFreeMotion(s, 0, p.move(1, 130 + 43 * k / parts, 183 + 15 * k / parts, 0));
+    advanceFreeMotion(s, 800_000); return s.pose.dog.q;
+  };
+  expect(qDistance(run(1), run(16)) / DEG).toBeLessThan(0.5);
 });
