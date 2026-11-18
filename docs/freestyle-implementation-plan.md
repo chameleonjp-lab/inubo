@@ -8,7 +8,7 @@
 
 **使用環境:** 現行のTypeScript・Three.js・Vite・Vitest・Playwright・GitHub Actions／Pagesを使う。新しい物理ライブラリや有料サービスは必要条件にしない。
 
-2026年11月14日。基準は`222ed247f84eb4b6f6150eff62974b43e06994df`。入力・採点の変更を別ルール`rules-freestyle-1`へ分け、`park-2`の地形、旧データ、旧送信待ちを保つ。各数値は[設計の初期案](freestyle-control-design.md)として実装し、調整時は値と検査例を更新する。
+2026年11月14日。基準は`222ed247f84eb4b6f6150eff62974b43e06994df`。入力・採点の変更を別ルール`rules-freestyle-1`へ分け、本体で使う公園の地形、旧データ、旧送信待ちを保つ。公園の修正版は `park-4`。各数値は[設計の初期案](freestyle-control-design.md)として実装し、調整時は値と検査例を更新する。
 
 **2026年11月17日更新:** [慣性方式の変更仕様](freestyle-inertia-update.md)をG01〜G08の優先契約とする。入力は回転速度を変え、指離し後も回転する。旧案の即時姿勢適用・指離し時の保持は使わない。
 
@@ -39,7 +39,7 @@
 
 **入出力:** `MovementRules = 'rules-1' | 'rules-freestyle-1'`を識別し、走行開始時のルールを最後まで固定する。新しい通常プレイと練習は自由操作。旧処理は旧記録の読込・旧再送・旧方式の比較に必要な範囲で残し、URL引数で新旧の配点を混ぜない。
 
-- [ ] 旧`park-1/park-2, rules-1`の生の保存文字列と送信待ちを使い、読込前後で内容が変わらない試験を作る。識別値・プロフィール・設定の再生成をしない。
+- [ ] `park-1`〜`park-4` の `rules-1`の生の保存文字列と送信待ちを使い、読込前後で内容が変わらない試験を作る。識別値・プロフィール・設定の再生成をしない。
 - [ ] `MotionEpoch`、`FreeInput`、`FreePoseState`、`AppliedRotation`、`SupportSegment`、`LandingSnapshot`、`FreeScore`、`LessonCheck`の型を分ける。`MotionEpoch`は`{id, kind: 'air' | 'support', jumpId: number | null, controlFrame, startedUs}`を持つ。計算入力に`lessonId`・`trickId`・`targetDegrees`を必須項目として含めない。
 - [ ] `npm test -- tests/freestyle-contract.test.ts tests/records.test.ts tests/ranking.test.ts`と型検査を通し、契約と旧データの基準をコミットする。
 
@@ -132,7 +132,7 @@ F01の練習用モデルとF02の練習地形だけでは競技に使えない�
 
 **変更:** `src/game/rules.ts`、`src/ranking/client.ts`、`src/ranking/production.ts`、`src/storage/records.ts`、順位画面。**作成:** `supabase migration new inubo_freestyle_rules`でCLIが発行する時刻付きSQLファイル、`tests/freestyle-ranking.test.ts`。実装時にCLIの`--help`と出力パスを確認し、計画段階の仮の日時をファイル名として使わない。
 
-- [ ] 既存の`inubo_ranking_private.versions`に`park/park-2/rules-freestyle-1`を追加する。既存ルールの行・成績は変更しない。初期の満点・0点基準と得点上限は設計に合わせる。適用順は隔離環境で検証→受付追加→本番ビルド切替とする。
+- [ ] 既存の`inubo_ranking_private.versions`に実装時に配信対象の `park.version` を確かめ、その版にだけ `rules-freestyle-1` の受付を追加する（この修正版なら `park/park-4/rules-freestyle-1`）。既存ルールの行・成績は変更しない。初期の満点・0点基準と得点上限は設計に合わせる。適用順は隔離環境で検証→受付追加→本番ビルド切替とする。
 - [ ] 送信待ちに保存された元のルール・氏名・ID・点を維持する。新規プレイのルール変更で古い送信待ちの値を変換しない。表示中の新旧順位も問い合わせるルールを固定する。
 - [ ] 新ルールが未受付の場合は新規送信を保留し、旧ルールとして送り直さない。試験は本番へ試験値を送らず、模擬通信と隔離したデータベースで行う。初期のサーバー検査は版・開始・範囲・合計の検算であり、ブラウザだけの履歴から不正を完全に防げるとは扱わない。
 - [ ] `npm test -- tests/freestyle-ranking.test.ts tests/ranking.test.ts tests/ranking-production.test.ts tests/records.test.ts`を通してコミットする。データベース適用・通常配信は計画書の作成だけでは実行しない。

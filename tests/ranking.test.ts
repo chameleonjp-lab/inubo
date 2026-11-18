@@ -120,8 +120,9 @@ describe('V17 任意の名前・再送', () => {
 
   test.each([
     ['park-1', 1400], // 96秒。60〜110秒の基準
+    ['park-3', 3800],
     ['park-2', 3800], // 同じタイムを80〜146.67秒の基準で検算
-  ] as const)('%s の送信待ちを再読込して再送し、park-3 と別々に順位を返す', async (courseVersion, oldTimeScore) => {
+  ] as const)('%s の送信待ちを再読込して再送し、park-4 と別々に順位を返す', async (courseVersion, oldTimeScore) => {
     const store = new MemoryStorage();
     const server = new MockRankingServer();
     const offline = new RankingClient(null, store, true);
@@ -155,7 +156,7 @@ describe('V17 任意の名前・再送', () => {
     expect(server.rows.size).toBe(1);
     expect(current.submissionStatus(old.runId)).toBe('accepted');
 
-    const fresh = parkId({ courseVersion: 'park-3', playerName: 'たま', participantId: 'p-new', rankingOptIn: true });
+    const fresh = parkId({ courseVersion: 'park-4', playerName: 'たま', participantId: 'p-new', rankingOptIn: true });
     current.beginRun(fresh);
     const newResult = makeResult(fresh, 9000, 500);
     current.finishRun(newResult);

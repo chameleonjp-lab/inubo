@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObjects } from './dispose';
 import type { DogLook } from '../content/types';
 import { createRig, type Rig } from './models';
 import {
@@ -58,7 +59,10 @@ export class TrickLabStage {
   }
 
   setRider(look: DogLook, clothes: string, helmet: string): void {
-    if (this.rig) this.scene.remove(this.rig.root);
+    if (this.rig) {
+      disposeObjects(this.rig.root);
+      this.rig.root.removeFromParent();
+    }
     this.rig = createRig(look, clothes, helmet);
     this.handles.clear();
     // 犬の背の練習用ベルトと持ち手、前後の練習用パッド。
@@ -83,6 +87,7 @@ export class TrickLabStage {
 
   setFixture(id: LabFixtureId, edge: LabEdge | null): void {
     this.fixture = id;
+    disposeObjects(this.terrain);
     this.terrain.clear();
     this.camReady = false;
     const ground = new THREE.MeshStandardMaterial({ color: '#c9b98f', roughness: 0.95 });
@@ -259,8 +264,9 @@ export class TrickLabStage {
   }
 
   dispose(): void {
-    this.terrain.clear();
-    if (this.rig) this.scene.remove(this.rig.root);
+    disposeObjects(this.scene);
+    this.scene.clear();
+    this.handles.clear();
     this.rig = null;
   }
 }

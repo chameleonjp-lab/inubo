@@ -56,7 +56,7 @@ function totals(ids: string[]) {
 
 test('公園の全配置と各道の設置数が仕様表に一致する', () => {
   expect(park.id).toBe('park');
-  expect(park.version).toBe('park-3');
+  expect(park.version).toBe('park-4');
   expect(park.start).toEqual({ path: 'start', u: 3 });
   expect(park.goal).toEqual({ path: 'extension', u: 1517 });
   expect(course.opportunities).toEqual(Array.from({ length: 18 }, (_, i) => 'S' + (i + 1)));

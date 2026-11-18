@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { disposeObjects } from './dispose';
+import { roadGeometry, solidGeometry, stairTreadGeometry } from './course-geometry';
 import { TrickLabStage } from './trick-lab';
 import type { LabEdge, LabFixtureId } from '../game/trick-lab-terrain';
 import type { Handle, LabPose } from '../game/trick-lab';
@@ -8,7 +10,6 @@ import {
   hwAt,
   railTopAt,
   sampleAt,
-  solidTop,
   supportGrade,
   supportHeight,
   worldXZ,
@@ -220,6 +221,11 @@ class Decals {
     this.mesh.instanceMatrix.needsUpdate = true;
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
+  clear(): void {
+    // 期限が残った足跡も、次の走行や練習のお手本へ持ち越さない。
+    this.update(Infinity, 0);
+    this.next = 0;
+  }
   update(nowMs: number, lifeMs: number): void {
     let changed = false;
     for (let i = 0; i < this.cap; i++) {
@@ -246,7 +252,7 @@ export class GameView {
   private ghost: ReplayData | null = null;
   private shadow: THREE.Mesh;
   private items = new Map<string, THREE.Object3D>();
-  private gates = new Map<string, { bar: THREE.Group; lamp: THREE.Mesh; solid: Solid; path: PathRt }>();
+  private gates = new Map<string, { bar: THREE.Group; lamp: THREE.Mesh; solid: Solid }>();
   private flags = new Map<string, THREE.Object3D>();
   private guideGroups = new Map<string, THREE.Group>();
   private goalTape: THREE.Mesh | null = null;
@@ -302,13 +308,19 @@ export class GameView {
   }
 
   setRider(look: DogLook, clothes: string, helmet: string): void {
-    if (this.rig) this.scene.remove(this.rig.root);
+    if (this.rig) {
+      disposeObjects(this.rig.root);
+      this.rig.root.removeFromParent();
+    }
     this.rig = createRig(look, clothes, helmet);
     this.scene.add(this.rig.root);
   }
 
   setGhost(replay: ReplayData | null, look: DogLook | null): void {
-    if (this.ghostRig) this.scene.remove(this.ghostRig.root);
+    if (this.ghostRig) {
+      disposeObjects(this.ghostRig.root);
+      this.ghostRig.root.removeFromParent();
+    }
     this.ghostRig = null;
     this.ghost = replay;
     if (replay && look) {
@@ -323,12 +335,25 @@ export class GameView {
     this.shoulderTrail.clear();
     this.cam.reset();
     if (this.goalTape) this.goalTape.visible = true;
-    for (const f of this.flags.values()) f.position.y = 0.2;
+    this.lastPrintS = 0;
+    this.legPhase = 0;
+    this.wagUntil = 0;
+    this.impactUntil = 0;
+    this.impact.visible = false;
+    this.windLines.visible = false;
+    this.prints.clear();
+    for (const f of this.flags.values()) {
+      delete f.userData.raiseAt;
+      f.position.y = 0.2;
+    }
+    for (const guide of this.guideGroups.values()) guide.visible = false;
     for (const o of this.items.values()) o.visible = true;
   }
 
   setCourse(course: CourseRt): void {
+    if (this.course === course) return;
     this.course = course;
+    disposeObjects(this.courseGroup);
     this.courseGroup.clear();
     this.items.clear();
     this.gates.clear();
@@ -355,28 +380,10 @@ export class GameView {
 
   private buildPath(p: PathRt, th: (typeof THEMES)[keyof typeof THEMES], order: number): void {
     const step = 2;
-    const verts: number[] = [];
-    const idx: number[] = [];
-    const lift = 0.002 * order;
-    let row = 0;
-    for (let k = 0; k < p.n; k += step) {
-      const s = p.s[k];
-      const hw = p.hw[k];
-      const h = baseHeight(p, s) + lift;
-      const [lx, lz] = worldXZ(p, s, -hw);
-      const [rx, rz] = worldXZ(p, s, hw);
-      verts.push(lx, h, lz, rx, h, rz);
-      if (row > 0) {
-        const a = (row - 1) * 2;
-        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-      }
-      row++;
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    geo.setIndex(idx);
-    geo.computeVertexNormals();
-    const road = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: th.road, side: THREE.DoubleSide }));
+    // 合流部で重なる道は描画の優先順だけを調整し、路面高は走行判定にそろえる。
+    const road = new THREE.Mesh(roadGeometry(p), new THREE.MeshLambertMaterial({
+      color: th.road, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetUnits: -order,
+    }));
     this.courseGroup.add(road);
     // 端: 壁なら縁石、落下側なら縁取りだけ（川沿いは水が見える）。
     for (const side of [-1, 1] as const) {
@@ -405,13 +412,9 @@ export class GameView {
     }
     // 階段
     for (const st of p.stairs) {
-      const d = (st.s1 - st.s0) / st.steps;
-      for (let k = 1; k <= st.steps; k++) {
-        const top = st.hTop - ((st.hTop - st.hBottom) * k) / st.steps;
-        const hgt = top - st.hBottom + 0.3;
-        const box = new THREE.Mesh(new THREE.BoxGeometry(d, hgt, hwAt(p, st.s0) * 2), new THREE.MeshLambertMaterial({ color: k % 2 ? '#cfc6b3' : '#bdb3a0' }));
-        placeOnPath(box, p, st.s0 + d * (k - 0.5), 0, top - hgt / 2);
-        this.courseGroup.add(box);
+      for (let step = 0; step < st.steps; step++) {
+        const material = new THREE.MeshLambertMaterial({ color: step % 2 ? '#bdb3a0' : '#cfc6b3', side: THREE.DoubleSide });
+        this.courseGroup.add(new THREE.Mesh(stairTreadGeometry(p, st, step), material));
       }
     }
     for (const so of p.solids) this.buildSolid(p, so);
@@ -438,7 +441,7 @@ export class GameView {
       g.add(post);
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6), new THREE.MeshBasicMaterial({ map: labelTexture(ar.dir === 'right' ? '›››' : '‹‹‹', '#ffd400', '#111111', 256, 160), side: THREE.DoubleSide }));
       sign.position.y = 1.25;
-      sign.rotation.y = Math.PI / 2;
+      sign.rotation.y = -Math.PI / 2;
       g.add(sign);
       placeOnPath(g, p, ar.s, (ar.side === 'right' ? 1 : -1) * (hwAt(p, ar.s) + 0.6), baseHeight(p, ar.s));
       this.courseGroup.add(g);
@@ -503,37 +506,22 @@ export class GameView {
       return;
     }
     if (so.kind === 'kicker') {
-      const corners = (s: number, x: number, y: number) => {
-        const [wx, wz] = worldXZ(p, s, x);
-        return [wx, y, wz];
-      };
-      const b0 = baseHeight(p, so.s0);
-      const top = b0 + so.height;
-      const v = [
-        ...corners(so.s0, so.x0, b0),
-        ...corners(so.s0, so.x1, b0),
-        ...corners(so.s1, so.x0, top),
-        ...corners(so.s1, so.x1, top),
-        ...corners(so.s1, so.x0, baseHeight(p, so.s1)),
-        ...corners(so.s1, so.x1, baseHeight(p, so.s1)),
-      ];
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
-      geo.setIndex([0, 2, 1, 1, 2, 3, 2, 4, 3, 3, 4, 5, 0, 4, 2, 1, 3, 5]);
-      geo.computeVertexNormals();
-      this.courseGroup.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: '#f08a24', side: THREE.DoubleSide })));
+      this.courseGroup.add(new THREE.Mesh(solidGeometry(p, so),
+        new THREE.MeshLambertMaterial({ color: '#f08a24', side: THREE.DoubleSide })));
       return;
     }
     if (so.kind === 'gate') {
       const g = new THREE.Group();
       const width = so.x1 - so.x0;
       const bone = new THREE.MeshLambertMaterial({ color: '#f5f0e1' });
-      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, width - 0.6, 10), bone);
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, width, 12), bone);
       bar.rotation.x = Math.PI / 2;
+      bar.position.y = -0.12;
       g.add(bar);
-      for (const z of [-(width / 2 - 0.3), width / 2 - 0.3]) {
-        for (const dy of [-0.12, 0.12]) {
+      for (const z of [-(width / 2 - 0.18), width / 2 - 0.18]) {
+        for (const dy of [-0.28, -0.18]) {
           const knob = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), bone);
+          knob.scale.x = 0.15 / 0.18;
           knob.position.set(0, dy, z);
           g.add(knob);
         }
@@ -550,22 +538,11 @@ export class GameView {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 6), new THREE.MeshLambertMaterial({ color: '#555555' }));
       placeOnPath(post, p, so.s0 - 0.6, lampX, baseHeight(p, so.s0) + 0.8);
       this.courseGroup.add(post);
-      this.gates.set(so.id, { bar: g, lamp, solid: so, path: p });
+      this.gates.set(so.id, { bar: g, lamp, solid: so });
       return;
     }
-    // 柵・壁: 長いものは道に沿って分けて置く。
-    const len = so.s1 - so.s0;
-    const pieces = Math.max(1, Math.ceil(len / 2));
     const color = so.kind === 'fence' ? '#f4f1ea' : so.look === 'planter' ? '#6d9c4f' : so.look === 'shop' ? '#b5835a' : '#9aa5b1';
-    for (let i = 0; i < pieces; i++) {
-      const a = so.s0 + (len * i) / pieces;
-      const b = so.s0 + (len * (i + 1)) / pieces;
-      const mid = (a + b) / 2;
-      const base = baseHeight(p, mid);
-      const box = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.12, b - a), so.height, so.x1 - so.x0), new THREE.MeshLambertMaterial({ color }));
-      placeOnPath(box, p, mid, (so.x0 + so.x1) / 2, base + so.height / 2);
-      this.courseGroup.add(box);
-    }
+    this.courseGroup.add(new THREE.Mesh(solidGeometry(p, so), new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })));
     const base = baseHeight(p, so.s0);
     if (so.kind === 'fence' || (so.kind === 'wall' && so.height < 1)) {
       // その場で越せる柵: 手前の足跡帯（R27）
@@ -583,7 +560,7 @@ export class GameView {
       // 踏切台で越す高い壁: 坂の印（R27）
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8), new THREE.MeshBasicMaterial({ map: labelTexture('◢ 踏切台', '#0b4f8a', '#ffffff', 384, 256), side: THREE.DoubleSide }));
       placeOnPath(sign, p, so.s0 - 0.02, (so.x0 + so.x1) / 2, base + so.height * 0.6);
-      sign.rotation.y += Math.PI / 2;
+      sign.rotation.y -= Math.PI / 2;
       this.courseGroup.add(sign);
     }
   }
@@ -837,8 +814,8 @@ export class GameView {
     }
     for (const g of this.gates.values()) {
       const ph = gatePhase(g.solid.gate!, run.simUs);
-      g.bar.position.y = 0.2 + solidTop(g.path, g.solid, g.solid.s0, run.simUs) - baseHeight(g.path, g.solid.s0) - 0.2 * (1 - ph.raise);
-      g.bar.visible = ph.raise > 0.02;
+      g.bar.position.y = g.solid.height * ph.raise;
+      g.bar.visible = ph.raise > 0;
       (g.lamp.material as THREE.MeshBasicMaterial).color.set(ph.phase === 'lamp' || ph.phase === 'rising' ? (nowMs % 300 < 150 ? '#ff4040' : '#aa2020') : '#552222');
     }
     for (const [id, f] of this.flags) {
@@ -909,6 +886,9 @@ export class GameView {
   }
 
   dispose(): void {
+    this.clearTrickLabStage();
+    disposeObjects(this.scene);
+    this.scene.clear();
     this.renderer.dispose();
   }
 }
