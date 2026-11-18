@@ -38,22 +38,22 @@ function segmentTime(courseId: 'park', dog: (typeof DOG_ORDER)[number], route: s
   return ((tOut ?? 0) - (tIn ?? 0)) / 1e6;
 }
 
-test('自動再生: 公園を 3 犬種（技なし・技あり）で走り、犬種差を 3 区間で測る', () => {
+test('自動再生: 公園を 3 犬種 × 3 経路で走り、犬種差を 3 区間で測る', () => {
   const lines: string[] = [];
   const sha = process.env.REPORT_COMMIT ?? '（未記入）';
   lines.push('# 自動再生の記録（自動操縦）', '');
   lines.push(`対象コミット: ${sha}／ルール版: ${RULES_VERSION}／生成: \`npm run report\``, '');
   lines.push('自動操縦（コースのデータに書いた手順）で走らせた結果です。端末の操作感・聞こえ方の合否には使いません。実機の欄は [実機受入の記録](acceptance-record.md) に別に残します。', '');
-  for (const route of ['safe', 'trick'] as const) {
-    lines.push(`## ${route === 'safe' ? '技を使わない走り（通常ジャンプだけ）' : '技を使う走り'}`, '');
-    lines.push('| コース（版） | 犬種 | 完走タイム | タイム点 | 技点 | 総合 | 通った道 |', '|---|---|---:|---:|---:|---:|---|');
+  for (const [route, label] of [['safe', '安全な道（通常ジャンプだけ）'], ['short', '近道'], ['trick', '技の道']] as const) {
+    lines.push(`## ${label}`, '');
+    lines.push('| コース（版） | 犬種 | 完走タイム | タイム点 | 技点 | 総合 | 通った道 | 長い手すりの課題 |', '|---|---|---:|---:|---:|---:|---|---|');
     for (const cid of RACE_COURSES) {
       for (const dog of DOG_ORDER) {
         const course = getCourse(cid);
         const run = drive(newRun(course, dog, { courseId: cid, courseVersion: course.def.version }), route);
         expect(run.finished, `${cid} ${dog} ${route}`).toBe(true);
         const r = run.result!;
-        lines.push(`| ${COURSE_DEFS[cid]!.name}（${course.def.version}） | ${DOGS[dog].name} | ${formatTime(r.recordCs)} | ${r.timeScore} | ${r.trickScore} | ${r.total} | ${r.route.join('→') || '—'} |`);
+        lines.push(`| ${COURSE_DEFS[cid]!.name}（${course.def.version}） | ${DOGS[dog].name} | ${formatTime(r.recordCs)} | ${r.timeScore} | ${r.trickScore} | ${r.total} | ${r.route.join('→') || '—'} | ${r.challengeDone ? '達成' : '未達成'} |`);
       }
     }
     lines.push('');

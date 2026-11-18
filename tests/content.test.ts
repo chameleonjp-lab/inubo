@@ -74,11 +74,11 @@ describe('コースのデータ', () => {
     });
   }
 
-  test('公園だけを競技に使い、旧版の倍の距離、35 基の踏切台、18 の採点区間を持つ', () => {
+  test('公園だけを競技に使い、旧版の倍の距離、105 基の踏切台、18 の採点区間を持つ', () => {
     expect(RACE_COURSES).toEqual(['park']);
     const course = getCourse('park');
     expect(course.progressLength).toBe((760 - 3) * 2);
-    expect(course.def.objects.filter((o) => o.kind === 'kicker')).toHaveLength(5 + 30);
+    expect(course.def.objects.filter((o) => o.kind === 'kicker')).toHaveLength(105);
     expect(course.opportunities).toHaveLength(18);
     for (const dog of DOG_ORDER) {
       const base = BASE_SPEED * DOGS[dog].speedIndex / 100;

@@ -9,6 +9,70 @@ const extensionRamps = Array.from({ length: 30 }, (_, i): ObjectDef => ({
   height: 0.6,
 }));
 
+type Side = 'L' | 'R';
+const lanes = { L: { x0: -3.3, x1: -1.7 }, R: { x0: 1.7, x1: 3.3 } };
+const narrowLanes = { L: { x0: -1.65, x1: -0.8 }, R: { x0: 0.8, x1: 1.65 } };
+
+const sideRamps: [path: string, positions: [u0: number, side: Side][]][] = [
+  ['start', [[12, 'L'], [34, 'R'], [68, 'L'], [80, 'R'], [101, 'L'], [121, 'R'], [146, 'L'], [184, 'R']]],
+  ['mid', [[306, 'L'], [324, 'L'], [342, 'L'], [358, 'R'], [378, 'R'], [403, 'R']]],
+  ['f2-short', [[440, 'R'], [483, 'L']]],
+  ['late', [[520, 'L'], [536, 'R'], [548, 'R'], [578, 'L'], [596, 'L'], [622, 'R'],
+    [639, 'L'], [660, 'R'], [682, 'L'], [718, 'R'], [746, 'L'], [762, 'R']]],
+  ['extension', [
+    ...Array.from({ length: 30 }, (_, i): [number, Side] => [802 + 24 * i, i % 2 === 0 ? 'R' : 'L']),
+    ...[0, 3, 5, 8, 10, 13, 15, 18, 20, 23, 25, 28].map((i): [number, Side] => [790 + 24 * i, i % 2 === 0 ? 'R' : 'L']),
+  ]],
+];
+
+const foodLocations: [path: string, u: number, x: number, h: number][] = [
+  ['start', 74, 2.35, 0.35], ['mid', 346, -1, 0.35],
+  ['f2-short', 435, -1.3, 0.35], ['f2-short', 462, 1.25, 0.35], ['f2-short', 488, 1.35, 0.35],
+  ['late', 528, 2.5, 0.35], ['extension', 850, -1, 0.35], ['extension', 1190, 0.95, 0.35], ['extension', 1468, 1.2, 0.35],
+  ['start', 113, -2.4, 3.3], ['mid', 370, 2.4, 3.8], ['late', 634, 2.4, 3.4],
+  ['extension', 898, -2, 3.3], ['extension', 1234, -2, 4.2], ['extension', 1450, 2, 4.2],
+];
+type GroundLocation = [path: string, u: number, x: number];
+const guideLocations: GroundLocation[] = [
+  ['start', 120, -0.9], ['start', 151, 2.45], ['start', 189, -1.25],
+  ['mid', 332, -1.1], ['mid', 365, -0.8], ['mid', 386, 1.35],
+];
+const poopLocations: GroundLocation[] = [
+  ['start', 41, -2.5], ['start', 190, -2.6], ['mid', 351, 2.75],
+  ['late', 581, 2.7], ['late', 694, -2.8], ['late', 751, 1],
+  ['extension', 827, 2.8], ['extension', 967, -2.75], ['extension', 1013, 2.8],
+  ['extension', 1200, -2.6], ['extension', 1294, -1.35], ['extension', 1478, -2.75],
+];
+
+function v3Id(kind: ObjectDef['kind'], index: number): string {
+  return `${kind}-v3-${String(index + 1).padStart(2, '0')}`;
+}
+
+const park3Objects: ObjectDef[] = [
+  ...sideRamps.flatMap(([path, positions]) => positions.map(([u0, side]) => ({
+    path, u0, u1: u0 + 4, ...(path === 'f2-short' ? narrowLanes : lanes)[side],
+  }))).map((ramp, i): ObjectDef => ({ ...ramp, kind: 'kicker', id: v3Id('kicker', i), height: 0.6 })),
+  { kind: 'stairs', id: 'stairs-v3-01', path: 'f1-stairs', u0: 252, u1: 258, steps: 4 },
+  { kind: 'stairs', id: 'stairs-v3-02', path: 'f1-stairs', u0: 265, u1: 271, steps: 4 },
+  { kind: 'stairs', id: 'stairs-v3-03', path: 'f1-rail', u0: 252, u1: 258, steps: 4 },
+  { kind: 'stairs', id: 'stairs-v3-04', path: 'f1-rail', u0: 265, u1: 271, steps: 4 },
+  { kind: 'rail', id: 'rail-v3-01', path: 'f1-rail', u0: 251, u1: 260, x: -1.6, h0: 0.6, h1: 0.6 },
+  { kind: 'rail', id: 'rail-v3-02', path: 'f1-rail', u0: 264, u1: 274, x: 1.6, h0: 0.6, h1: 0.6 },
+  { kind: 'rail', id: 'rail-v3-03', path: 'f2-rail', u0: 435, u1: 441, x: -1.35, h0: 0.6, h1: 0.6 },
+  { kind: 'rail', id: 'rail-v3-04', path: 'f2-rail', u0: 476, u1: 483, x: 1.35, h0: 0.6, h1: 0.6 },
+  { kind: 'fence', id: 'fence-v3-01', path: 'late', u: 655, ...lanes.L, height: 0.5 },
+  { kind: 'fence', id: 'fence-v3-02', path: 'extension', u: 870, ...lanes.L, height: 0.5 },
+  { kind: 'wall', id: 'wall-v3-01', path: 'start', u0: 112, u1: 115, ...lanes.R, height: 0.6, look: 'wall' },
+  { kind: 'wall', id: 'wall-v3-02', path: 'mid', u0: 312, u1: 316, ...lanes.L, height: 0.6, look: 'planter' },
+  { kind: 'wall', id: 'wall-v3-03', path: 'late', u0: 744, u1: 748, ...lanes.R, height: 0.6, look: 'wall' },
+  { kind: 'wall', id: 'wall-v3-04', path: 'extension', u0: 1365, u1: 1369, ...lanes.R, height: 0.6, look: 'planter' },
+  { kind: 'gate', id: 'gate-v3-01', path: 'extension', u: 948, ...lanes.L, height: 0.9, periodUs: 4_400_000, offsetUs: 1_100_000 },
+  { kind: 'gate', id: 'gate-v3-02', path: 'extension', u: 1353, ...lanes.R, height: 0.9, periodUs: 4_400_000, offsetUs: 2_200_000 },
+  ...foodLocations.map(([path, u, x, h], i): ObjectDef => ({ kind: 'food', id: v3Id('food', i), path, u, x, h })),
+  ...guideLocations.map(([path, u, x], i): ObjectDef => ({ kind: 'guide', id: v3Id('guide', i), path, u, x, h: 0.4 })),
+  ...poopLocations.map(([path, u, x], i): ObjectDef => ({ kind: 'poop', id: v3Id('poop', i), path, u, x })),
+];
+
 /**
  * 公園。直線 → 階段と手すりの分岐（中央の階段・横の手すり・脇の坂）→ 合流 → 急カーブ
  * → 短い平道と少し長い手すり道の分岐 → 合流 → 高い壁 → ゲート → 踏切台の多い後半 → ゴール。
@@ -16,7 +80,7 @@ const extensionRamps = Array.from({ length: 30 }, (_, i): ObjectDef => ({
  */
 export const park: CourseDef = {
   id: 'park',
-  version: 'park-2',
+  version: 'park-3',
   name: '公園',
   theme: 'park',
   speedMultiplier: 1.5,
@@ -44,17 +108,33 @@ export const park: CourseDef = {
   },
   height: [
     { u: 0, v: 4.5 },
+    { u: 92, v: 4.5 },
+    { u: 114, v: 5.5 },
+    { u: 124, v: 5.5 },
+    { u: 144, v: 4.5 },
     { u: 150, v: 4.5 },
     { u: 200, v: 2 },
     { u: 236, v: 2 },
-    { u: 242, v: 0 },
+    { u: 242, v: 0.8 },
+    { u: 252, v: 0.8 },
+    { u: 258, v: 0.4 },
+    { u: 265, v: 0.4 },
+    { u: 271, v: 0 },
     { u: 300, v: 0 },
     { u: 340, v: 2 },
+    { u: 620, v: 2 },
+    { u: 644, v: 3 },
+    { u: 654, v: 3 },
+    { u: 678, v: 2 },
     { u: 780, v: 2 },
     { u: 875, v: 2 },
     { u: 965, v: 6 },
     { u: 1050, v: 6 },
     { u: 1160, v: 1 },
+    { u: 1172, v: 1 },
+    { u: 1196, v: 2 },
+    { u: 1210, v: 2 },
+    { u: 1236, v: 1 },
     { u: 1270, v: 1 },
     { u: 1395, v: 5 },
     { u: 1480, v: 2 },
@@ -95,6 +175,8 @@ export const park: CourseDef = {
       height: [
         { u: 214, v: 2 },
         { u: 228, v: 2 },
+        { u: 244, v: 1 },
+        { u: 253, v: 1 },
         { u: 272, v: 0 },
         { u: 286, v: 0 },
       ],
@@ -215,9 +297,9 @@ export const park: CourseDef = {
     { kind: 'checkpoint', id: 'cp-14', path: 'extension', u: 1153, x: 0 },
     { kind: 'checkpoint', id: 'cp-15', path: 'extension', u: 1278, x: 0 },
     { kind: 'checkpoint', id: 'cp-16', path: 'extension', u: 1403, x: 0 },
-    { kind: 'food', id: 'food-4', path: 'extension', u: 986, x: 2.8, h: 3.1 },
+    { kind: 'food', id: 'food-4', path: 'extension', u: 994, x: 2.4, h: 3.8 },
     { kind: 'food', id: 'food-5', path: 'extension', u: 1327, x: -2.8, h: 0.35 },
-    { kind: 'poop', id: 'poop-3', path: 'extension', u: 1120, x: 2.1 },
+    { kind: 'poop', id: 'poop-3', path: 'extension', u: 1069, x: 2.1 },
     { kind: 'poop', id: 'poop-4', path: 'extension', u: 1445, x: -2.1 },
     { kind: 'arrow', id: 'ar-11', path: 'extension', u: 861, side: 'right', dir: 'left' },
     { kind: 'arrow', id: 'ar-12', path: 'extension', u: 871, side: 'right', dir: 'left' },
@@ -225,6 +307,7 @@ export const park: CourseDef = {
     { kind: 'arrow', id: 'ar-14', path: 'extension', u: 1091, side: 'left', dir: 'right' },
     { kind: 'arrow', id: 'ar-15', path: 'extension', u: 1321, side: 'right', dir: 'left' },
     { kind: 'arrow', id: 'ar-16', path: 'extension', u: 1331, side: 'right', dir: 'left' },
+    ...park3Objects,
   ],
   sections: [
     { path: 'start', u0: 0, u1: 70, opp: 'S1' },

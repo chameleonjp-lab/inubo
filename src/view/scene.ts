@@ -539,10 +539,12 @@ export class GameView {
       placeOnPath(holder, p, (so.s0 + so.s1) / 2, (so.x0 + so.x1) / 2, baseHeight(p, so.s0));
       this.courseGroup.add(holder);
       const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: '#552222' }));
-      placeOnPath(lamp, p, so.s0 - 0.6, hwAt(p, so.s0) + 0.4, baseHeight(p, so.s0) + 1.6);
+      const roadEdge = hwAt(p, so.s0) + 0.4;
+      const lampX = so.x1 < 0 ? -roadEdge : roadEdge;
+      placeOnPath(lamp, p, so.s0 - 0.6, lampX, baseHeight(p, so.s0) + 1.6);
       this.courseGroup.add(lamp);
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 6), new THREE.MeshLambertMaterial({ color: '#555555' }));
-      placeOnPath(post, p, so.s0 - 0.6, hwAt(p, so.s0) + 0.4, baseHeight(p, so.s0) + 0.8);
+      placeOnPath(post, p, so.s0 - 0.6, lampX, baseHeight(p, so.s0) + 0.8);
       this.courseGroup.add(post);
       this.gates.set(so.id, { bar: g, lamp, solid: so, path: p });
       return;

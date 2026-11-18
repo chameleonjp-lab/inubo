@@ -26,6 +26,18 @@ function sameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** 送信待ちの記録には、その走行の版が使っていた採点基準を適用する。 */
+function scoreCriteria({ courseId, courseVersion, rulesVersion }: Pick<StartSnapshot, 'courseId' | 'courseVersion' | 'rulesVersion'>) {
+  if (rulesVersion !== RULES_VERSION) return null;
+  if (courseId === 'park') {
+    if (courseVersion === 'park-1') return { fullCs: 6000, zeroCs: 11000 };
+    if (courseVersion === 'park-2' || courseVersion === 'park-3') return { fullCs: 8000, zeroCs: 14667 };
+    return null;
+  }
+  const def = COURSE_DEFS[courseId];
+  return def?.goal && def.version === courseVersion ? def.timeScore : null;
+}
+
 export class MockRankingServer implements Transport {
   starts = new Map<string, StartSnapshot>();
   rows = new Map<string, Row>();
@@ -48,15 +60,10 @@ export class MockRankingServer implements Transport {
     return v;
   }
 
-  private validVersion(courseId: string, courseVersion: string, rulesVersion: string): boolean {
-    const def = COURSE_DEFS[courseId as keyof typeof COURSE_DEFS];
-    return !!def && def.version === courseVersion && rulesVersion === RULES_VERSION && def.goal !== null;
-  }
-
   postStart(s: StartSnapshot): Promise<SendStatus> {
     return this.gate(() => {
       if (!s.consent || !s.displayName.trim() || !s.participantId) return 'rejected';
-      if (!this.validVersion(s.courseId, s.courseVersion, s.rulesVersion)) return 'rejected';
+      if (!scoreCriteria(s)) return 'rejected';
       const prev = this.starts.get(s.runId);
       if (prev) return sameJson(prev, s) ? 'duplicate' : 'conflict';
       this.starts.set(s.runId, { ...s, displayName: String(s.displayName).slice(0, 16) });
@@ -69,13 +76,13 @@ export class MockRankingServer implements Transport {
       const st = this.starts.get(f.runId);
       if (!st) return 'unknownStart';
       if (st.participantId !== f.participantId || st.courseId !== f.courseId || st.courseVersion !== f.courseVersion || st.rulesVersion !== f.rulesVersion || st.dogId !== f.dogId) return 'rejected';
-      if (!this.validVersion(f.courseId, f.courseVersion, f.rulesVersion)) return 'rejected';
-      const def = COURSE_DEFS[f.courseId]!;
+      const criteria = scoreCriteria(f);
+      if (!criteria) return 'rejected';
       const ints = [f.recordCs, f.timeScore, f.trickScore, f.total];
       if (!ints.every((v) => Number.isInteger(v) && v >= 0)) return 'rejected';
       if (f.trickScore > 5000 || f.timeScore > 5000 || f.total > 10000 || f.recordCs <= 0) return 'rejected';
       // サーバー側の検算: タイム点はコースの基準から計算し直し、総合はタイム点＋技点。
-      if (timeScore(f.recordCs, def.timeScore.fullCs, def.timeScore.zeroCs) !== f.timeScore) return 'rejected';
+      if (timeScore(f.recordCs, criteria.fullCs, criteria.zeroCs) !== f.timeScore) return 'rejected';
       if (f.timeScore + f.trickScore !== f.total) return 'rejected';
       const prev = this.rows.get(f.runId);
       if (prev) {

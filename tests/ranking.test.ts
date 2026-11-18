@@ -118,6 +118,70 @@ describe('V17 任意の名前・再送', () => {
     expect(time.map((r) => [r.displayName, r.value])).toEqual([['はなこ', 9600]]);
   });
 
+  test.each([
+    ['park-1', 1400], // 96秒。60〜110秒の基準
+    ['park-2', 3800], // 同じタイムを80〜146.67秒の基準で検算
+  ] as const)('%s の送信待ちを再読込して再送し、park-3 と別々に順位を返す', async (courseVersion, oldTimeScore) => {
+    const store = new MemoryStorage();
+    const server = new MockRankingServer();
+    const offline = new RankingClient(null, store, true);
+    const old = parkId({ courseVersion, playerName: 'さくら', participantId: 'p-old', rankingOptIn: true });
+    offline.beginRun(old);
+    const oldResult = { ...makeResult(old, 9600, 1200), timeScore: oldTimeScore, total: oldTimeScore + 1200 };
+    offline.finishRun(oldResult);
+    expect(offline.pendingCount()).toBe(1);
+
+    const current = new RankingClient(server, store, true);
+    // サーバーで完走を受け付けた直後に応答を失う。再送時の内容と ID も照合する。
+    const postFinish = server.postFinish.bind(server);
+    const loseResponse = async (f: FinishPayload) => {
+      await postFinish(f);
+      throw new Error('response lost');
+    };
+    const finish = vi.spyOn(server, 'postFinish')
+      .mockImplementationOnce(loseResponse)
+      .mockImplementationOnce(loseResponse)
+      .mockImplementation(postFinish);
+    await current.flush();
+    expect(server.starts.get(old.runId)).toMatchObject({ courseVersion, participantId: 'p-old' });
+    expect(server.rows.get(old.runId)).toMatchObject({ courseVersion, total: oldResult.total });
+    expect(server.rows.size).toBe(1);
+    await current.flush();
+    expect(current.submissionStatus(old.runId)).toBe('pending');
+    expect(server.rows.size).toBe(1);
+    await current.flush();
+    expect(finish).toHaveBeenCalledTimes(3);
+    expect(finish.mock.calls.slice(1)).toEqual([finish.mock.calls[0], finish.mock.calls[0]]);
+    expect(server.rows.size).toBe(1);
+    expect(current.submissionStatus(old.runId)).toBe('accepted');
+
+    const fresh = parkId({ courseVersion: 'park-3', playerName: 'たま', participantId: 'p-new', rankingOptIn: true });
+    current.beginRun(fresh);
+    const newResult = makeResult(fresh, 9000, 500);
+    current.finishRun(newResult);
+    await current.flush();
+    for (const [run, result] of [[old, oldResult], [fresh, newResult]] as const) {
+      const query = { courseId: run.courseId, courseVersion: run.courseVersion, rulesVersion: run.rulesVersion, limit: 30 };
+      for (const metric of ['total', 'time'] as const) {
+        const board = await server.getBoard({ ...query, metric });
+        expect(board.map(({ participantId, rank, value }) => [participantId, rank, value])).toEqual([
+          [run.participantId, 1, metric === 'total' ? result.total : result.recordCs],
+        ]);
+      }
+    }
+  });
+
+  test('公園の未知の版と未知の採点ルールは拒む', async () => {
+    const server = new MockRankingServer();
+    const snapshot = {
+      runId: 'unknown-version', participantId: 'p1', displayName: 'ぽち', courseId: 'park',
+      courseVersion: 'park-3', rulesVersion: 'rules-1', dogId: 'shiba', consent: true,
+    } as const;
+    expect(await server.postStart({ ...snapshot, courseVersion: 'park-unknown' })).toBe('rejected');
+    expect(await server.postStart({ ...snapshot, rulesVersion: 'rules-2' })).toBe('rejected');
+    expect(server.starts.size).toBe(0);
+  });
+
   test('同じ走行 ID で違う値を送ると拒み、元の記録を残す', async () => {
     const server = new MockRankingServer();
     const client = new RankingClient(server, new MemoryStorage(), true);
