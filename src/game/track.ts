@@ -379,7 +379,7 @@ export function solidTop(p: PathRt, so: Solid, s: number, tUs: number): number {
     case 'rail':
       return railTopAt(so.rail!, sc);
     case 'kicker':
-      return baseHeight(p, so.s0) + so.height * clamp((sc - so.s0) / (so.s1 - so.s0), 0, 1);
+      return baseHeight(p, sc) + so.height * ((sc - so.s0) / (so.s1 - so.s0));
     case 'gate':
       return baseHeight(p, so.s0) + so.height * gatePhase(so.gate!, tUs).raise;
     default:

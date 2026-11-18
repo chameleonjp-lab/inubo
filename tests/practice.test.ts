@@ -40,6 +40,8 @@ describe('練習広場', () => {
   it('スタート近くから踏切台が並び、周回しても長く待たずにもう一度試せる', () => {
     const path = course.paths.get(course.start.pathId)!;
     const ramps = path.solids.filter((s) => s.kind === 'kicker').map((s) => s.s0).sort((a, b) => a - b);
+    expect(course.def.version).toBe('plaza-2');
+    expect(ramps).toHaveLength(14);
     expect(ramps[0] - course.start.s).toBeLessThan(15);
     expect(Math.max(...ramps.map((s, i) => (ramps[i + 1] ?? ramps[0] + path.length) - s))).toBeLessThanOrEqual(30);
   });

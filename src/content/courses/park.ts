@@ -80,7 +80,7 @@ const park3Objects: ObjectDef[] = [
  */
 export const park: CourseDef = {
   id: 'park',
-  version: 'park-3',
+  version: 'park-4',
   name: '公園',
   theme: 'park',
   speedMultiplier: 1.5,

@@ -32,7 +32,6 @@ function scoreCriteria({ courseId, courseVersion, rulesVersion }: Pick<StartSnap
   if (courseId === 'park') {
     if (courseVersion === 'park-1') return { fullCs: 6000, zeroCs: 11000 };
     if (courseVersion === 'park-2' || courseVersion === 'park-3') return { fullCs: 8000, zeroCs: 14667 };
-    return null;
   }
   const def = COURSE_DEFS[courseId];
   return def?.goal && def.version === courseVersion ? def.timeScore : null;

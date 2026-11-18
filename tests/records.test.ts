@@ -77,19 +77,19 @@ describe('V15 2つの自己記録', () => {
     expect(rec.bestTimeReplay({ courseId: 'park', courseVersion: 'park-2', rulesVersion: RULES_VERSION })!.runId).toBe('c');
   });
 
-  test('park-3 へ更新しても旧版の自己記録・再生・課題と共通の参加者ID・スタンプを読める', () => {
+  test.each([['park-2', 'park-3'], ['park-3', 'park-4']])('%s から %s へ更新しても版別の記録・再生・課題と共通の参加者ID・スタンプを読める', (oldVersion, newVersion) => {
     const store = new MemoryStorage();
     const participantId = loadProfile(store).participantId;
-    const oldRun = result({ courseVersion: 'park-2', runId: 'old', challengeDone: true });
-    const newRun = result({ courseVersion: 'park-3', runId: 'new', recordCs: 9000, total: 2000, challengeDone: true });
+    const oldRun = result({ courseVersion: oldVersion, runId: 'old', challengeDone: true });
+    const newRun = result({ courseVersion: newVersion, runId: 'new', recordCs: 9000, total: 2000, challengeDone: true });
     const before = new Records(store);
-    before.saveLocalResult(oldRun, replay('old', 'shiba', 'park-2'));
+    before.saveLocalResult(oldRun, replay('old', 'shiba', oldVersion));
 
     const after = new Records(store);
     expect(after.bestScore(newRun)).toBeNull();
     expect(after.bestTimeReplay(newRun)).toBeNull();
-    expect(after.challenges()).toEqual({ 'park|park-2': true });
-    expect(after.saveLocalResult(newRun, replay('new', 'shiba', 'park-3'))).toMatchObject({
+    expect(after.challenges()).toEqual({ ['park|' + oldVersion]: true });
+    expect(after.saveLocalResult(newRun, replay('new', 'shiba', newVersion))).toMatchObject({
       saved: true, newBestScore: true, newBestTime: true, newChallenge: true, newStamp: false,
     });
     for (const run of [oldRun, newRun]) {
@@ -97,7 +97,7 @@ describe('V15 2つの自己記録', () => {
       expect(after.bestTime(run)).toMatchObject({ runId: run.runId, recordCs: run.recordCs });
       expect(after.bestTimeReplay(run)).toEqual(replay(run.runId, 'shiba', run.courseVersion));
     }
-    expect(after.challenges()).toEqual({ 'park|park-2': true, 'park|park-3': true });
+    expect(after.challenges()).toEqual({ ['park|' + oldVersion]: true, ['park|' + newVersion]: true });
     expect(after.stamps()).toEqual({ shiba: { park: true } });
     expect(loadProfile(store).participantId).toBe(participantId);
   });

@@ -30,6 +30,7 @@ export class FollowCamera {
 
   reset(): void {
     this.initialized = false;
+    this.shake = 0;
   }
 
   update(path: PathRt, s: number, x: number, y: number, dtMs: number, shakeOn: boolean): void {
