@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 type Inubo = {
   app: {
-    game: { session: { paused: boolean; phase: string; sim: { events: { kind: string; data?: { viaSwipe?: boolean } }[]; simUs: number } } } | null;
+    game: { session: { paused: boolean; phase: string; sim: { events: { kind: string; data?: { viaSwipe?: boolean } }[]; inputLog: { kind: string }[]; simUs: number } } } | null;
   };
 };
 
@@ -14,7 +14,8 @@ async function gameState(page: Page) {
     if (!g) return null;
     const jumps = g.session.sim.events.filter((e) => e.kind === 'jump');
     return { paused: g.session.paused, phase: g.session.phase, simUs: g.session.sim.simUs,
-      jumps: jumps.length, swipeJumps: jumps.filter((e) => e.data?.viaSwipe).length };
+      jumps: jumps.length, swipeJumps: jumps.filter((e) => e.data?.viaSwipe).length,
+      releases: g.session.sim.inputLog.filter((f) => f.kind === 'up').length };
   });
 }
 
@@ -140,8 +141,9 @@ test('指の操作: 上へ払うと 1 回跳ぶ（画面の上が前）', async 
   await page.mouse.move(x, y);
   await page.mouse.down();
   for (let i = 1; i <= 8; i++) await page.mouse.move(x, y - i * 12);
+  await expect.poll(() => gameState(page)).toMatchObject({ swipeJumps: 1, releases: 0 });
   await page.mouse.up();
-  await expect.poll(async () => (await gameState(page))?.swipeJumps).toBe(1);
+  await expect.poll(() => gameState(page)).toMatchObject({ swipeJumps: 1, releases: 1 });
 });
 
 test('設定: 音のオン・オフ、音量、揺れ、光の量を別々に変え、再読込後も残る', async ({ page }) => {
