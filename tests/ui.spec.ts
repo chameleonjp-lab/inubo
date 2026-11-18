@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 type Inubo = {
   app: {
-    game: { session: { paused: boolean; phase: string; sim: { events: { kind: string }[]; simUs: number } } } | null;
+    game: { session: { paused: boolean; phase: string; sim: { events: { kind: string; data?: { viaSwipe?: boolean } }[]; simUs: number } } } | null;
   };
 };
 
@@ -12,7 +12,9 @@ async function gameState(page: Page) {
   return page.evaluate(() => {
     const g = (window as unknown as { __inubo: Inubo }).__inubo.app.game;
     if (!g) return null;
-    return { paused: g.session.paused, phase: g.session.phase, simUs: g.session.sim.simUs, jumps: g.session.sim.events.filter((e) => e.kind === 'jump').length };
+    const jumps = g.session.sim.events.filter((e) => e.kind === 'jump');
+    return { paused: g.session.paused, phase: g.session.phase, simUs: g.session.sim.simUs,
+      jumps: jumps.length, swipeJumps: jumps.filter((e) => e.data?.viaSwipe).length };
   });
 }
 
@@ -131,7 +133,7 @@ test('V01 中断: 一時停止は景色を覆い、指を離して「再開」�
 test('指の操作: 上へ払うと 1 回跳ぶ（画面の上が前）', async ({ page }) => {
   await page.goto('/?debug=1');
   await page.click('[data-testid="start"]');
-  await page.waitForTimeout(4000);
+  await expect.poll(async () => (await gameState(page))?.phase, { timeout: 15_000 }).toBe('running');
   const box = (await page.locator('[data-testid="surface"]').boundingBox())!;
   const x = box.x + box.width / 2;
   const y = box.y + box.height * 0.75;
@@ -139,8 +141,7 @@ test('指の操作: 上へ払うと 1 回跳ぶ（画面の上が前）', async 
   await page.mouse.down();
   for (let i = 1; i <= 8; i++) await page.mouse.move(x, y - i * 12);
   await page.mouse.up();
-  await page.waitForTimeout(300);
-  expect((await gameState(page))!.jumps).toBe(1);
+  await expect.poll(async () => (await gameState(page))?.swipeJumps).toBe(1);
 });
 
 test('設定: 音のオン・オフ、音量、揺れ、光の量を別々に変え、再読込後も残る', async ({ page }) => {
