@@ -449,10 +449,11 @@ export class GameView {
       const g = new THREE.Group();
       opts.forEach((o, i) => {
         const tex = labelTexture(`${o.trick ? '★ ' : ''}${o.label}`, o.trick ? '#7a3b00' : '#1f2a37');
-        const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+        const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex }));
         const mid = (Math.max(o.xMin, -hwAt(p, p.length)) + Math.min(o.xMax, hwAt(p, p.length))) / 2;
-        plate.position.set(0, 2.6, mid);
-        plate.rotation.y = Math.PI / 2;
+        // 追従カメラより高く掲げ、近づいてくる犬に文字の表を向ける。
+        plate.position.set(0, 5.2, mid);
+        plate.rotation.y = -Math.PI / 2;
         g.add(plate);
         void i;
       });
@@ -483,7 +484,10 @@ export class GameView {
     if (so.kind === 'rail') {
       const r = so.rail!;
       const pts: THREE.Vector3[] = [];
-      for (let s = r.s0; s <= r.s1 + 1e-6; s += Math.max(0.5, (r.s1 - r.s0) / 40)) {
+      const length = r.s1 - r.s0;
+      const segments = Math.max(1, Math.min(40, Math.ceil(length / 0.5)));
+      for (let i = 0; i <= segments; i++) {
+        const s = r.s0 + length * i / segments;
         const [x, z] = worldXZ(p, s, r.x);
         pts.push(new THREE.Vector3(x, railTopAt(r, s) - 0.04, z));
       }
@@ -539,10 +543,12 @@ export class GameView {
       placeOnPath(holder, p, (so.s0 + so.s1) / 2, (so.x0 + so.x1) / 2, baseHeight(p, so.s0));
       this.courseGroup.add(holder);
       const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: '#552222' }));
-      placeOnPath(lamp, p, so.s0 - 0.6, hwAt(p, so.s0) + 0.4, baseHeight(p, so.s0) + 1.6);
+      const roadEdge = hwAt(p, so.s0) + 0.4;
+      const lampX = so.x1 < 0 ? -roadEdge : roadEdge;
+      placeOnPath(lamp, p, so.s0 - 0.6, lampX, baseHeight(p, so.s0) + 1.6);
       this.courseGroup.add(lamp);
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 6), new THREE.MeshLambertMaterial({ color: '#555555' }));
-      placeOnPath(post, p, so.s0 - 0.6, hwAt(p, so.s0) + 0.4, baseHeight(p, so.s0) + 0.8);
+      placeOnPath(post, p, so.s0 - 0.6, lampX, baseHeight(p, so.s0) + 0.8);
       this.courseGroup.add(post);
       this.gates.set(so.id, { bar: g, lamp, solid: so, path: p });
       return;

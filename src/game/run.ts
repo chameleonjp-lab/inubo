@@ -352,6 +352,7 @@ function processContact(run: SimState, c: Contact, t: number, emit: Emit): void 
         emit('poop', t, { untilUs: run.effects.poopUntilUs }, it.id);
       } else {
         run.guide.active = true;
+        if (p.next.kind === 'fork') run.guide.forkId = p.next.forkId;
         emit('guide', t, undefined, it.id);
       }
       break;

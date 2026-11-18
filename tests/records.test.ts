@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { MemoryStorage, Records, loadSettings, saveSettings, DEFAULT_SETTINGS } from '../src/storage/records';
+import { MemoryStorage, Records, loadProfile, loadSettings, saveSettings, DEFAULT_SETTINGS } from '../src/storage/records';
 import { ReplayRecorder, replayPoseAt, type ReplayData } from '../src/view/replay';
 import { homeShareText, intentUrl, resultShareText, shareOnX, shareableResult } from '../src/ui/share';
 import { getCourse } from '../src/content/courses/index';
@@ -75,6 +75,31 @@ describe('V15 2つの自己記録', () => {
     expect(rec.bestTime({ courseId: 'park', courseVersion: 'park-1', rulesVersion: 'rules-2' })!.runId).toBe('d');
     // 古い走りを新しい道に重ねない（版が違う再生は使わない）。
     expect(rec.bestTimeReplay({ courseId: 'park', courseVersion: 'park-2', rulesVersion: RULES_VERSION })!.runId).toBe('c');
+  });
+
+  test('park-3 へ更新しても旧版の自己記録・再生・課題と共通の参加者ID・スタンプを読める', () => {
+    const store = new MemoryStorage();
+    const participantId = loadProfile(store).participantId;
+    const oldRun = result({ courseVersion: 'park-2', runId: 'old', challengeDone: true });
+    const newRun = result({ courseVersion: 'park-3', runId: 'new', recordCs: 9000, total: 2000, challengeDone: true });
+    const before = new Records(store);
+    before.saveLocalResult(oldRun, replay('old', 'shiba', 'park-2'));
+
+    const after = new Records(store);
+    expect(after.bestScore(newRun)).toBeNull();
+    expect(after.bestTimeReplay(newRun)).toBeNull();
+    expect(after.challenges()).toEqual({ 'park|park-2': true });
+    expect(after.saveLocalResult(newRun, replay('new', 'shiba', 'park-3'))).toMatchObject({
+      saved: true, newBestScore: true, newBestTime: true, newChallenge: true, newStamp: false,
+    });
+    for (const run of [oldRun, newRun]) {
+      expect(after.bestScore(run)).toMatchObject({ runId: run.runId, total: run.total });
+      expect(after.bestTime(run)).toMatchObject({ runId: run.runId, recordCs: run.recordCs });
+      expect(after.bestTimeReplay(run)).toEqual(replay(run.runId, 'shiba', run.courseVersion));
+    }
+    expect(after.challenges()).toEqual({ 'park|park-2': true, 'park|park-3': true });
+    expect(after.stamps()).toEqual({ shiba: { park: true } });
+    expect(loadProfile(store).participantId).toBe(participantId);
   });
 
   test('同じタイム・同じ点なら、先に保存した走行を残す。練習は保存しない', () => {
