@@ -15,12 +15,12 @@ import type { SimState } from '../src/game/types';
  * REPORT_OUT を指定すると Markdown に書き出す。実機の欄を埋める代わりには使わない。
  */
 
-function drive(run: SimState, route: string, onTick?: (r: SimState) => void): SimState {
+function drive(run: SimState, route: string, stopAfterTick?: (r: SimState) => boolean): SimState {
   const pilot = new Autopilot(run.course.def.autoRoutes[route]);
   let t = 0;
   while (!run.finished && t < 200_000_000) {
     advanceRun(run, (t += 5_000), pilot.poll(run));
-    onTick?.(run);
+    if (stopAfterTick?.(run)) break;
   }
   return run;
 }
@@ -29,13 +29,14 @@ function drive(run: SimState, route: string, onTick?: (r: SimState) => void): Si
 function segmentTime(courseId: 'park', dog: (typeof DOG_ORDER)[number], route: string, u0: number, u1: number): number {
   const run = newRun(getCourse(courseId), dog);
   let tIn: number | null = null;
-  let tOut: number | null = null;
   drive(run, route, (r) => {
     const u = uAtS(r.course.paths.get(r.pathId)!, r.s);
     if (tIn === null && u >= u0) tIn = r.simUs;
-    if (tOut === null && u >= u1) tOut = r.simUs;
+    return u >= u1;
   });
-  return ((tOut ?? 0) - (tIn ?? 0)) / 1e6;
+  expect(tIn).not.toBeNull();
+  expect(uAtS(run.course.paths.get(run.pathId)!, run.s)).toBeGreaterThanOrEqual(u1);
+  return (run.simUs - tIn!) / 1e6;
 }
 
 test('自動再生: 公園を 3 犬種 × 3 経路で走り、犬種差を 3 区間で測る', () => {

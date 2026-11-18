@@ -449,10 +449,11 @@ export class GameView {
       const g = new THREE.Group();
       opts.forEach((o, i) => {
         const tex = labelTexture(`${o.trick ? '★ ' : ''}${o.label}`, o.trick ? '#7a3b00' : '#1f2a37');
-        const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+        const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex }));
         const mid = (Math.max(o.xMin, -hwAt(p, p.length)) + Math.min(o.xMax, hwAt(p, p.length))) / 2;
-        plate.position.set(0, 2.6, mid);
-        plate.rotation.y = Math.PI / 2;
+        // 追従カメラより高く掲げ、近づいてくる犬に文字の表を向ける。
+        plate.position.set(0, 5.2, mid);
+        plate.rotation.y = -Math.PI / 2;
         g.add(plate);
         void i;
       });
@@ -483,7 +484,10 @@ export class GameView {
     if (so.kind === 'rail') {
       const r = so.rail!;
       const pts: THREE.Vector3[] = [];
-      for (let s = r.s0; s <= r.s1 + 1e-6; s += Math.max(0.5, (r.s1 - r.s0) / 40)) {
+      const length = r.s1 - r.s0;
+      const segments = Math.max(1, Math.min(40, Math.ceil(length / 0.5)));
+      for (let i = 0; i <= segments; i++) {
+        const s = r.s0 + length * i / segments;
         const [x, z] = worldXZ(p, s, r.x);
         pts.push(new THREE.Vector3(x, railTopAt(r, s) - 0.04, z));
       }

@@ -2,9 +2,11 @@ import './park-item-runs';
 import './park-route-runs';
 import { expect, test } from 'vitest';
 import { park } from '../src/content/courses/park';
-import { FOOT_HALF_WIDTH } from '../src/game/rules';
+import { FALL_US, FOOT_HALF_WIDTH } from '../src/game/rules';
 import { baseGrade, baseHeight, buildCourse, hwAt, sAtU, uAtS } from '../src/game/track';
 import type { PathRt } from '../src/game/track';
+import { advanceRun, forceFall } from '../src/game/run';
+import { newRun } from './helpers';
 
 const course = buildCourse(park);
 const paths = [...course.paths.values()];
@@ -272,4 +274,22 @@ test('44個の識別子・道・座標・路面からの高さが計画 §4 と�
     ['start', 41, -2.5], ['start', 190, -2.6], ['mid', 351, 2.75], ['late', 581, 2.7], ['late', 694, -2.8], ['late', 751, 1],
     ['extension', 827, 2.8], ['extension', 967, -2.75], ['extension', 1013, 2.8], ['extension', 1200, -2.6], ['extension', 1294, -1.35], ['extension', 1478, -2.75],
   ]);
+});
+
+test('全復帰地点で路面に戻り、操作を再開するまでの1秒間に衝突しない', () => {
+  for (const path of paths) {
+    for (const cp of path.checkpoints) {
+      const run = newRun(course);
+      run.lastCheckpoint = cp;
+      forceFall(run, 0);
+      advanceRun(run, FALL_US);
+      expect(run.events.filter(e => e.kind === 'respawn').map(e => e.objId)).toEqual([cp.id]);
+      expect(run.pathId).toBe(cp.pathId);
+      expect(run.y, cp.id).toBeCloseTo(baseHeight(path, cp.s), 6);
+      advanceRun(run, FALL_US + 1_000_000);
+      expect(run.s, cp.id).toBeGreaterThan(cp.s);
+      expect(run.events.filter(e => e.kind === 'collide'), cp.id).toEqual([]);
+      expect(run.blocked, cp.id).toBeNull();
+    }
+  }
 });
