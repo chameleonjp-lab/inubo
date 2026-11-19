@@ -1,4 +1,6 @@
-import { quatAxisAngle, quatMul, type Quat } from '../game/math';
+import { quatAxisAngle, quatMul, type Quat, type Vec3 } from '../game/math';
+import { courseFlightPose } from '../game/free-flight';
+import { FREE_RULES_VERSION, type FreeBody } from '../game/free-motion';
 import { bodyQuat, dogQuat } from '../game/tricks';
 import { sampleAt, worldXZ } from '../game/track';
 import type { CourseId, DogId } from '../content/types';
@@ -15,9 +17,10 @@ export interface ReplayData {
   courseId: CourseId;
   courseVersion: string;
   rulesVersion: string;
+  motionVersion?: 'freestyle-1';
   /** 記録の間隔（ms）。 */
   stepMs: number;
-  /** [x(cm), y(cm), z(cm), 向き(mrad), 体の四元数×1000 (x,y,z,w), 犬の四元数×1000 (x,y,z,w)] */
+  /** 最初の12値は従来どおり。自由回転中だけ犬・人の相対位置(mm)と世界姿勢(×1000)を後ろに加える。 */
   frames: number[][];
 }
 
@@ -28,6 +31,7 @@ export interface Pose {
   heading: number;
   body: Quat;
   dog: Quat;
+  free?: { dog: FreeBody; rider: FreeBody };
 }
 
 /** 計算の状態から、世界座標の姿勢を求める（描画と再生で共通）。 */
@@ -37,7 +41,9 @@ export function poseOf(run: SimState, s = run.s, x = run.x, y = run.y, tUs = run
   const heading = sampleAt(p, Math.max(0, Math.min(p.length, s))).heading;
   const rotations = run.jump?.resolution.rotations ?? [];
   const base = quatAxisAngle([0, 0, 1], run.basePitch);
-  return { x: wx, y, z: wz, heading, body: quatMul(base, bodyQuat(rotations, tUs)), dog: dogQuat(rotations, tUs) };
+  const flight = run.freeFlight ?? run.freeLanding?.flight;
+  return { x: wx, y, z: wz, heading, body: quatMul(base, bodyQuat(rotations, tUs)), dog: dogQuat(rotations, tUs),
+    ...(flight ? { free: courseFlightPose(flight, tUs) } : {}) };
 }
 
 export class ReplayRecorder {
@@ -50,7 +56,9 @@ export class ReplayRecorder {
     while (run.simUs >= this.nextUs) {
       const p = poseOf(run);
       const q = (v: number) => Math.round(v * 1000);
-      this.frames.push([Math.round(p.x * 100), Math.round(p.y * 100), Math.round(p.z * 100), Math.round(p.heading * 1000), ...p.body.map(q), ...p.dog.map(q)]);
+      const frame = [Math.round(p.x * 100), Math.round(p.y * 100), Math.round(p.z * 100), Math.round(p.heading * 1000), ...p.body.map(q), ...p.dog.map(q)];
+      if (p.free) frame.push(...p.free.dog.p.map(q), ...p.free.dog.q.map(q), ...p.free.rider.p.map(q), ...p.free.rider.q.map(q));
+      this.frames.push(frame);
       this.nextUs += this.stepMs * 1000;
     }
   }
@@ -62,6 +70,7 @@ export class ReplayRecorder {
       courseId: run.id.courseId,
       courseVersion: run.id.courseVersion,
       rulesVersion: run.id.rulesVersion,
+      ...(run.id.rulesVersion === FREE_RULES_VERSION ? { motionVersion: 'freestyle-1' as const } : {}),
       stepMs: this.stepMs,
       frames: this.frames.slice(),
     };
@@ -98,6 +107,15 @@ export function replayPoseAt(rp: ReplayData, tUs: number): Pose | null {
   while (dh < -3142) dh += 6283;
   const qa = (k: number) => [a[k] / 1000, a[k + 1] / 1000, a[k + 2] / 1000, a[k + 3] / 1000];
   const qb = (k: number) => [b[k] / 1000, b[k + 1] / 1000, b[k + 2] / 1000, b[k + 3] / 1000];
+  const fa = a.length === 26, fb = b.length === 26;
+  const nearest = t < 0.5 ? a : b;
+  const freeBody = (k: number): FreeBody => {
+    const read = fa && fb ? L : (entry: number) => nearest[entry];
+    const p: Vec3 = [read(k) / 1000, read(k + 1) / 1000, read(k + 2) / 1000];
+    const q = fa && fb ? nlerpQuat(qa(k + 3), qb(k + 3), t) :
+      nlerpQuat(nearest.slice(k + 3, k + 7).map(v => v / 1000), [0, 0, 0, 1], 0);
+    return { p, q };
+  };
   return {
     x: L(0) / 100,
     y: L(1) / 100,
@@ -105,5 +123,6 @@ export function replayPoseAt(rp: ReplayData, tUs: number): Pose | null {
     heading: (a[3] + dh * t) / 1000,
     body: nlerpQuat(qa(4), qb(4), t),
     dog: nlerpQuat(qa(8), qb(8), t),
+    ...(rp.motionVersion === 'freestyle-1' && nearest.length === 26 ? { free: { dog: freeBody(12), rider: freeBody(19) } } : {}),
   };
 }

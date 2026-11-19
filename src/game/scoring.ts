@@ -9,7 +9,7 @@ import {
 import { resolveTricks, scoreJump, type JumpScore } from './tricks';
 import { sectionAt, type PathRt, type SectionRt } from './track';
 import { settleRail, loseRail } from './rails';
-import type { FailureRec, NearMiss, RunResult, ScoreState, SimEvent, SimState } from './types';
+import type { FailureRec, JumpRec, NearMiss, RunResult, ScoreState, SimEvent, SimState } from './types';
 
 /**
  * 採点。総合点 = タイム点（0〜5,000）＋技点（0〜5,000）、上限 10,000。
@@ -87,17 +87,14 @@ export interface LandingContact {
  * 着地を確定する。手すりに乗ったときも呼ぶ。
  * 順番: 着地の判定 → 保留中の手すり点 → 空中技（区間の採点と連続点）。同じジャンプの再通知は 0 点。
  */
-export function settleLanding(run: SimState, contact: LandingContact, emit: Emit): JumpScore | null {
+export function settleLanding(run: SimState, contact: LandingContact, emit: Emit, actual?: { jump: JumpRec; score: JumpScore }): JumpScore | null {
   const sc = run.score;
-  const jump = run.jump;
+  const jump = actual?.jump ?? run.jump;
   if (!jump || sc.settledJumps[jump.jumpId]) return null;
   sc.settledJumps[jump.jumpId] = true;
-  const strokes = jump.strokes.map((id) => run.strokes[id]).filter(Boolean);
-  const res = resolveTricks(strokes, contact.atUs, contact.atUs);
-  jump.resolution = res;
-  const js = scoreJump(res, contact.atUs, run.basePitch, contact.surfacePitch);
-  const hasTrick = res.rotations.length > 0;
-  const safe = !hasTrick || js.tenths > 0;
+  const js = actual ? actual.score : resolveLegacyLanding(run, jump, contact);
+  const hasTrick = actual ? js.base > 0 || js.tenths === 0 : jump.resolution.rotations.length > 0;
+  const safe = actual ? js.tenths > 0 : !hasTrick || js.tenths > 0;
 
   if (run.pendingRail) {
     if (safe) settleRail(run, run.pendingRail, contact.atUs, emit);
@@ -119,7 +116,7 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
       opp: sec?.opp ?? null,
       sectionKey: sec?.key ?? null,
       wouldBase,
-      reason: js.residualDeg >= js.tiltDeg ? 'underRotated' : 'tilted',
+      reason: !actual && js.residualDeg >= js.tiltDeg ? 'underRotated' : 'tilted',
       names: js.names,
       composite: js.composite,
     };
@@ -145,7 +142,7 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
   sc.jumps.push({ jumpId: jump.jumpId, atUs: contact.atUs, opp: sec?.opp ?? null, sectionKey: sec?.key ?? null, names: js.names, base: js.base, composite: js.composite, tenths: js.tenths, points: js.points, awarded, onRail: !!contact.onRail });
   emit('land', contact.atUs, {
     jumpId: jump.jumpId,
-    points: awarded,
+    points: actual && run.id.mode === 'practice' ? js.points : awarded,
     tenths: js.tenths,
     composite: js.composite,
     names: js.names,
@@ -153,6 +150,12 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
     onRail: contact.onRail,
   });
   return js;
+}
+
+function resolveLegacyLanding(run: SimState, jump: JumpRec, contact: LandingContact): JumpScore {
+  const strokes = jump.strokes.map((id) => run.strokes[id]).filter(Boolean);
+  jump.resolution = resolveTricks(strokes, contact.atUs, contact.atUs);
+  return scoreJump(jump.resolution, contact.atUs, run.basePitch, contact.surfacePitch);
 }
 
 const HINTS: Record<FailureRec['reason'], (f: FailureRec) => string> = {
@@ -178,7 +181,7 @@ export function nearMiss(run: SimState): NearMiss | null {
     sectionNumber: order.indexOf(best.opp) + 1,
     wouldBase: best.wouldBase,
     names: best.names,
-    hint: HINTS[best.reason](best),
+    hint: best.names.includes('フリースタイル') ? '逆向きに払って回転を弱め、足が地面を向くように調整しましょう。' : HINTS[best.reason](best),
   };
 }
 

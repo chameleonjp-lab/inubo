@@ -13,7 +13,7 @@ export interface DogSpec {
   speedIndex: number;
   /** 目標の横位置に届く速さの指数（柴犬=100）。 */
   handlingIndex: number;
-  /** 見た目だけに使う。接触範囲の計算には使わない。 */
+  /** 見た目と、自由操作中の身体の接触範囲に使う。 */
   look: DogLook;
 }
 

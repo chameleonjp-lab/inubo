@@ -498,6 +498,42 @@ canvas.trails {
   margin: 0;
 }
 
+.free-run-controls {
+  position: absolute;
+  left: max(10px, env(safe-area-inset-left, 0px));
+  bottom: calc(10px + var(--safe-bottom));
+  max-width: min(320px, 90%);
+  pointer-events: none;
+  color: #172633;
+}
+
+.free-run-hint {
+  width: fit-content;
+  margin: 0 0 5px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #fff9ed;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.free-run-targets, .free-run-lessons { display: flex; flex-wrap: wrap; gap: 5px; }
+.free-run-lessons { margin-top: 5px; }
+.free-run-targets button, .free-run-lessons button { pointer-events: auto; }
+.free-run-targets button {
+  min-height: 44px;
+  min-width: 62px;
+  padding: 4px 8px;
+  border: 1px solid #263e4d;
+  border-radius: 8px;
+  background: #fff9ed;
+  color: #233849;
+  font: inherit;
+  font-size: 13px;
+  touch-action: manipulation;
+}
+.free-run-targets button[aria-pressed='true'] { background: #233849; color: #fff9ed; }
+
 .practice-demo-playing .countdown,
 .practice-demo-playing .center-text {
   display: none;

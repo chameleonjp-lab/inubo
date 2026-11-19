@@ -23,7 +23,7 @@ async function finishAutoRun(page: Page, route = 'safe', course = 'park', dog = 
   await page.goto(`/?autoplay=${route}&speed=12${extra}`);
   await page.click(`[data-testid="course-${course}"]`);
   await page.click(`[data-testid="dog-${dog}"]`);
-  await page.click('[data-testid="start"]');
+  await page.getByTestId(route === 'trick' ? 'ranked-start' : 'start').click();
   await page.waitForSelector('[data-testid="results"]', { timeout: 90_000 });
   await page.waitForTimeout(900);
 }
@@ -164,6 +164,7 @@ test('設定: 音のオン・オフ、音量、揺れ、光の量を別々に変
 test('練習広場: 5 つの手順を順に試せ、途中で次へ・本番へ進める。練習は記録を作らない', async ({ page }) => {
   await page.goto('/');
   await page.click('[data-testid="practice"]');
+  await page.getByTestId('legacy-practice').click();
   await expect(page.locator('[data-testid="practice-title"]')).toHaveText('1. 左右に動く');
   await page.click('[data-testid="practice-next"]');
   await expect(page.locator('[data-testid="practice-title"]')).toHaveText('2. ジャンプ');
@@ -183,7 +184,7 @@ for (const vp of [
     await page.goto('/');
     await page.click('[data-testid="start"]');
     await page.waitForTimeout(3500);
-    for (const id of ['pause', 'hud-time', 'hud-trick']) {
+    for (const id of ['pause', 'hud-time', 'hud-trick', 'free-run-controls', 'run-target-dog']) {
       const b = (await page.locator(`[data-testid="${id}"]`).boundingBox())!;
       expect(b.x).toBeGreaterThanOrEqual(0);
       expect(b.y).toBeGreaterThanOrEqual(0);
@@ -204,8 +205,8 @@ test('画面の向きを変えると一時停止する', async ({ page }) => {
 test('V17・V18（試験用の接続先）: 名前を入れて走ると、結果の順位に開始時の名前で 1 件だけ出る', async ({ page }) => {
   await page.goto('/?ranking=mock&autoplay=safe&speed=12');
   await page.fill('[data-testid="name"]', 'テスト<犬>&');
-  await expect(page.locator('#ranking-name-note')).toContainText('名前と記録がランキングに公開');
-  await page.click('[data-testid="start"]');
+  await expect(page.locator('#ranking-name-note')).toContainText('名前と記録が公開');
+  await page.getByTestId('ranked-start').click();
   await page.waitForSelector('[data-testid="results"]', { timeout: 90_000 });
   await page.getByRole('button', { name: 'ランキング（総合）' }).click();
   await expect(page.locator('[data-testid="board"] [data-state="ready"] li')).toHaveCount(1);

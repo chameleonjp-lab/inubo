@@ -106,6 +106,7 @@ export interface FoundContacts {
 
 export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): FoundContacts | null {
   const p = m.path;
+  const rotating = m.air && !!run.freeFlight?.controlled;
   const found: { tau: number; c: Contact }[] = [];
   const add = (tau: number | null, c: Contact) => {
     if (tau !== null && tau <= spanUs) found.push({ tau, c });
@@ -142,6 +143,7 @@ export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): F
 
   // 物への接触（正面・側面）と踏切台の先端
   for (const so of p.solids) {
+    if (rotating) break; // 実際に回転した身体の接触は free-flight.ts で求める。
     if (so.s0 - FOOT_FRONT > sEnd + 0.5) break;
     if (so.s1 < m.s0 - 0.5 && so.kind !== 'kicker') continue;
     if (run.ghostGates.includes(so.id)) continue;
@@ -181,7 +183,7 @@ export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): F
     add(crossLinear(m.s0, m.dsdt, r.s1, spanUs, true), { type: 'railEnd', rail: r });
   }
 
-  if (m.air) {
+  if (m.air && !rotating) {
     // 手すりへ上から乗る
     for (const r of p.rails) {
       if (r.s1 < m.s0 || r.s0 - FOOT_FRONT > sEnd) continue;
@@ -201,6 +203,8 @@ export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): F
       return pt.vy <= 0 && pt.y <= landingSupport(p, pt.s, pt.x, pt.y, m.t0 + tau) + 1e-9;
     };
     if (landPred(spanUs)) add(firstTrue(spanUs, landPred), { type: 'land' });
+  }
+  if (m.air) {
     // 道の外へ落ちた
     const endPt = at(spanUs);
     if (offRoad(p, Math.min(p.length, Math.max(0, endPt.s)), endPt.x) && endPt.y < baseHeight(p, Math.min(p.length, Math.max(0, endPt.s))) - FALL_DEPTH) add(spanUs, { type: 'fallDepth' });
