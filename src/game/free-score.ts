@@ -12,7 +12,7 @@ export function scoreFreeMotion(history: readonly FreeSpan[], landing: FreeLandi
     for (const span of history) {
       anchor ??= span.from.pose[body].q;
       let start = span.startUs;
-      // 1区間の移動は最大7.2度。45度の境界を跨いだ時点を補間して余りを保つ。
+      // 共通・個別が同じ向きに重なっても、1区間は最大28.8度。45度の境界を補間して余りを保つ。
       while (qDistance(anchor, span.to.pose[body].q) >= 45 * DEG - 1e-9) {
         let lo = start, hi = span.endUs;
         for (let n = 0; n < 35; n++) {

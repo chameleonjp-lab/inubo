@@ -1,12 +1,12 @@
 import { expect, test } from 'vitest';
 import { DOGS } from '../src/content/dogs';
 import { advanceRun, RunSession } from '../src/game/run';
-import { FREE_RULES_VERSION, type FreeTarget } from '../src/game/free-motion';
+import { FREE_RULES_VERSION, sampleFreeSpan, type FreeTarget } from '../src/game/free-motion';
 import { qDistance } from '../src/game/free-math';
 import type { Vec3 } from '../src/game/math';
 import type { GestureFact } from '../src/game/types';
 import { FreePointerController } from '../src/input/free-pointer';
-import { ReplayRecorder, poseOf, replayPoseAt } from '../src/view/replay';
+import { FREE_REPLAY_STEP_MS, ReplayRecorder, poseOf, replayPoseAt } from '../src/view/replay';
 import { eventsOf, identity, jumpFacts, newRun, runTo, testCourse } from './helpers';
 
 const free = { rulesVersion: FREE_RULES_VERSION };
@@ -123,10 +123,26 @@ test('どの時刻で描画しても未知の姿勢と着地が同じ。再生�
 test('途中で大きく傾いた身体が地面に触れると、着地の向きへ自動で戻さず失敗にする', () => {
   const run = newRun(testCourse(), 'shiba', free);
   advanceRun(run, 1_100_000, [...jumpFacts(jumpAt), down(1, 240_000),
-    turn(1, 250_000, 1, [2.6, 0, 0]), up(1, 270_000)]);
+    turn(1, 250_000, 1, [0.65, 0, 0]), up(1, 270_000)]);
   expect(run.score.jumps).toHaveLength(1);
   expect(run.score.jumps[0]).toMatchObject({ points: 0, tenths: 0 });
   expect(eventsOf(run, 'landFail')).toHaveLength(1);
+});
+
+test('描画が100ms遅れても最高速の共通・個別回転を逆向きに再生しない', () => {
+  const recorder = new ReplayRecorder(FREE_REPLAY_STEP_MS);
+  const session = new RunSession(identity(free), testCourse(), DOGS.shiba, run => recorder.sample(run));
+  session.update(0);
+  session.begin();
+  session.submit(session.runId, [...jumpFacts(20_000),
+    down(1, 25_000), turn(1, 25_000, 1, [0, Math.PI, 0]), up(1, 25_000),
+    down(2, 25_000, 'dog'), turn(2, 25_000, 2, [0, Math.PI, 0]), up(2, 25_000)]);
+  session.update(100_000);
+  const at = 37_500;
+  const history = session.sim.freeFlight!.motion.history;
+  const span = history.find(s => s.startUs <= at && s.endUs >= at)!;
+  const saved = replayPoseAt(recorder.finish(session.sim), at)!.free!;
+  expect(qDistance(saved.dog.q, sampleFreeSpan(span, at).pose.dog.q)).toBeLessThan(0.02);
 });
 
 test('空中で壁に触れると回転の履歴を閉じ、前進を止める', () => {

@@ -4,7 +4,8 @@ import { add3, normalQ, rotateBody, rotationQ, scale3 } from './free-math';
 export const FREE_RULES_VERSION = 'rules-freestyle-1';
 export const FREE_TICK_US = 5_000;
 export const FREE_DECAY = Math.log(2) / 0.8;
-const MAX_OMEGA = 720 * DEG;
+const SWIPE_GAIN = 16;
+const MAX_OMEGA = 2_880 * DEG;
 export type FreeTarget = 'common' | 'dog' | 'rider';
 export interface FreeBody { p: Vec3; q: Quat }
 export interface FreePose { pivot: Vec3; dog: FreeBody; rider: FreeBody }
@@ -79,7 +80,7 @@ function acceptInputs(s: FreeMotionState, inputs: readonly FreeMotionInput[]): v
 function applyDue(s: FreeMotionState): void {
   while (s.pending.length && s.pending[0].atUs <= s.timeUs) {
     const i = s.pending.shift()!;
-    const next = add3(s.omega[i.target], scale3(i.rotation, 4));
+    const next = add3(s.omega[i.target], scale3(i.rotation, SWIPE_GAIN));
     s.omega[i.target] = length(next) > MAX_OMEGA ? scale3(next, MAX_OMEGA / length(next)) : next;
   }
 }

@@ -41,7 +41,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       await until(() => !!sim.freeFlight);
       const before = q();
 
-      const right = innerWidth * 0.92, left = innerWidth * 0.10;
+      const right = innerWidth * 0.9, left = right - 48;
       const heldAt = sim.simUs;
       pointer('pointerdown', 2, right, y);
       pointer('pointermove', 2, left, y);
@@ -56,9 +56,9 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       await until(() => sim.simUs >= releasedAt + 120_000);
       const drift = gap(released, q()), speedBeforeReverse = omega();
       const reverseAt = sim.simUs;
-      pointer('pointerdown', 3, left - 8, y);
-      pointer('pointermove', 3, right + 8, y);
-      pointer('pointerup', 3, right + 8, y);
+      pointer('pointerdown', 3, left, y);
+      pointer('pointermove', 3, left + 64, y);
+      pointer('pointerup', 3, left + 64, y);
       await until(() => sim.simUs >= reverseAt + 55_000);
       const speedAfterReverse = omega();
       await until(() => sim.score.jumps.length > 0);
@@ -73,7 +73,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     expect(observed.heldTurn).toBeGreaterThan(0.2);
     expect(observed.displayTurn).toBeGreaterThan(0.2);
     expect(observed.drift).toBeGreaterThan(0.2);
-    expect(observed.speedBeforeReverse).toBeLessThan(-1);
+    expect(observed.speedBeforeReverse).toBeLessThan(-2.5);
     expect(observed.speedAfterReverse).toBeGreaterThan(0.5);
     expect(observed.premature).toBe(0);
     expect(observed.fixedTricks).toBe(0);

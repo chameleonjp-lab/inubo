@@ -17,7 +17,7 @@ import { COURSE_DEFS, RACE_COURSES, getCourse } from '../content/courses/index';
 import { DOGS, DOG_ORDER } from '../content/dogs';
 import { GameView } from '../view/scene';
 import { CenterText, UI_CUES, cueForEvent, type Cue } from '../view/effects';
-import { ReplayRecorder } from '../view/replay';
+import { FREE_REPLAY_STEP_MS, ReplayRecorder } from '../view/replay';
 import { AudioEngine, SoundScheduler } from '../audio/sound';
 import { Records, browserStorage, loadProfile, loadSettings, newId, saveProfile, saveSettings, type Profile, type SaveOutcome, type Settings, type StorageLike } from '../storage/records';
 import { RankingClient, type BoardState, type SubmissionStatus, type Transport } from '../ranking/client';
@@ -563,7 +563,7 @@ class GameRun {
   private trails: HTMLCanvasElement;
   private hud: Record<string, HTMLElement> = {};
   private center = new CenterText();
-  private recorder = new ReplayRecorder(100);
+  private readonly recorder: ReplayRecorder;
   private pilot: Autopilot | null = null;
   private coach: PracticeCoach | null = null;
   private raf = 0;
@@ -590,8 +590,9 @@ class GameRun {
     this.freePractice = freestyle && identity.mode === 'practice';
     this.recognizer = new GestureRecognizer({}, 1, !freestyle);
     this.freePointer = freestyle ? new FreePointerController(undefined, true, false) : null;
-    if (freestyle) this.recorder = new ReplayRecorder(50);
-    this.session = new RunSession(identity, getCourse(identity.courseId), DOGS[identity.dogId]);
+    this.recorder = new ReplayRecorder(freestyle ? FREE_REPLAY_STEP_MS : 100);
+    this.session = new RunSession(identity, getCourse(identity.courseId), DOGS[identity.dogId],
+      identity.mode === 'competition' ? state => this.recorder.sample(state) : undefined);
     this.setInputViewport(window.innerWidth, window.innerHeight);
     this.trails = h('canvas', { class: 'trails', 'data-testid': 'surface' });
     const H = (k: string, el: HTMLElement) => (this.hud[k] = el);
@@ -855,7 +856,6 @@ class GameRun {
         this.virtualWallUs += step;
         if (this.pilot && this.session.phase === 'running' && !this.session.paused) this.submit(this.pilot.poll(sim));
         events = events.concat(this.session.update(this.virtualWallUs));
-        if (this.session.phase === 'running') this.recorder.sample(sim);
       }
     } else {
       if (this.coach || this.freePractice) {
@@ -864,7 +864,6 @@ class GameRun {
         this.virtualWallUs += dtMs * 1000 * rate;
       }
       events = this.session.update(this.wallUs());
-      if (this.session.phase === 'running') this.recorder.sample(sim);
     }
     const cues = events.map(cueForEvent).filter(Boolean) as Cue[];
     // 左右移動の踏み替えと、強いカーブのすれ音（E04）は、計算の状態の変わり目から出す。

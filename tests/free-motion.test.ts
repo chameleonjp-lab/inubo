@@ -7,7 +7,7 @@ const impulse = (seq: number, atUs: number, y: number, target: 'common' | 'dog' 
 
 test('指離し後も慣性が残り、0.8秒で速度半減・約207.75度進む', () => {
   const s = createFreeMotion();
-  advanceFreeMotion(s, 0, [impulse(1, 0, 90)]);
+  advanceFreeMotion(s, 0, [impulse(1, 0, 22.5)]);
   expect(s.pose.dog.q).toEqual([0, 0, 0, 1]); // 入力時刻に姿勢を瞬間移動しない。
   advanceFreeMotion(s, 800_000);
   expect(s.omega.common[1] / DEG).toBeCloseTo(180, 7);
@@ -18,11 +18,11 @@ test('指離し後も慣性が残り、0.8秒で速度半減・約207.75度進�
 test('逆スワイプは減速、停止、逆転を起こし、姿勢は入力だけで飛ばない', () => {
   const s = createFreeMotion();
   advanceFreeMotion(s, 0, [impulse(1, 0, 90), impulse(2, 0, -45)]);
-  expect(s.omega.common[1] / DEG).toBeCloseTo(180);
+  expect(s.omega.common[1] / DEG).toBeCloseTo(720);
   advanceFreeMotion(s, 0, [impulse(3, 0, -45)]);
   expect(s.omega.common[1]).toBeCloseTo(0);
   advanceFreeMotion(s, 0, [impulse(4, 0, -15)]);
-  expect(s.omega.common[1] / DEG).toBeCloseTo(-60);
+  expect(s.omega.common[1] / DEG).toBeCloseTo(-240);
   expect(s.pose.dog.q).toEqual([0, 0, 0, 1]);
 });
 
@@ -44,10 +44,17 @@ test('犬だけの勢いは人へ混ぜず、一緒の勢いも対象切替で�
   expect(s.omega.rider).toEqual([0, 0, 0]);
 });
 
-test('各成分は720度毎秒を上限とし、非数や過去の入力を受け付けない', () => {
+test.each(['common', 'dog', 'rider'] as const)('%s: 斜めの小さな入力にも全軸で旧版の4倍反応する', target => {
+  const s = createFreeMotion();
+  const rotation = [0.01, 0.02, -0.015] as const;
+  advanceFreeMotion(s, 0, [{ seq: 1, atUs: 0, target, rotation: [...rotation] }]);
+  for (const [axis, angle] of rotation.entries()) expect(s.omega[target][axis]).toBeCloseTo(4 * angle * 4, 12);
+});
+
+test('各成分は2,880度毎秒を上限とし、非数や過去の入力を受け付けない', () => {
   const s = createFreeMotion();
   advanceFreeMotion(s, 0, [impulse(1, 0, 1_000)]);
-  expect(s.omega.common[1] / DEG).toBeCloseTo(720);
+  expect(s.omega.common[1] / DEG).toBeCloseTo(2_880);
   expect(() => advanceFreeMotion(s, 5_000, [{ seq: 2, atUs: 0, target: 'dog', rotation: [NaN, 0, 0] }])).toThrow();
   advanceFreeMotion(s, 10_000);
   expect(() => advanceFreeMotion(s, 15_000, [impulse(3, 1, 1)])).toThrow();
