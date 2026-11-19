@@ -1,47 +1,67 @@
 import { expect, test } from 'vitest';
 import { DEG, type Vec3 } from '../src/game/math';
-import { createFreeMotion, advanceFreeMotion } from '../src/game/free-motion';
+import { createFreeMotion, advanceFreeMotion, rotationTime, type FreeTarget } from '../src/game/free-motion';
 import { scoreFreeMotion } from '../src/game/free-score';
 
-function motion(deg: number, axis: Vec3 = [0, 1, 0], target: 'common' | 'dog' = 'dog') {
-  const duration = 2.4;
-  const integral = 0.875 / (Math.log(2) / 0.8);
-  const n = Math.hypot(...axis);
-  const s = createFreeMotion();
-  s.omega[target] = axis.map(x => deg * DEG / integral * x / n) as Vec3;
-  advanceFreeMotion(s, duration * 1e6);
-  return s;
+const airtime = 800_000;
+function score(degrees: number, axis: Vec3, target: FreeTarget = 'dog', heading = 0) {
+  const state = createFreeMotion();
+  // 入力で各回転を維持した場合の実角度を、並走する2成分に分けて再現する。
+  for (let at = 0; at < airtime; at += 5_000) {
+    const speed = degrees * DEG * 5_000 / airtime / rotationTime(5_000);
+    if (speed > 3_600 * DEG) {
+      state.omega.common = axis.map(value => value * speed / 2) as Vec3;
+      state.omega[target] = [...state.omega.common];
+    } else {
+      state.omega[target] = axis.map(value => value * speed) as Vec3;
+    }
+    advanceFreeMotion(state, at + 5_000);
+  }
+  return scoreFreeMotion(state.history, airtime, heading);
 }
 
-for (const axis of [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0.01, 0]] as Vec3[]) {
-  test(`任意軸${axis}の360度は実運動から犬100点`, () => {
-    expect(scoreFreeMotion(motion(360, axis).history, 'normal').points).toBe(100);
+test.each([['common', '犬と人'], ['dog', '犬'], ['rider', '人']] as const)('%s の1回転は同じ61点', (target, label) => {
+  expect(score(360, [0, 1, 0], target)).toMatchObject({ points: 61, tier: 1, label: label + 'の左スピン・1回転' });
+});
+
+test.each<[Vec3, string]>([
+  [[0, 0, 1], 'バックフリップ'], [[0, 0, -1], 'フロントフリップ'],
+  [[0, 1, 0], '左スピン'], [[0, -1, 0], '右スピン'],
+  [[-1, 0, 0], '左バレルロール'], [[1, 0, 0], '右バレルロール'],
+])('回転方向 %j に対応する名前を付ける', (axis, direction) => {
+  expect(score(360, axis).label).toContain(direction);
+});
+
+test('道の方角が変わっても進行方向に対する技名を維持する', () => {
+  expect(score(360, [-1, 0, 0], 'dog', Math.PI / 2).label).toContain('バックフリップ');
+});
+
+test('半回転から採点し、理論上限16回転の半回転手前を満点とする', () => {
+  expect(score(179.99, [0, 1, 0]).points).toBe(0);
+  expect(score(180, [0, 1, 0])).toMatchObject({ points: 30, label: '犬の左スピン・半回転' });
+  expect(score(5_579.99, [0, 1, 0]).points).toBeLessThan(1_000);
+  expect(score(5_580, [0, 1, 0])).toMatchObject({ points: 1_000, tier: 5, label: expect.stringContaining('15.5回転') });
+});
+
+test('半回転以上の異なる方向を組み合わせると加点し、装飾と技名も段階を上げる', () => {
+  const state = createFreeMotion();
+  const speed = 360 * DEG / rotationTime(400_000);
+  state.omega.dog = [0, speed, 0];
+  advanceFreeMotion(state, 400_000);
+  state.omega.dog = [0, 0, speed];
+  advanceFreeMotion(state, airtime);
+  expect(scoreFreeMotion(state.history, airtime, 0)).toMatchObject({
+    points: 132, label: expect.stringContaining('左スピン'),
   });
-}
-test('最終姿勢が同じでも720度は200点で、履歴を捨てない', () => {
-  expect(scoreFreeMotion(motion(720).history, 'normal').points).toBe(200);
+  const increasing = [360, 1440, 2520, 3960, 5040].map(degrees => score(degrees, [0, 1, 0]));
+  expect(increasing.map(item => item.tier)).toEqual([1, 2, 3, 4, 5]);
+  expect(increasing.every((item, i) => i === 0 || item.label.length > increasing[i - 1].label.length)).toBe(true);
 });
-test('最高速で共通と個別の回転を重ねても、着地までの周回を数える', () => {
-  const s = createFreeMotion();
-  advanceFreeMotion(s, 250_000, [
-    { seq: 1, atUs: 0, target: 'common', rotation: [0, Math.PI, 0] },
-    { seq: 2, atUs: 0, target: 'dog', rotation: [0, Math.PI, 0] },
-  ]);
-  // 0.25秒の実回転は犬が約1,295度、人が約647度。
-  expect(scoreFreeMotion(s.history, 'clean')).toMatchObject({ dogDegrees: 1_260, riderDegrees: 630, points: 734 });
-});
-test('未知の225度同士にも名前に依存せず156点を付ける', () => {
-  const scored = scoreFreeMotion(motion(225, [0, 1, 0], 'common').history, 'normal');
-  expect(scored.points).toBe(156);
-  expect(scored.label).toBe('フリースタイル');
-});
-test('小さな動きの着地成功は0点で、失敗は予定値を加算しない', () => {
-  expect(scoreFreeMotion(motion(17).history, 'normal').points).toBe(0);
-  const crashed = scoreFreeMotion(motion(720).history, 'crash');
-  expect(crashed.base).toBe(200);
-  expect(crashed.points).toBe(0);
-  expect(crashed.eligible).toBe(false);
-});
-test('きれいな着地の倍率は最後に切り捨てる', () => {
-  expect(scoreFreeMotion(motion(225, [0, 1, 0], 'common').history, 'clean').points).toBe(187);
+
+test('共通と犬の逆回転が打ち消し合った分は犬の角度に含めない', () => {
+  const state = createFreeMotion();
+  state.omega.common = [0, 360 * DEG / rotationTime(airtime), 0];
+  state.omega.dog = [0, -state.omega.common[1], 0];
+  advanceFreeMotion(state, airtime);
+  expect(scoreFreeMotion(state.history, airtime, 0)).toMatchObject({ dogDegrees: 0, points: 61, label: '人の左スピン・1回転' });
 });

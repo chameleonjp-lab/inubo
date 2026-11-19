@@ -68,7 +68,7 @@ npm run report         # 自動再生の記録を docs/autoplay-report.md に書
 
 ## 進み具合
 
-通常のスタートと練習広場では、空中の自由操作と着地時の採点を使います。38技の見本の作り直しと自由操作の公開順位は、実装計画の後続工程です。[自由操作の設計](docs/freestyle-control-design.md)・[実装計画](docs/freestyle-implementation-plan.md)・[慣性方式](docs/freestyle-inertia-update.md)
+通常のスタートと練習広場では、空中の自由操作を使い、着地までの回転数と方向で採点します。[自由操作のスコア表](docs/freestyle-score-table.md)38技の見本の作り直しと自由操作の公開順位は、実装計画の後続工程です。[自由操作の設計](docs/freestyle-control-design.md)・[実装計画](docs/freestyle-implementation-plan.md)・[慣性方式](docs/freestyle-inertia-update.md)
 
 38技の見た目・接触・画面操作の仕上げと、15言語対応、既存記録の保全、iPhoneでの確認は[後続対応の実装計画書](docs/followup-implementation-plan.md)にまとめています。計画の検証と修正は[敵対的検証記録](docs/followup-adversarial-review.md)を参照してください。これらの文書追加は、ゲームの実装完了を意味しません。
 

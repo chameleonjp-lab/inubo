@@ -41,7 +41,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       await until(() => !!sim.freeFlight);
       const before = q();
 
-      const right = innerWidth * 0.9, left = right - 48;
+      const right = innerWidth * 0.9, left = right - 240;
       const heldAt = sim.simUs;
       pointer('pointerdown', 2, right, y);
       pointer('pointermove', 2, left, y);
@@ -53,12 +53,12 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
 
       const released = q();
       const releasedAt = sim.simUs;
-      await until(() => sim.simUs >= releasedAt + 120_000);
+      await until(() => sim.simUs >= releasedAt + 145_000);
       const drift = gap(released, q()), speedBeforeReverse = omega();
       const reverseAt = sim.simUs;
       pointer('pointerdown', 3, left, y);
-      pointer('pointermove', 3, left + 64, y);
-      pointer('pointerup', 3, left + 64, y);
+      pointer('pointermove', 3, right + 24, y);
+      pointer('pointerup', 3, right + 24, y);
       await until(() => sim.simUs >= reverseAt + 55_000);
       const speedAfterReverse = omega();
       await until(() => sim.score.jumps.length > 0);
@@ -77,8 +77,11 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     expect(observed.speedAfterReverse).toBeGreaterThan(0.5);
     expect(observed.premature).toBe(0);
     expect(observed.fixedTricks).toBe(0);
-    expect(observed.landing).toMatchObject({ names: ['フリースタイル'], tenths: 12 });
+    expect(observed.landing).toMatchObject({ names: [expect.stringContaining('犬と人の右スピン')], tenths: 10 });
     expect(observed.landing.points).toBeGreaterThan(0);
+    const title = page.getByTestId('center-text');
+    await expect(title).toContainText(observed.landing.names[0]);
+    await expect(title).toHaveAttribute('data-trick-tier', /^[1-5]$/);
     expect(errors).toEqual([]);
   });
 }

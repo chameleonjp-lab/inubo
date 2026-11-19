@@ -71,28 +71,24 @@ test('画面の端から払っても反応し、長い払いも指を置いた�
   }
 });
 
-test('安全な水平回転は初回接地までの動きで採点し、確認中に区間を出ても元の区間に1回だけ付く', () => {
+test('接地までの回転で即時採点し、実際の着地区間に1回だけ付く', () => {
   const course = testCourse({ sections: [
     { path: 'main', u0: 0, u1: 8.4, opp: 'first' },
     { path: 'main', u0: 8.4, u1: 60, opp: 'second' },
   ] });
   const run = newRun(course, 'shiba', free);
   const facts = [...jumpFacts(jumpAt), down(1, 240_000), turn(1, 250_000, 1, [0, 0.78, 0]), up(1, 270_000)];
-  advanceRun(run, 1_035_000, facts);
-  expect(run.freeLanding).not.toBeNull();
-  const candidate = run.freeLanding!;
-  expect(candidate.contact.pathId).toBe('main');
-  expect(candidate.opp).toBe('first');
-  expect(candidate.score.base).toBeGreaterThan(0);
+  advanceRun(run, 970_000, facts);
   expect(run.score.jumps).toEqual([]);
-  const oldOmega = candidate.flight.motion.omega.common[1];
+  advanceRun(run, 1_035_000);
+  expect(run.score.jumps).toHaveLength(1);
+  const landing = run.score.jumps[0];
+  expect(landing).toMatchObject({ opp: 'first', names: [expect.stringContaining('犬と人の左スピン')], tenths: 10 });
+  expect(landing.awarded).toBeGreaterThan(0);
+  expect(eventsOf(run, 'land')[0].data).toMatchObject({ trickTier: expect.any(Number) });
 
   advanceRun(run, 1_245_000, [down(2, 1_055_000), turn(2, 1_065_000, 2, [-2, -3, 2]), up(2, 1_075_000)]);
-  expect(candidate.flight.motion.omega.common[1]).toBeGreaterThan(0);
-  expect(candidate.flight.motion.omega.common[1]).toBeLessThan(oldOmega);
-  expect(run.score.jumps).toHaveLength(1);
-  expect(candidate.exits.map(exit => exit.section.opp)).toEqual(['first']);
-  expect(run.score.jumps[0]).toMatchObject({ opp: 'first', names: ['フリースタイル'], awarded: candidate.score.points });
+  expect(run.score.jumps).toEqual([landing]);
   expect(run.score.scoredOpps.second).toBeUndefined();
   expect(eventsOf(run, 'sectionMiss').some(e => e.data?.opp === 'first')).toBe(false);
 });
@@ -120,13 +116,25 @@ test('どの時刻で描画しても未知の姿勢と着地が同じ。再生�
   expect(pose.rider.p[1]).toBeGreaterThan(pose.dog.p[1]);
 });
 
-test('途中で大きく傾いた身体が地面に触れると、着地の向きへ自動で戻さず失敗にする', () => {
+test.each(['common', 'dog', 'rider'] as const)('%s の姿勢が傾いても、接地時に技を採点する', target => {
   const run = newRun(testCourse(), 'shiba', free);
-  advanceRun(run, 1_100_000, [...jumpFacts(jumpAt), down(1, 240_000),
-    turn(1, 250_000, 1, [0.65, 0, 0]), up(1, 270_000)]);
+  advanceRun(run, 1_100_000, [...jumpFacts(jumpAt), down(1, 240_000, target),
+    turn(1, 250_000, 1, [0.33, 0, 0]), up(1, 270_000)]);
   expect(run.score.jumps).toHaveLength(1);
-  expect(run.score.jumps[0]).toMatchObject({ points: 0, tenths: 0 });
-  expect(eventsOf(run, 'landFail')).toHaveLength(1);
+  expect(run.score.jumps[0].points).toBeGreaterThan(0);
+  expect(run.score.jumps[0].names[0]).toContain('バックフリップ');
+  expect(eventsOf(run, 'landFail')).toHaveLength(0);
+});
+
+test('手すりの上に戻った時点で、傾いた犬の回転も採点する', () => {
+  const course = testCourse({ objects: [{ kind: 'rail', id: 'A', path: 'main', u0: 6, u1: 20, x: 0, h0: 0.6, h1: 0.6 }] });
+  const run = newRun(course, 'shiba', free);
+  advanceRun(run, 1_080_000, [...jumpFacts(jumpAt), down(1, 240_000, 'dog'),
+    turn(1, 250_000, 1, [0.52, 0, 0]), up(1, 270_000)]);
+  expect(eventsOf(run, 'railOn').map(event => event.objId)).toEqual(['A']);
+  expect(run.score.jumps).toHaveLength(1);
+  expect(run.score.jumps[0]).toMatchObject({ onRail: true, names: [expect.stringContaining('犬のバックフリップ')] });
+  expect(run.score.jumps[0].awarded).toBeGreaterThan(0);
 });
 
 test('描画が100ms遅れても最高速の共通・個別回転を逆向きに再生しない', () => {
@@ -138,7 +146,7 @@ test('描画が100ms遅れても最高速の共通・個別回転を逆向きに
     down(1, 25_000), turn(1, 25_000, 1, [0, Math.PI, 0]), up(1, 25_000),
     down(2, 25_000, 'dog'), turn(2, 25_000, 2, [0, Math.PI, 0]), up(2, 25_000)]);
   session.update(100_000);
-  const at = 37_500;
+  const at = 50_000;
   const history = session.sim.freeFlight!.motion.history;
   const span = history.find(s => s.startUs <= at && s.endUs >= at)!;
   const saved = replayPoseAt(recorder.finish(session.sim), at)!.free!;
@@ -152,17 +160,16 @@ test('空中で壁に触れると回転の履歴を閉じ、前進を止める',
   expect(eventsOf(run, 'collide').map(event => event.objId)).toContain('wall');
   expect(run.s).toBeLessThan(5.3);
   expect(run.freeFlight).toBeNull();
-  expect(run.score.jumps).toHaveLength(1);
-  expect(run.score.jumps[0]).toMatchObject({ points: 0, tenths: 0 });
+  expect(run.score.jumps).toHaveLength(0);
+  expect(eventsOf(run, 'landFail')).toHaveLength(0);
 });
 
-test('着地を確認中にゴールした走行へ後から得点を足さない', () => {
-  const run = newRun(testCourse({ goalU: 8.4 }), 'shiba', free);
+test('着地前にゴールした走行へ後から得点を足さない', () => {
+  const run = newRun(testCourse({ goalU: 7.2 }), 'shiba', free);
   advanceRun(run, 1_500_000, [...jumpFacts(jumpAt), down(1, 240_000), turn(1, 250_000, 1, [0, 0.8, 0]), up(1, 270_000)]);
   expect(run.finished).toBe(true);
-  expect(run.freeLanding).toBeNull();
   expect(run.result?.trickScore).toBe(0);
-  expect(run.result?.jumps).toHaveLength(1);
+  expect(run.result?.jumps).toHaveLength(0);
 });
 
 test('一時停止は入力待ちを捨て、空中姿勢と勢いを保存する', () => {

@@ -378,6 +378,22 @@ canvas.trails {
   transform: none;
 }
 
+.center-text[data-trick-tier]:not([data-trick-tier='0']) {
+  margin-inline: auto;
+  max-width: min(92vw, 34ch);
+  padding-inline: 10px;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.center-text[data-trick-tier='2'] { color: #bff3ff; }
+.center-text[data-trick-tier='3'] { color: #dcf6ff; text-shadow: 0 2px 5px #071b2f, 0 0 16px #1580cb; }
+.center-text[data-trick-tier='4'] { color: #ffe393; text-shadow: 0 2px 6px #321700, 0 0 18px #eb8e22; }
+.center-text[data-trick-tier='5'] {
+  color: #fff0a4;
+  -webkit-text-stroke: 1px #4a1d3f;
+  text-shadow: 0 2px 0 #4a1d3f, 0 0 11px #ee8d3c, 0 0 24px #be55dd;
+}
+
 .foot-marks {
   position: absolute;
   left: 0;

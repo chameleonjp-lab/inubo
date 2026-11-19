@@ -60,6 +60,17 @@ describe('V14 演出', () => {
     expect(ct.footMarks.map((f) => f.text)).toContain('加速 5秒');
   });
 
+  test('高得点の技名は同時の手すり点より先に表示し、装飾段階を持つ', () => {
+    const name = '限界突破・犬の左スピン';
+    const land = cueForEvent(ev('land', 100, { names: [name], points: 1000, trickTier: 5 }))!;
+    const rail = cueForEvent(ev('railScore', 100, { points: 80, distMm: 8_000 }))!;
+    const center = new CenterText();
+    center.push([land, rail], 1000);
+    expect(center.current(2700)).toBe(name + ' ＋1000');
+    expect(center.trickTier).toBe(5);
+    expect(center.current(2900)).toBeNull();
+  });
+
   test('同じ壁に当たり続けても、接触の音は最初の1回だけ', () => {
     const course = testCourse({ objects: [{ kind: 'wall', id: 'w', path: 'main', u0: 40, u1: 40.4, x0: -4, x1: 4, height: 1.8 }] });
     const run = newRun(course);
