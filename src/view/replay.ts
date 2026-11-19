@@ -7,7 +7,7 @@ import type { CourseId, DogId } from '../content/types';
 import type { SimState } from '../game/types';
 
 // 共通と個別の最高速度が重なっても、隣り合う姿勢の回転を180度未満に保つ。
-export const FREE_REPLAY_STEP_MS = 25;
+export const FREE_REPLAY_STEP_MS = 20;
 
 /**
  * 最速の走りの再生データ。各時刻の位置と姿勢を、犬種と一緒に残す。
@@ -44,7 +44,7 @@ export function poseOf(run: SimState, s = run.s, x = run.x, y = run.y, tUs = run
   const heading = sampleAt(p, Math.max(0, Math.min(p.length, s))).heading;
   const rotations = run.jump?.resolution.rotations ?? [];
   const base = quatAxisAngle([0, 0, 1], run.basePitch);
-  const flight = run.freeFlight ?? run.freeLanding?.flight;
+  const flight = run.freeFlight;
   return { x: wx, y, z: wz, heading, body: quatMul(base, bodyQuat(rotations, tUs)), dog: dogQuat(rotations, tUs),
     ...(flight ? { free: courseFlightPose(flight, tUs) } : {}) };
 }

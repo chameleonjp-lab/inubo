@@ -255,6 +255,7 @@ export interface JumpScore {
   names: string[];
   residualDeg: number;
   tiltDeg: number;
+  trickTier?: number;
 }
 
 /** ジャンプの技の小計を計算する。複合の 100 点は1回だけ足し、着地の倍率を掛ける。 */

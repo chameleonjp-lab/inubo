@@ -41,9 +41,3 @@ export function freeParts(pose: FreePose): FreePart[] {
   });
   return parts;
 }
-export function feetOnPads(pose: FreePose): boolean {
-  const pads = dogPads.map(p => atBody(pose.dog, p));
-  const feet = riderFeet.map(p => atBody(pose.rider, p));
-  return (length(sub3(feet[0], pads[0])) <= 0.18 && length(sub3(feet[1], pads[1])) <= 0.18) ||
-    (length(sub3(feet[0], pads[1])) <= 0.18 && length(sub3(feet[1], pads[0])) <= 0.18);
-}

@@ -15,7 +15,6 @@ import { createEffects, nextEffectEnd, stepPoop, takeFood } from './items';
 import {
   currentPath,
   forwardSpeedAt,
-  offRoad,
   pointAt,
   segmentMotion,
   setTarget,
@@ -26,8 +25,8 @@ import {
 } from './motion';
 import { blocksAt, findContacts, insideExpanded, orderContacts, sMmOf, type Contact } from './contacts';
 import { breakStreak, createScore, exitSection, finishRun, settleLanding, type LandingContact } from './scoring';
-import { advanceCourseFlight, applyCourseRotation, gradeCourseLanding, launchCourseFlight,
-  stabilizeCourseLanding, supportCourseFlight, type CourseAirHit } from './free-flight';
+import { advanceCourseFlight, applyCourseRotation, launchCourseFlight, type CourseAirHit } from './free-flight';
+import { scoreFreeMotion } from './free-score';
 import { FREE_RULES_VERSION } from './free-motion';
 import { leaveRail, loseRail, mountRail } from './rails';
 import { resolveTricks, type TrickResolution } from './tricks';
@@ -37,10 +36,8 @@ import {
   railGrade,
   railTopAt,
   sampleAt,
-  sectionAt,
   supportGrade,
   supportHeight,
-  worldXZ,
   type CourseRt,
   type SectionRt,
 } from './track';
@@ -91,7 +88,6 @@ export function createRun(identity: RunIdentity, course: CourseRt, dog: DogSpec)
     jump: null,
     jumpCounter: 0,
     freeFlight: null,
-    freeLanding: null,
     rail: null,
     pendingRail: null,
     railsCompleted: [],
@@ -236,13 +232,6 @@ function moveSegment(run: SimState, ta: number, tb: number, emit: Emit): void {
       continue;
     }
     let te = tb;
-    const pending = run.freeLanding;
-    if (pending) {
-      for (const delay of [40_000, 150_000]) {
-        const boundary = pending.contact.atUs + delay;
-        if (boundary > t) te = Math.min(te, boundary);
-      }
-    }
     const eff = nextEffectEnd(run.effects, t, te);
     if (eff !== null) te = eff;
     const m = segmentMotion(run, t);
@@ -260,14 +249,6 @@ function moveSegment(run: SimState, ta: number, tb: number, emit: Emit): void {
     applyMotion(run, m, tau, t + tau);
     t += tau;
     const contacts = found?.tau === tau ? found.contacts : [];
-    if (pending) {
-      const p = currentPath(run);
-      const staysSupported = !run.blocked && !contacts.some(c => c.type === 'solid' || c.type === 'ledge' || c.type === 'dropOff' || c.type === 'fallDepth');
-      const pitch = Math.atan(surfaceGradeAt(run));
-      const progress = staysSupported ? stabilizeCourseLanding(pending, sampleAt(p, run.s).heading, pitch, t,
-        Math.hypot(m.dsdt, m.latV) * tau / 1e6) : 'failed';
-      if (progress !== 'pending') finishCourseLanding(run, t, emit, progress === 'failed');
-    }
     if (impact) handleCourseImpact(run, impact, t, emit);
     if (contacts.length) {
       // 動き方を変える接触（跳ぶ・着く・止まる・落ちる）のあとは、同じ時刻に見つけた残りの接触のうち
@@ -325,10 +306,8 @@ function onKicker(run: SimState): boolean {
 
 function takeoff(run: SimState, t: number, kind: JumpRec['kind'], vy: number, emit: Emit, fromRail: string | null = null, viaSwipe = false): void {
   if (run.id.rulesVersion === FREE_RULES_VERSION) {
-    const previous = run.freeLanding?.flight.motion;
-    finishCourseLanding(run, t, emit, true);
     const heading = sampleAt(currentPath(run), run.s).heading;
-    run.freeFlight = launchCourseFlight(run.dog.look, heading, run.basePitch, t, previous);
+    run.freeFlight = launchCourseFlight(run.dog.look, heading, run.basePitch, t);
   }
   run.jumpCounter += 1;
   run.jump = { jumpId: run.jumpCounter, takeoffUs: t, kind, fromRail, strokes: [], resolution: EMPTY_RESOLUTION };
@@ -339,72 +318,40 @@ function takeoff(run: SimState, t: number, kind: JumpRec['kind'], vy: number, em
 
 function recordSectionExit(run: SimState, section: SectionRt, atUs: number, emit: Emit): void {
   run.exitedSection = { key: section.key, atUs };
-  const landing = run.freeLanding;
-  if (landing?.opp === section.opp) landing.exits.push({ section, atUs });
-  else exitSection(run.score, section, atUs, emit);
+  exitSection(run.score, section, atUs, emit);
 }
 
-function finishCourseLanding(run: SimState, atUs: number, emit: Emit, unsafe: boolean): void {
-  const landing = run.freeLanding;
-  if (!landing) return;
-  run.freeLanding = null;
-  const score = unsafe ? { ...landing.score, points: 0, tenths: 0 as const } : landing.score;
-  settleLanding(run, { ...landing.contact, atUs }, emit, { jump: landing.jump, score });
-  // 採点先は最初の接地地点で固定する。接地後に同じ区間を抜けても先に失敗扱いにしない。
-  for (const exit of landing.exits) exitSection(run.score, exit.section, exit.atUs, emit);
-}
-
-function closeAirborneJump(run: SimState, contact: LandingContact, emit: Emit, hit?: CourseAirHit, shift: [number, number, number] = [0, 0, 0]): boolean {
+function closeAirborneJump(run: SimState, contact: LandingContact, emit: Emit): void {
   const { freeFlight: flight, jump } = run;
   run.freeFlight = null;
-  if (!flight || !jump || !flight.controlled) {
+  if (!flight || !jump) {
     settleLanding(run, contact, emit);
-    return true;
+    return;
   }
-  const p = currentPath(run);
-  const heading = hit?.heading ?? sampleAt(p, run.s).heading;
-  const score = gradeCourseLanding(flight, heading, contact.surfacePitch, hit?.supportsPaw ?? true);
-  if (score.tenths === 0) {
-    settleLanding(run, contact, emit, { jump, score });
-    return false;
-  }
-  const opp = sectionAt(p, contact.sMm)?.opp ?? null;
-  supportCourseFlight(flight, shift, heading, contact.surfacePitch, contact.atUs);
-  run.freeLanding = { flight, jump, contact, score, opp, travel: 0, exits: [] };
-  return true;
+  const trick = scoreFreeMotion(flight.motion.history, contact.atUs - flight.takeoffUs, flight.heading);
+  settleLanding(run, contact, emit, { jump, score: {
+    base: trick.points, points: trick.points, names: trick.points ? [trick.label] : [],
+    composite: false, residualDeg: 0, tiltDeg: 0, tenths: 10, trickTier: trick.tier,
+  } });
+}
+
+function interruptFreeFlight(run: SimState, t: number, emit: Emit): void {
+  if (!run.freeFlight) return;
+  run.freeFlight = null;
+  run.jump = null;
+  if (run.pendingRail) loseRail(run, run.pendingRail, t, emit);
+  run.pendingRail = null;
 }
 
 function handleCourseImpact(run: SimState, hit: CourseAirHit, t: number, emit: Emit): void {
-  const p = currentPath(run);
-  const rail = hit.rail;
-  const readyS = rail ? Math.max(rail.s0, Math.min(run.s, rail.s1)) : run.s;
-  const [oldX, oldZ] = worldXZ(p, run.s, run.x);
-  const [newX, newZ] = worldXZ(p, readyS, rail?.x ?? run.x);
-  const safe = closeAirborneJump(run, { atUs: t, pathId: p.id, sMm: sMmOf(run.s), surfacePitch: hit.pitch, onRail: rail?.id ?? null }, emit,
-    hit, [oldX - newX, run.y - hit.supportY, oldZ - newZ]);
-  run.jump = null;
-  if (hit.obstacle) {
-    const so = hit.obstacle;
-    const side = run.x < so.x0 ? 1 : run.x > so.x1 ? -1 : 0;
-    const face = side === 0 ? 'front' : 'side';
-    run.blocked = { solidId: so.id, face, side, sinceUs: t };
-    run.baseSpeed = 0;
-    emitCollide(run, so.id, face, t, emit);
-    return;
-  }
-  if (!safe && (rail || offRoad(p, run.s, run.x))) {
-    startFall(run, t, emit);
-    return;
-  }
-  run.s = readyS;
-  run.y = rail ? railTopAt(rail, readyS) : hit.supportY;
-  run.vy = 0;
-  run.basePitch = hit.pitch;
-  if (rail) mountRail(run, rail, t, sMmOf(run.s), emit);
-  else {
-    run.mode = 'ground';
-    landedInsideCheck(run, t);
-  }
+  interruptFreeFlight(run, t, emit);
+  const so = hit.obstacle;
+  const side = run.x < so.x0 ? 1 : run.x > so.x1 ? -1 : 0;
+  const face = side === 0 ? 'front' : 'side';
+  run.blocked = { solidId: so.id, face, side, sinceUs: t };
+  run.baseSpeed = 0;
+  breakStreak(run.score);
+  emitCollide(run, so.id, face, t, emit);
 }
 
 function landedInsideCheck(run: SimState, t: number): void {
@@ -434,7 +381,6 @@ function processContact(run: SimState, c: Contact, t: number, emit: Emit): void 
       break;
     case 'goal':
       if (!run.finished) {
-        finishCourseLanding(run, t, emit, true);
         run.finished = true;
         run.result = finishRun(run, t);
         emit('goal', t, { recordCs: run.result.recordCs, total: run.result.total });
@@ -467,6 +413,7 @@ function processContact(run: SimState, c: Contact, t: number, emit: Emit): void 
       takeoff(run, t, 'kicker', KICKER_VY, emit);
       break;
     case 'solid': {
+      interruptFreeFlight(run, t, emit);
       const so = c.solid;
       if (c.face === 'front') {
         run.s = Math.min(run.s, so.s0 - FOOT_FRONT);
@@ -527,7 +474,6 @@ export function forceFall(run: SimState, t: number): SimEvent[] {
 }
 
 function startFall(run: SimState, t: number, emit: Emit): void {
-  finishCourseLanding(run, t, emit, true);
   run.freeFlight = null;
   run.mode = 'falling';
   run.fallUntilUs = t + FALL_US;

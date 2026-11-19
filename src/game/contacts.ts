@@ -143,7 +143,7 @@ export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): F
 
   // 物への接触（正面・側面）と踏切台の先端
   for (const so of p.solids) {
-    if (rotating) break; // 実際に回転した身体の接触は free-flight.ts で求める。
+    if (rotating && !so.standable && so.kind !== 'rail') continue; // 壁などは回転した身体で調べる。
     if (so.s0 - FOOT_FRONT > sEnd + 0.5) break;
     if (so.s1 < m.s0 - 0.5 && so.kind !== 'kicker') continue;
     if (run.ghostGates.includes(so.id)) continue;
@@ -183,7 +183,7 @@ export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): F
     add(crossLinear(m.s0, m.dsdt, r.s1, spanUs, true), { type: 'railEnd', rail: r });
   }
 
-  if (m.air && !rotating) {
+  if (m.air) {
     // 手すりへ上から乗る
     for (const r of p.rails) {
       if (r.s1 < m.s0 || r.s0 - FOOT_FRONT > sEnd) continue;

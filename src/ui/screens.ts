@@ -288,10 +288,10 @@ export class App {
           h('li', {}, '地面で左右に払う: 払った幅の分だけ横へ動きます。'),
           h('li', {}, '上へ払う: 1回跳びます。踏切台からは高く跳べます。'),
           h('li', {}, '跳んだら一度指を離し、空中で画面をなぞります。なぞる間に回転し、指を離した後も勢いが続きます。'),
-          h('li', {}, '反対へ払うと勢いを弱められます。「一緒」「犬だけ」「人だけ」で回す対象を選び、足から着地しましょう。'),
+          h('li', {}, '反対へ払うと勢いを弱められます。「一緒」「犬だけ」「人だけ」で回す対象を選びましょう。'),
           h('li', {}, '手すりには上から乗ると滑り、前へ払うと跳び降ります。正面や側面に当たると止まります。'),
         ]),
-        h('p', {}, '着地までに実際に回った動きが技点になります。同じ区間で点になるのは、最初に成功した技のジャンプ1回です。3区間続けて成功すると100点を加えます。タイム点と技点はそれぞれ最大5,000点です。'),
+        h('p', {}, '着地までの回転数と方向で技の名前と点が決まります。同じ区間で点になるのは、最初に決めた技のジャンプ1回です。3区間続けて成功すると100点を加えます。タイム点と技点はそれぞれ最大5,000点です。'),
         h('details', {}, h('summary', {}, '従来ルールの操作'), h('p', {}, '空中で円を閉じると犬が回り、線を引いて離すと人と犬が一緒に回ります。円を描いてから線を引くと複合技になります。')),
         h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
       ),
@@ -896,7 +896,7 @@ class GameRun {
     this.app.audio.update(this.app.sound.master(t), loops, t);
     this.view.frame(sim, renderUs, cues, this.app.settings, t, dtMs);
     if (this.hud.freeStatus) {
-      const text = sim.freeLanding ? '着地を確認中' : sim.freeFlight ? '画面をなぞって回る。反対へ払うと減速' :
+      const text = sim.freeFlight ? '画面をなぞって回る。反対へ払うと減速' :
         this.freePractice ? '上へ払ってジャンプ。指を離して置き直すと回転できます' : '上へ払ってジャンプ';
       if (this.hud.freeStatus.textContent !== text) this.hud.freeStatus.textContent = text;
     }
@@ -939,6 +939,7 @@ class GameRun {
     } else this.hud.boost.classList.add('hidden');
     const ct = this.center.current(t);
     this.hud.center.textContent = ct ?? '';
+    this.hud.center.dataset.trickTier = ct ? String(this.center.trickTier) : '0';
     this.hud.center.classList.toggle('show', !!ct);
     this.hud.marks.replaceChildren(...this.center.footMarks.map((f) => h('span', {}, f.text)));
     (this.hud.fade as HTMLElement).style.opacity = sim.mode === 'falling' ? '0.7' : '0';

@@ -4,8 +4,13 @@ import { add3, normalQ, rotateBody, rotationQ, scale3 } from './free-math';
 export const FREE_RULES_VERSION = 'rules-freestyle-1';
 export const FREE_TICK_US = 5_000;
 export const FREE_DECAY = Math.log(2) / 0.8;
-const SWIPE_GAIN = 16;
-const MAX_OMEGA = 2_880 * DEG;
+const SWIPE_GAIN = 20;
+export const FREE_MAX_DEG_PER_SEC = 3_600;
+const MAX_OMEGA = FREE_MAX_DEG_PER_SEC * DEG;
+
+export function rotationTime(dtUs: number): number {
+  return -Math.expm1(-FREE_DECAY * dtUs / 1e6) / FREE_DECAY;
+}
 export type FreeTarget = 'common' | 'dog' | 'rider';
 export interface FreeBody { p: Vec3; q: Quat }
 export interface FreePose { pivot: Vec3; dog: FreeBody; rider: FreeBody }
@@ -42,7 +47,7 @@ export function createFreeMotion(opts: Partial<FreeSnapshot> & { timeUs?: number
 export function predictFree(from: FreeSnapshot, acceleration: Vec3, dtUs: number): FreeSnapshot {
   const dt = dtUs / 1e6;
   const decay = Math.exp(-FREE_DECAY * dt);
-  const integral = -Math.expm1(-FREE_DECAY * dt) / FREE_DECAY;
+  const integral = rotationTime(dtUs);
   const deltaCommon = rotationQ(scale3(from.omega.common, integral));
   const pivot = add3(from.pose.pivot, add3(scale3(from.velocity, dt), scale3(acceleration, dt * dt / 2)));
   const shift = add3(scale3(from.velocity, dt), scale3(acceleration, dt * dt / 2));

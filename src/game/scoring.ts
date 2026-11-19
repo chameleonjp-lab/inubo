@@ -93,8 +93,8 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
   if (!jump || sc.settledJumps[jump.jumpId]) return null;
   sc.settledJumps[jump.jumpId] = true;
   const js = actual ? actual.score : resolveLegacyLanding(run, jump, contact);
-  const hasTrick = actual ? js.base > 0 || js.tenths === 0 : jump.resolution.rotations.length > 0;
-  const safe = actual ? js.tenths > 0 : !hasTrick || js.tenths > 0;
+  const hasTrick = actual ? js.base > 0 : jump.resolution.rotations.length > 0;
+  const safe = !hasTrick || js.tenths > 0;
 
   if (run.pendingRail) {
     if (safe) settleRail(run, run.pendingRail, contact.atUs, emit);
@@ -116,14 +116,14 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
       opp: sec?.opp ?? null,
       sectionKey: sec?.key ?? null,
       wouldBase,
-      reason: !actual && js.residualDeg >= js.tiltDeg ? 'underRotated' : 'tilted',
+      reason: js.residualDeg >= js.tiltDeg ? 'underRotated' : 'tilted',
       names: js.names,
       composite: js.composite,
     };
     sc.failures.push(fail);
     breakStreak(sc);
     sc.jumps.push({ jumpId: jump.jumpId, atUs: contact.atUs, opp: fail.opp, sectionKey: fail.sectionKey, names: js.names, base: js.base, composite: js.composite, tenths: 0, points: 0, awarded: 0, onRail: !!contact.onRail });
-    emit('landFail', contact.atUs, { jumpId: jump.jumpId, reason: fail.reason, residual: Math.round(js.residualDeg), names: js.names, section: sec?.key ?? null, ...(actual ? { freestyle: true } : {}) });
+    emit('landFail', contact.atUs, { jumpId: jump.jumpId, reason: fail.reason, residual: Math.round(js.residualDeg), names: js.names, section: sec?.key ?? null });
     return js;
   }
   let awarded = 0;
@@ -148,6 +148,7 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
     names: js.names,
     sectionUsed: !!sec && awarded === 0,
     onRail: contact.onRail,
+    ...(js.trickTier ? { trickTier: js.trickTier } : {}),
   });
   return js;
 }
@@ -181,7 +182,7 @@ export function nearMiss(run: SimState): NearMiss | null {
     sectionNumber: order.indexOf(best.opp) + 1,
     wouldBase: best.wouldBase,
     names: best.names,
-    hint: best.names.includes('フリースタイル') ? '逆向きに払って回転を弱め、足が地面を向くように調整しましょう。' : HINTS[best.reason](best),
+    hint: HINTS[best.reason](best),
   };
 }
 

@@ -2,7 +2,7 @@ import type { CourseId, DogId, DogSpec } from '../content/types';
 import type { CourseRt } from './track';
 import type { Candidate, TrickResolution } from './tricks';
 import type { FreeTarget } from './free-motion';
-import type { CourseFlight, CourseLanding } from './free-flight';
+import type { CourseFlight } from './free-flight';
 import type { Vec3 } from './math';
 
 export type RunMode = 'competition' | 'practice';
@@ -248,7 +248,6 @@ export interface SimState {
   jump: JumpRec | null;
   jumpCounter: number;
   freeFlight: CourseFlight | null;
-  freeLanding: CourseLanding | null;
   rail: RailGrind | null;
   pendingRail: PendingRail | null;
   railsCompleted: string[];

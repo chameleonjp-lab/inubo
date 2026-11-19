@@ -22,7 +22,7 @@ export function startFreeReview(root: HTMLElement): void {
   const trails = new Map<number, SVGPolylineElement | null>();
   const clearPointers = () => { pointer.clear(); trails.clear(); svg.replaceChildren(); };
   const tickClock = (now: number) => {
-    if (!paused && (arena.phase === 'air' || arena.phase === 'settling')) clockUs += Math.max(0, now - lastWall) * 1000 * (half ? 0.5 : 1);
+    if (!paused && arena.phase === 'air') clockUs += Math.max(0, now - lastWall) * 1000 * (half ? 0.5 : 1);
     lastWall = now; clockAnchor = now;
   };
   const sync = () => { tickClock(performance.now()); arena.advance(Math.round(clockUs)); };
@@ -40,7 +40,7 @@ export function startFreeReview(root: HTMLElement): void {
   const select = h('select', { 'aria-label': '確認する場所', onchange: () => {
     scenario = select.value as FreeScenario; scene.setScenario(scenario); retry.click();
   } }, ...([['flat', '平地'], ['wall', '壁あり'], ['rail', 'レールあり']] as const).map(([value, label]) => h('option', { value }, label)));
-  const details = h('details', {}, h('summary', {}, '遊び方と確認版の情報'), h('p', {}, '跳んだら、犬が映る画面か操作パッドをなぞります。指を離しても回り続け、逆になぞると勢いを抑えられます。足から着地できるように調整してください。'), h('p', {}, '犬と人を別々に回せます。着地時に足が足置きから離れていると失敗します。点は接触までの動きから計算し、安定した着地の後に確定します。'), h('p', {}, '壁やレールへの接触を試せる確認版です。レールは接触で止まります。'), h('code', {}, `${FREE_RULES_VERSION} / interaction / ${__FREE_SOURCE__} / ${__FREE_BUILD__}`));
+  const details = h('details', {}, h('summary', {}, '遊び方と確認版の情報'), h('p', {}, '跳んだら、犬が映る画面か操作パッドをなぞります。指を離しても回り続け、逆になぞると勢いを抑えられます。'), h('p', {}, '犬と人を別々に回せます。半回転から技になります。着地までの回転数と方向で技名と点が決まります。'), h('p', {}, '壁やレールへの接触を試せる確認版です。レールは接触で止まります。'), h('code', {}, `${FREE_RULES_VERSION} / interaction / ${__FREE_SOURCE__} / ${__FREE_BUILD__}`));
   root.className = 'free-review'; root.replaceChildren(
     h('header', { class: 'free-header' }, h('div', {}, h('h1', {}, 'イヌボー 自由操作'), h('p', {}, '慣性で回して、着地を決めよう')), h('span', { class: 'free-badge' }, '操作確認版')),
     h('p', { class: 'free-note' }, '確認版の点は、本番の記録・ランキングに反映しません。'),
@@ -74,7 +74,7 @@ export function startFreeReview(root: HTMLElement): void {
   };
   for (const surface of [stage, pad]) {
     surface.addEventListener('pointerdown', e => {
-      if (paused || (arena.phase !== 'air' && arena.phase !== 'settling')) return;
+      if (paused || arena.phase !== 'air') return;
       const [x, y] = coords(e);
       if (!pointer.down(e.pointerId, x, y, target)) return;
       e.preventDefault();
@@ -103,12 +103,13 @@ export function startFreeReview(root: HTMLElement): void {
     meter.dataset.common = String(speeds[0]); meter.dataset.dog = String(speeds[1]); meter.dataset.rider = String(speeds[2]);
     score.textContent = arena.result ? `${arena.result.points}点` : '着地後に採点';
     score.dataset.points = String(arena.result?.points ?? 0);
+    status.dataset.trickTier = String(arena.result?.tier ?? 0);
     status.textContent = paused ? '停止中 — 再開で続きから動きます' : arena.result ?
-      (arena.result.landing === 'crash' ? `転倒・0点｜${arena.result.reason}` : `${arena.result.landing === 'clean' ? 'きれいな着地' : '着地成功'}｜${arena.result.label} ${arena.result.points}点`) :
-      arena.phase === 'air' ? '空中 — 指を離しても回り続けます' : arena.phase === 'settling' ? '着地を確認中…' : 'ジャンプしてから、画面をなぞろう';
+      (arena.result.landing === 'landed' && arena.result.points > 0 ? `着地｜${arena.result.label}` : arena.result.label) :
+      arena.phase === 'air' ? '空中 — 指を離しても回り続けます' : 'ジャンプしてから、画面をなぞろう';
     pause.textContent = paused ? '再開' : '一時停止';
     jump.disabled = high.disabled = paused || arena.phase === 'air' || arena.phase === 'done';
-    pad.dataset.active = String(!paused && (arena.phase === 'air' || arena.phase === 'settling'));
+    pad.dataset.active = String(!paused && arena.phase === 'air');
     scene.draw(arena.motion.pose);
   }
   const frame = () => { sync(); update(); requestAnimationFrame(frame); }; frame();

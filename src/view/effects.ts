@@ -51,6 +51,7 @@ export interface Cue {
   sound: string | null;
   text?: string;
   priority?: TextPriority;
+  trickTier?: number;
   /** 中央に出さなかった出来事は、足元の印として残す。 */
   footMark?: string;
   objId?: string;
@@ -97,12 +98,17 @@ export function cueForEvent(ev: SimEvent): Cue | null {
       if (d.plain) return cue(ev, 'E13', 'sandRing', 'landSoft');
       const pts = Number(d.points ?? 0);
       const names = Array.isArray(d.names) ? d.names.join('＋') : '';
+      if (typeof d.trickTier === 'number') {
+        const text = pts > 0 ? `${names} ＋${pts}` : names;
+        return cue(ev, 'E13', d.trickTier >= 4 ? 'fourPaws' : 'sandRing', d.trickTier >= 4 ? 'landPerfect' : 'landSoft',
+          { text, priority: 2, trickTier: d.trickTier });
+      }
       if (d.composite) return cue(ev, 'E09', 'pawTrails', 'chord2', { text: `${names} ${pts > 0 ? `＋${pts}` : '（採点済みの区間）'}`, priority: 2 });
-      if (d.tenths === 12) return cue(ev, 'E13', 'fourPaws', 'landPerfect', { text: `${names === 'フリースタイル' ? 'フリースタイル　' : ''}ぴたり ${pts > 0 ? `＋${pts}` : ''}`.trim(), priority: 2 });
+      if (d.tenths === 12) return cue(ev, 'E13', 'fourPaws', 'landPerfect', { text: `ぴたり ${pts > 0 ? `＋${pts}` : ''}`.trim(), priority: 2 });
       return cue(ev, 'E13', 'sandRing', 'landSoft', { text: pts > 0 ? `${names} ＋${pts}` : names, priority: 2 });
     }
     case 'landFail':
-      return cue(ev, 'E14', 'underRotatedLabel', 'landBad', { text: d.freestyle ? '着地が乱れた' : d.reason === 'tilted' ? '足が傾いた' : '回転不足', priority: 1 });
+      return cue(ev, 'E14', 'underRotatedLabel', 'landBad', { text: d.reason === 'tilted' ? '足が傾いた' : '回転不足', priority: 1 });
     case 'collide':
       return cue(ev, 'E15', 'impactLines', 'thud', { text: 'ストップ', priority: 1 });
     case 'relaunch':
@@ -180,14 +186,16 @@ export const UI_CUES = {
  * 同じ時期に起きた出来事のうち、中央に出す文字を1つ選ぶ。「停止・失敗」→「着地・技」→「アイテム」の順。
  * 同じ優先度なら、あとから起きた方。選ばれなかった文字は足元の印として残す。
  */
-export function pickCenterText(cues: Cue[]): { text: string | null; priority: TextPriority | null; footMarks: string[] } {
+export function pickCenterText(cues: Cue[]): { text: string | null; priority: TextPriority | null; footMarks: string[]; trickTier?: number } {
   let best: Cue | null = null;
   for (const c of cues) {
     if (!c.text || !c.priority) continue;
-    if (!best || c.priority < best.priority! || (c.priority === best.priority && c.atUs >= best.atUs)) best = c;
+    if (!best || c.priority < best.priority! || (c.priority === best.priority &&
+      (c.atUs > best.atUs || (c.atUs === best.atUs && (c.trickTier ?? 0) >= (best.trickTier ?? 0))))) best = c;
   }
   const footMarks = cues.filter((c) => c !== best && (c.text || c.footMark)).map((c) => c.footMark ?? c.text!);
-  return { text: best?.text ?? null, priority: best?.priority ?? null, footMarks };
+  return { text: best?.text ?? null, priority: best?.priority ?? null, footMarks,
+    ...(best?.trickTier ? { trickTier: best.trickTier } : {}) };
 }
 
 /** 中央の文字を、優先度と表示時間で管理する（新しい文字は、同じか高い優先度なら差し替える）。 */
@@ -195,6 +203,7 @@ export class CenterText {
   text: string | null = null;
   priority: TextPriority = 3;
   untilMs = 0;
+  trickTier = 0;
   footMarks: { text: string; untilMs: number }[] = [];
 
   push(cues: Cue[], nowMs: number): void {
@@ -205,7 +214,8 @@ export class CenterText {
         if (active && this.text) this.footMarks.push({ text: this.text, untilMs: nowMs + 1800 });
         this.text = pick.text;
         this.priority = pick.priority;
-        this.untilMs = nowMs + (pick.priority === 1 ? 1100 : 1300);
+        this.trickTier = pick.trickTier ?? 0;
+        this.untilMs = nowMs + (this.trickTier >= 4 ? 1850 : pick.priority === 1 ? 1100 : 1300);
       } else {
         this.footMarks.push({ text: pick.text, untilMs: nowMs + 1800 });
       }
