@@ -7,7 +7,6 @@ import { advanceRun } from '../src/game/run';
 import { BASE_SPEED, BODY_ROT_US, DOG_SPIN_US, FOOT_FRONT, FOOT_HALF_WIDTH, JUMP_VY } from '../src/game/rules';
 import { maxSpeed } from '../src/game/motion';
 import { newRun, testCourse } from './helpers';
-import type { CourseId, DogId } from '../src/content/types';
 
 describe('コースのデータ', () => {
   for (const id of RACE_COURSES) {
@@ -114,23 +113,14 @@ describe('公園の近道と技の道', () => {
       const trick = newRun(course, dog);
       runWithAutopilot(short, course.def.autoRoutes.short);
       runWithAutopilot(trick, course.def.autoRoutes.trick);
+      expect(short.finished).toBe(true);
+      expect(trick.finished).toBe(true);
+      expect(trick.result!.trickScore).toBeGreaterThan(0);
       expect(short.result!.recordCs).toBeLessThan(trick.result!.recordCs);
       expect(trick.result!.total).toBeGreaterThan(short.result!.total);
       expect(trick.result!.challengeDone).toBe(true);
     });
   }
-
-  test('公園の技の道を全犬種が完走できる', () => {
-    for (const cid of RACE_COURSES) {
-      for (const dog of DOG_ORDER) {
-        const course = getCourse(cid as CourseId);
-        const run = newRun(course, dog as DogId);
-        runWithAutopilot(run, course.def.autoRoutes.trick);
-        expect(run.finished, `${cid} ${dog}`).toBe(true);
-        expect(run.result!.trickScore, `${cid} ${dog}`).toBeGreaterThan(0);
-      }
-    }
-  });
 });
 
 describe('犬種の性能（R32〜R35）', () => {

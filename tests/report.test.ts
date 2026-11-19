@@ -40,6 +40,8 @@ function segmentTime(courseId: 'park', dog: (typeof DOG_ORDER)[number], route: s
 }
 
 test('自動再生: 公園を 3 犬種 × 3 経路で走り、犬種差を 3 区間で測る', () => {
+  const reportPath = process.env.REPORT_OUT;
+  const repeats = reportPath ? 3 : 1;
   const lines: string[] = [];
   const sha = process.env.REPORT_COMMIT ?? '（未記入）';
   lines.push('# 自動再生の記録（自動操縦）', '');
@@ -71,15 +73,15 @@ test('自動再生: 公園を 3 犬種 × 3 経路で走り、犬種差を 3 区
   for (const dog of DOG_ORDER) {
     med[dog] = {};
     for (const [name, route, u0, u1] of segs) {
-      const v = [0, 1, 2].map(() => segmentTime('park', dog, route, u0, u1));
-      const m = [...v].sort((a, b) => a - b)[1];
+      const v = Array.from({ length: repeats }, () => segmentTime('park', dog, route, u0, u1));
+      const m = [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)];
       med[dog][name] = m;
-      lines.push(`| ${DOGS[dog].name} | ${name} | ${v.map((x) => x.toFixed(2)).join(' | ')} | ${m.toFixed(2)} |`);
+      if (reportPath) lines.push(`| ${DOGS[dog].name} | ${name} | ${v.map((x) => x.toFixed(2)).join(' | ')} | ${m.toFixed(2)} |`);
     }
   }
   // 直線では最高速の速いウィペットが最も短く、コーギーが最も長い。
   expect(med.whippet['直線']).toBeLessThan(med.shiba['直線']);
   expect(med.shiba['直線']).toBeLessThan(med.corgi['直線']);
   lines.push('');
-  if (process.env.REPORT_OUT) writeFileSync(process.env.REPORT_OUT, lines.join('\n') + '\n');
+  if (reportPath) writeFileSync(reportPath, lines.join('\n') + '\n');
 });

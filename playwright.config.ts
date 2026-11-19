@@ -9,7 +9,8 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts$/,
   testIgnore: /free-review\.spec\.ts$/,
   timeout: 120_000,
-  fullyParallel: false,
+  // GitHub Actions splits individual tests across runners. Each runner uses one browser at a time.
+  fullyParallel: true,
   workers: 1,
   reporter: [['list']],
   use: {

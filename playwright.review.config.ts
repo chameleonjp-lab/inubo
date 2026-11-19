@@ -8,7 +8,7 @@ export default defineConfig({
     launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
   },
   webServer: {
-    command: 'npm run build:review && npx vite preview --mode review --port 4174 --strictPort',
+    command: 'npm exec -- vite build --mode review && npx vite preview --mode review --port 4174 --strictPort',
     url: 'http://localhost:4174', reuseExistingServer: false, timeout: 120_000,
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
