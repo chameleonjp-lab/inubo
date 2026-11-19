@@ -39,25 +39,27 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       pointer('pointermove', 1, centerX, y - 84);
       pointer('pointerup', 1, centerX, y - 84);
       await until(() => !!sim.freeFlight);
-      const at = sim.freeFlight!.takeoffUs;
       const before = q();
 
-      const right = innerWidth * 0.89, left = innerWidth * 0.13;
+      const right = innerWidth * 0.92, left = innerWidth * 0.10;
+      const heldAt = sim.simUs;
       pointer('pointerdown', 2, right, y);
       pointer('pointermove', 2, left, y);
-      await until(() => sim.simUs >= at + 135_000);
+      await until(() => sim.simUs >= heldAt + 105_000);
       const heldTurn = gap(before, q()), displayTurn = gap(before, view.rig.dog.quaternion.toArray());
       const held = Object.values(sim.strokes).some(stroke => stroke.freeTarget === 'common' && stroke.upUs === null);
       const premature = sim.score.jumps.length;
       pointer('pointerup', 2, left, y);
 
       const released = q();
-      await until(() => sim.simUs >= at + 275_000);
+      const releasedAt = sim.simUs;
+      await until(() => sim.simUs >= releasedAt + 120_000);
       const drift = gap(released, q()), speedBeforeReverse = omega();
+      const reverseAt = sim.simUs;
       pointer('pointerdown', 3, left - 8, y);
       pointer('pointermove', 3, right + 8, y);
       pointer('pointerup', 3, right + 8, y);
-      await until(() => sim.simUs >= at + 355_000);
+      await until(() => sim.simUs >= reverseAt + 55_000);
       const speedAfterReverse = omega();
       await until(() => sim.score.jumps.length > 0);
       return {
