@@ -41,6 +41,8 @@ test('ホーム: 3犬種と服装を選び、旧版の選択履歴があって�
   await expect(page.getByRole('button', { name: 'Xでシェア' })).toBeVisible();
   const start = page.getByTestId('start');
   await expect(start).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 700, height: 402 });
+  await expect(start).toBeInViewport({ ratio: 1 });
   await start.click();
   await expect.poll(() => gameState(page)).toMatchObject({ identity: { courseId: 'park', dogId: 'corgi' } });
 });

@@ -244,15 +244,15 @@ export class App {
         h('h1', { class: 'logo' }, 'イヌボー', h('small', {}, '犬のスケボー')),
         h('h2', {}, '犬'),
         h('div', { class: 'cards' }, dogCards),
-        h('h2', {}, '乗り手'),
-        swatches(CLOTHES, this.profile.clothes, (c) => (this.profile.clothes = c), '服'),
-        swatches(HELMETS, this.profile.helmet, (c) => (this.profile.helmet = c), 'ヘルメット'),
         h(
           'div',
           { class: 'actions' },
           h('button', { class: 'btn primary big', 'data-testid': 'start', onclick: () => (this.uiSound('decide'), this.startRun('competition')) }, 'スタート'),
           h('button', { class: 'btn', 'data-testid': 'practice', onclick: () => (this.uiSound('decide'), this.startRun('practice')) }, '練習広場'),
         ),
+        h('h2', {}, '乗り手'),
+        swatches(CLOTHES, this.profile.clothes, (c) => (this.profile.clothes = c), '服'),
+        swatches(HELMETS, this.profile.helmet, (c) => (this.profile.helmet = c), 'ヘルメット'),
         nameBlock,
         h(
           'div',
