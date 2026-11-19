@@ -10,7 +10,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
@@ -22,8 +22,66 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Build for iPhone testing
+        if: github.event_name == 'pull_request'
+        env:
+          VITE_OFFICIAL_URL: ''
+        run: |
+          npm exec -- vite build
+          test -f dist/index.html
+      - name: Upload the iPhone test build
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: inubo-iphone-preview
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  browser:
+    name: Browser tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - &prepare-browser
+        name: Prepare headless Chromium
+        run: |
+          npx playwright install chromium --only-shell
+          # Keep Japanese text legible in mobile layouts and review screenshots.
+          if ! fc-list --quiet ':lang=ja'; then
+            sudo apt-get install -y --no-install-recommends fonts-ipafont-gothic || {
+              sudo apt-get update
+              sudo apt-get install -y --no-install-recommends fonts-ipafont-gothic
+            }
+          fi
+      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
+
+  review:
+    name: Freestyle review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - *prepare-browser
       - run: npm run test:review
       - name: Upload freestyle browser evidence
         if: always()
@@ -35,21 +93,6 @@ jobs:
           retention-days: 7
       - name: Check review isolation
         run: node scripts/check-review-build.mjs
-      - name: Build for iPhone testing
-        if: github.event_name == 'pull_request'
-        env:
-          VITE_OFFICIAL_URL: ''
-        run: |
-          npm run build
-          test -f dist/index.html
-      - name: Upload the iPhone test build
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
-        with:
-          name: inubo-iphone-preview
-          path: dist/
-          if-no-files-found: error
-          retention-days: 7
       - name: Upload the freestyle review build
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v7
