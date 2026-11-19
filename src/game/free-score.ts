@@ -1,9 +1,9 @@
 import { DEG, length, type Vec3 } from './math';
 import { add3 } from './free-math';
+import { DIRECTION_NAMES, freeTrickName, matchFreeTrick } from './free-trick-catalog';
 import { FREE_MAX_DEG_PER_SEC, rotationTime, type FreeSpan } from './free-motion';
 
 const HALF_TURN = 180;
-const DIRECTION_NAMES = ['バックフリップ', 'フロントフリップ', '左スピン', '右スピン', '左バレルロール', '右バレルロール'] as const;
 const TIER_MINIMUMS = [1, 200, 400, 650, 850] as const;
 
 export interface FreeScore {
@@ -22,9 +22,9 @@ function directionOf(omega: Vec3, heading: number): number {
   return axis * 2 + Number(local[axis] < 0);
 }
 
-function trickName(target: string, direction: string, turns: number, tier: number): string {
+function displayTrickName(name: string, turns: number, tier: number): string {
   const count = turns === 0.5 ? '半回転' : `${turns}回転`;
-  const core = `${target}の${direction}・${count}`;
+  const core = `${name}・${count}`;
   switch (tier) {
     case 1: return core;
     case 2: return `連続技・${core}`;
@@ -49,20 +49,21 @@ export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number,
   const riderDegrees = rider.reduce((sum, amount) => sum + amount, 0);
   // 半回転未満の方向の揺れは技に数えない。両方が同じ量だけ動いても二重加点しない。
   const qualifies = (amount: number) => amount >= HALF_TURN - 1e-7;
-  const directions = dog.map((amount, i) => ({ amount: Math.max(amount, rider[i]), i }))
-    .filter(direction => qualifies(direction.amount)).sort((a, b) => b.amount - a.amount || a.i - b.i);
+  const directions = dog.flatMap((amount, i) => qualifies(Math.max(amount, rider[i])) ? [i] : []);
   const qualifiedTotal = (amounts: number[]) => amounts.filter(qualifies).reduce((sum, amount) => sum + amount, 0);
   const dogQualified = qualifiedTotal(dog), riderQualified = qualifiedTotal(rider);
   const measured = Math.max(dogQualified, riderQualified);
   if (!directions.length || airtimeUs <= 0) return { dogDegrees, riderDegrees, points: 0, tier: 0, label: '着地' };
 
   const ceiling = 2 * FREE_MAX_DEG_PER_SEC * airtimeUs / 1e6;
-  const scoredDegrees = Math.floor((measured + 1e-7) / HALF_TURN) * HALF_TURN;
+  const halfTurns = Math.floor((measured + 1e-7) / HALF_TURN);
+  const scoredDegrees = halfTurns * HALF_TURN;
   const nearLimit = ceiling - measured <= HALF_TURN + 1e-7;
   const variety = 1 + 0.08 * Math.min(directions.length - 1, 2);
   const points = nearLimit ? 1_000 : Math.min(999, Math.max(1, Math.floor(980 * scoredDegrees * variety / ceiling)));
   const tier = TIER_MINIMUMS.filter(minimum => points >= minimum).length;
-  const target = dogQualified > 0 && riderQualified > 0 ? '犬と人' : dogQualified > 0 ? '犬' : '人';
-  const direction = directions.slice(0, 2).map(entry => DIRECTION_NAMES[entry.i]).join('＋') + (directions.length > 2 ? 'コンボ' : '');
-  return { dogDegrees, riderDegrees, points, tier, label: trickName(target, direction, scoredDegrees / 360, tier) };
+  const target = dogQualified > 0 && riderQualified > 0 ? 'common' : dogQualified > 0 ? 'dog' : 'rider';
+  const pattern = matchFreeTrick(directions, halfTurns);
+  const name = freeTrickName(target, pattern, directions.length === 1);
+  return { dogDegrees, riderDegrees, points, tier, label: displayTrickName(name, halfTurns / 2, tier) };
 }
