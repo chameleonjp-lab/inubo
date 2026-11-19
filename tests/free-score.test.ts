@@ -21,6 +21,15 @@ for (const axis of [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0.01, 0]] as Vec3[]) {
 test('最終姿勢が同じでも720度は200点で、履歴を捨てない', () => {
   expect(scoreFreeMotion(motion(720).history, 'normal').points).toBe(200);
 });
+test('最高速で共通と個別の回転を重ねても、着地までの周回を数える', () => {
+  const s = createFreeMotion();
+  advanceFreeMotion(s, 250_000, [
+    { seq: 1, atUs: 0, target: 'common', rotation: [0, Math.PI, 0] },
+    { seq: 2, atUs: 0, target: 'dog', rotation: [0, Math.PI, 0] },
+  ]);
+  // 0.25秒の実回転は犬が約1,295度、人が約647度。
+  expect(scoreFreeMotion(s.history, 'clean')).toMatchObject({ dogDegrees: 1_260, riderDegrees: 630, points: 734 });
+});
 test('未知の225度同士にも名前に依存せず156点を付ける', () => {
   const scored = scoreFreeMotion(motion(225, [0, 1, 0], 'common').history, 'normal');
   expect(scored.points).toBe(156);

@@ -6,6 +6,9 @@ import { sampleAt, worldXZ } from '../game/track';
 import type { CourseId, DogId } from '../content/types';
 import type { SimState } from '../game/types';
 
+// 共通と個別の最高速度が重なっても、隣り合う姿勢の回転を180度未満に保つ。
+export const FREE_REPLAY_STEP_MS = 25;
+
 /**
  * 最速の走りの再生データ。各時刻の位置と姿勢を、犬種と一緒に残す。
  * 再生は見るためだけに使い、当たり判定・取得・採点には関与しない。

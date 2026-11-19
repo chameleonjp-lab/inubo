@@ -132,7 +132,7 @@ export function enqueueFacts(run: SimState, facts: GestureFact[]): void {
  * 走行を untilUs まで進める（実際には直前の刻みの境目まで）。描画の回数や間隔によらず、同じ入力なら同じ結果になる。
  * 返す events は、この呼び出しで確定した出来事だけ。
  */
-export function advanceRun(run: SimState, untilUs: number, orderedInputs: GestureFact[] = []): { state: SimState; events: SimEvent[] } {
+export function advanceRun(run: SimState, untilUs: number, orderedInputs: GestureFact[] = [], onTick?: (state: SimState) => void): { state: SimState; events: SimEvent[] } {
   const out: SimEvent[] = [];
   const emit = makeEmit(run, out);
   enqueueFacts(run, orderedInputs);
@@ -151,6 +151,7 @@ export function advanceRun(run: SimState, untilUs: number, orderedInputs: Gestur
       t = nextIn;
     }
     run.simUs = t1;
+    onTick?.(run);
     // 空中で壁・柵・ゲートの上を越えた（E11）。演出用で、採点には使わない。
     if (!run.finished && run.mode === 'air' && run.pathId === pathBefore) {
       for (const so of currentPath(run).solids) {
@@ -774,7 +775,7 @@ export class RunSession {
   private sessionEvents: SimEvent[] = [];
   private seq = 0;
 
-  constructor(identity: RunIdentity, course: CourseRt, dog: DogSpec) {
+  constructor(identity: RunIdentity, course: CourseRt, dog: DogSpec, private readonly onTick?: (state: SimState) => void) {
     this.sim = createRun(identity, course, dog);
   }
 
@@ -791,6 +792,7 @@ export class RunSession {
     if (this.phase !== 'countdown') return false;
     this.phase = 'running';
     this.runTargetUs = Math.max(0, overflowUs);
+    this.onTick?.(this.sim);
     this.sessionEvent('start');
     return true;
   }
@@ -904,7 +906,7 @@ export class RunSession {
     }
     const facts = this.pending;
     this.pending = [];
-    const { events } = advanceRun(this.sim, this.runTargetUs, facts);
+    const { events } = advanceRun(this.sim, this.runTargetUs, facts, this.onTick);
     out.push(...events);
     if (this.sim.finished) this.phase = 'finished';
     return out;
