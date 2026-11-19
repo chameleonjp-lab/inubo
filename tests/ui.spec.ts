@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 type Inubo = {
   app: {
-    game: { session: { paused: boolean; phase: string; sim: { events: { kind: string; data?: { viaSwipe?: boolean } }[]; inputLog: { kind: string }[]; simUs: number } } } | null;
+    game: { session: { paused: boolean; phase: string; sim: { id: { courseId: string; dogId: string }; events: { kind: string; data?: { viaSwipe?: boolean } }[]; inputLog: { kind: string }[]; simUs: number } } } | null;
   };
 };
 
@@ -13,37 +13,40 @@ async function gameState(page: Page) {
     const g = (window as unknown as { __inubo: Inubo }).__inubo.app.game;
     if (!g) return null;
     const jumps = g.session.sim.events.filter((e) => e.kind === 'jump');
-    return { paused: g.session.paused, phase: g.session.phase, simUs: g.session.sim.simUs,
+    return { paused: g.session.paused, phase: g.session.phase, simUs: g.session.sim.simUs, identity: g.session.sim.id,
       jumps: jumps.length, swipeJumps: jumps.filter((e) => e.data?.viaSwipe).length,
       releases: g.session.sim.inputLog.filter((f) => f.kind === 'up').length };
   });
 }
 
-async function finishAutoRun(page: Page, route = 'safe', course = 'park', dog = 'shiba', extra = '') {
-  await page.goto(`/?autoplay=${route}&speed=12${extra}`);
-  await page.click(`[data-testid="course-${course}"]`);
+async function finishAutoRun(page: Page, route = 'safe', dog = 'shiba') {
+  await page.goto(`/?autoplay=${route}&speed=12`);
   await page.click(`[data-testid="dog-${dog}"]`);
   await page.getByTestId(route === 'trick' ? 'ranked-start' : 'start').click();
   await page.waitForSelector('[data-testid="results"]', { timeout: 90_000 });
   await page.waitForTimeout(900);
 }
 
-test('ホーム: 旧版で別コースを選んでいても公園が選択され、3 犬種と服装を選べる', async ({ page }) => {
+test('ホーム: 3犬種と服装を選び、旧版の選択履歴があっても公園へ直接入る', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('inubo-test:inubo:v1:profile', JSON.stringify({
     participantId: 'legacy-player', lastCourse: 'riverside',
   })));
   await page.goto('/');
-  await expect(page.getByTestId('course-park')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-testid^="course-"]')).toHaveCount(1);
+  await expect(page.getByRole('heading', { name: 'コース', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /公園/ })).toHaveCount(0);
   for (const d of ['shiba', 'corgi', 'whippet']) await expect(page.locator(`[data-testid="dog-${d}"]`)).toBeEnabled();
   await page.click('[data-testid="dog-corgi"]');
   await expect(page.locator('[data-testid="dog-corgi"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.swatches').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Xでシェア' })).toBeVisible();
+  const start = page.getByTestId('start');
+  await expect(start).toBeInViewport({ ratio: 1 });
+  await start.click();
+  await expect.poll(() => gameState(page)).toMatchObject({ identity: { courseId: 'park', dogId: 'corgi' } });
 });
 
 test('完走 → 結果: 総合点を大きく、その下にタイム・タイム点・技点。合計が一致し、1 操作で同じ犬・コースを再挑戦できる', async ({ page }) => {
-  await finishAutoRun(page, 'trick', 'park', 'whippet');
+  await finishAutoRun(page, 'trick', 'whippet');
   const num = async (id: string) => Number((await page.textContent(`[data-testid="${id}"]`))!.replace(/[^0-9]/g, ''));
   const total = await num('total');
   const timeScore = await num('time-score');
@@ -63,11 +66,11 @@ test('完走 → 結果: 総合点を大きく、その下にタイム・タイ�
 });
 
 test('端末内の記録: 完走するとホームに最高点と最速（犬種つき）が出て、スタンプ帳に印が付く。再読込後も残る', async ({ page }) => {
-  await finishAutoRun(page, 'safe', 'park', 'corgi');
+  await finishAutoRun(page, 'safe', 'corgi');
   await page.click('[data-testid="home"]');
   await page.reload();
-  await expect(page.getByTestId('course-park')).toContainText('最高');
-  await expect(page.getByTestId('course-park')).toContainText('コーギー');
+  await expect(page.getByTestId('home-records')).toContainText('最高');
+  await expect(page.getByTestId('home-records')).toContainText('コーギー');
   await page.getByRole('button', { name: 'スタンプ帳' }).click();
   await expect(page.locator('table.stamps')).toContainText('🐾');
   const keys = await page.evaluate(() => Object.keys(localStorage));
@@ -90,7 +93,7 @@ test('V16 共有: 投稿画面を開けないときは、同じ文をコピー�
     window.open = () => null;
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('denied')) }, configurable: true });
   });
-  await finishAutoRun(page, 'safe', 'park', 'shiba');
+  await finishAutoRun(page);
   await page.click('[data-testid="share"]');
   const text = await page.locator('[data-testid="share-text"]').inputValue();
   const once = (s: string) => text.split(s).length - 1;
