@@ -31,6 +31,7 @@ import type { GestureFact, RunIdentity, RunResult, SimEvent } from '../game/type
 
 const CLOTHES = ['#e4572e', '#2e86ab', '#f2c14e', '#6a4c93', '#3bb273'];
 const HELMETS = ['#2e86ab', '#e4572e', '#ffffff', '#222222', '#f2c14e'];
+const PARK_ID = 'park';
 const reviewPath: string = import.meta.env.VITE_REVIEW_URL ?? '';
 
 function nowMs(): number {
@@ -87,7 +88,6 @@ export class App {
   lab: TrickLabScreen | null = null;
   /** 技の練習から戻ったときに復元する、練習広場の段階（メモリーだけに持つ）。 */
   practiceMemory: { index: number; completed: PracticeStepId[] } | null = null;
-  courseId: CourseId;
   dogId: DogId;
   lastResult: RunResult | null = null;
   private updateRankingStatus: (() => void) | null = null;
@@ -101,7 +101,6 @@ export class App {
     this.records = new Records(this.store);
     this.settings = loadSettings(this.store);
     this.profile = loadProfile(this.store);
-    this.courseId = this.profile.lastCourse;
     this.dogId = this.profile.lastDog;
     this.sound = new SoundScheduler(this.settings);
     this.ranking = new RankingClient(transport, this.store, transport !== null);
@@ -169,7 +168,6 @@ export class App {
   }
 
   saveProfile(): void {
-    this.profile.lastCourse = this.courseId;
     this.profile.lastDog = this.dogId;
     saveProfile(this.store, this.profile);
   }
@@ -181,32 +179,19 @@ export class App {
     this.game?.destroy();
     this.game = null;
     this.root.classList.remove('in-game');
-    const courseCards = RACE_COURSES.map((id) => {
-      const def = COURSE_DEFS[id]!;
-      const key = { courseId: id, courseVersion: def.version, rulesVersion: FREE_RULES_VERSION };
-      const legacyKey = { ...key, rulesVersion: RULES_VERSION };
-      const best = this.records.bestScore(key), fast = this.records.bestTime(key);
-      const oldBest = this.records.bestScore(legacyKey), oldFast = this.records.bestTime(legacyKey);
-      return h(
-        'button',
-        {
-          class: `card course-card theme-${def.theme}${id === this.courseId ? ' selected' : ''}`,
-          'data-testid': `course-${id}`,
-          'aria-pressed': id === this.courseId ? 'true' : 'false',
-          onclick: () => {
-            this.courseId = id;
-            this.uiSound('select');
-            this.saveProfile();
-            this.showHome();
-          },
-        },
-        h('span', { class: 'card-title' }, def.name),
-        h('span', { class: 'card-sub' }, best ? `自由操作　最高 ${fmtInt(best.total)}点` : '自由操作の記録なし'),
-        h('span', { class: 'card-sub' }, fast ? `最速 ${formatTime(fast.recordCs)}（${DOGS[fast.dogId].name}）` : ''),
-        oldBest || oldFast ? h('span', { class: 'card-sub' }, [
-          '従来の記録', oldBest ? `最高 ${fmtInt(oldBest.total)}点` : '', oldFast ? `最速 ${formatTime(oldFast.recordCs)}（${DOGS[oldFast.dogId].name}）` : '',
-        ].filter(Boolean).join('　')) : null,
-      );
+    const parkRecords = { courseId: PARK_ID, courseVersion: COURSE_DEFS[PARK_ID]!.version } as const;
+    const records = [
+      [FREE_RULES_VERSION, '自由操作の記録'],
+      [RULES_VERSION, '従来ルールの記録'],
+    ].flatMap(([rulesVersion, label]) => {
+      const key = { ...parkRecords, rulesVersion };
+      const best = this.records.bestScore(key);
+      const fast = this.records.bestTime(key);
+      if (!best && !fast) return [];
+      return [h('dt', {}, label), h('dd', {}, [
+        best && `最高 ${fmtInt(best.total)}点`,
+        fast && `最速 ${formatTime(fast.recordCs)}（${DOGS[fast.dogId].name}）`,
+      ].filter(Boolean).join('　'))];
     });
     const dogCards = DOG_ORDER.map((id) =>
       h(
@@ -234,7 +219,7 @@ export class App {
         h('span', { class: 'sw-label' }, label),
         list.map((c) => h('button', { class: `sw${c === cur ? ' selected' : ''}`, style: `background:${c}`, 'aria-label': `${label} ${c}`, onclick: () => (set(c), this.saveProfile(), this.showHome()) })),
       );
-    const hasRanking = this.rankingFor(this.courseId);
+    const hasRanking = this.rankingFor(PARK_ID);
     const shareFallback = h('div', { class: 'share-fallback hidden', 'data-testid': 'home-share-fallback', 'aria-live': 'polite' });
     const nameBlock = hasRanking
       ? h(
@@ -257,24 +242,22 @@ export class App {
         'section',
         { class: 'screen home', 'data-testid': 'home' },
         h('h1', { class: 'logo' }, 'イヌボー', h('small', {}, '犬のスケボー')),
-        h('h2', {}, 'コース'),
-        h('div', { class: 'cards course-cards' }, courseCards),
         h('h2', {}, '犬'),
         h('div', { class: 'cards' }, dogCards),
+        h(
+          'div',
+          { class: 'actions' },
+          h('button', { class: 'btn primary big', 'data-testid': 'start', onclick: () => (this.uiSound('decide'), this.startRun('competition')) }, 'スタート'),
+          h('button', { class: 'btn', 'data-testid': 'practice', onclick: () => (this.uiSound('decide'), this.startRun('practice')) }, '練習広場'),
+        ),
         h('h2', {}, '乗り手'),
         swatches(CLOTHES, this.profile.clothes, (c) => (this.profile.clothes = c), '服'),
         swatches(HELMETS, this.profile.helmet, (c) => (this.profile.helmet = c), 'ヘルメット'),
         nameBlock,
         h(
           'div',
-          { class: 'actions' },
-          h('button', { class: 'btn primary big', 'data-testid': 'start', onclick: () => (this.uiSound('decide'), this.startRun('competition')) }, 'スタート'),
-          h('button', { class: 'btn', 'data-testid': 'practice', onclick: () => (this.uiSound('decide'), this.startRun('practice')) }, '練習広場'),
-          h('button', { class: 'btn small', 'data-testid': 'ranked-start', onclick: () => (this.uiSound('decide'), this.startRun('competition', RULES_VERSION)) }, '従来ルールで走る'),
-        ),
-        h(
-          'div',
           { class: 'actions small-row' },
+          h('button', { class: 'btn small', 'data-testid': 'ranked-start', onclick: () => (this.uiSound('decide'), this.startRun('competition', RULES_VERSION)) }, '従来ルールで走る'),
           h('button', { class: 'btn small', onclick: () => this.showHowTo() }, '遊び方'),
           h('button', { class: 'btn small', 'data-testid': 'settings', onclick: () => this.showSettings() }, '設定'),
           h('button', { class: 'btn small', onclick: () => this.showStamps() }, 'スタンプ帳'),
@@ -284,6 +267,7 @@ export class App {
           h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(officialUrl()), shareFallback) }, 'Xでシェア'),
         ),
         shareFallback,
+        records.length ? h('dl', { class: 'home-records', 'aria-label': '自己ベスト', 'data-testid': 'home-records' }, records) : null,
       ),
     );
   }
@@ -385,12 +369,12 @@ export class App {
   }
 
   showRanking(): void {
-    const def = COURSE_DEFS[this.courseId]!;
+    const def = COURSE_DEFS[PARK_ID]!;
     const board = h('div', { class: 'board' });
     let boardRequest = 0;
     const load = (metric: 'total' | 'time') => {
       const current = ++boardRequest;
-      void this.ranking.loadBoard({ courseId: this.courseId, courseVersion: def.version, rulesVersion: RULES_VERSION, metric }, (s) => {
+      void this.ranking.loadBoard({ courseId: PARK_ID, courseVersion: def.version, rulesVersion: RULES_VERSION, metric }, (s) => {
         if (current === boardRequest) renderBoardInto(board, s, metric, () => load(metric));
       });
     };
@@ -430,7 +414,7 @@ export class App {
     if (mode === 'competition') this.practiceMemory = null;
     this.game?.destroy();
     this.game = null;
-    const courseId: CourseId = mode === 'practice' ? 'practice' : this.courseId;
+    const courseId: CourseId = mode === 'practice' ? 'practice' : PARK_ID;
     const course = getCourse(courseId);
     const name = this.profile.name.trim();
     const opt = this.rankingFor(courseId, rulesVersion) && this.ranking.canParticipate(name, mode, true);

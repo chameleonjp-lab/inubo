@@ -132,7 +132,14 @@ h2 {
   gap: 8px;
 }
 
-.course-cards { grid-template-columns: minmax(0, 1fr); }
+.home-records {
+  margin: 16px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.home-records dt { color: var(--muted); }
+.home-records dd { margin: 0 0 8px; }
 
 .card {
   appearance: none;
