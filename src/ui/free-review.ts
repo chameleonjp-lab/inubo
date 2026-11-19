@@ -1,16 +1,19 @@
 import './free-review.css';
 import { h } from './dom';
-import { FreeArena, type FreeScenario } from '../game/free-arena';
+import { FreeArena, type FreeResult, type FreeScenario } from '../game/free-arena';
 import { FREE_RULES_VERSION, type FreeTarget } from '../game/free-motion';
 import { length } from '../game/math';
 import { FreePointerController } from '../input/free-pointer';
 import { FreeScene } from '../view/free-scene';
+import { AudioEngine } from '../audio/sound';
+import { TRICK_LANDING, trickLandingText } from '../view/trick-landing';
+import { showTrickLanding } from './trick-landing';
 
 export function startFreeReview(root: HTMLElement): void {
   document.title = 'イヌボー｜慣性で自由操作';
   const stage = h('div', { class: 'free-stage', 'data-testid': 'free-stage', 'aria-label': 'この画面をなぞって空中で回転' });
   const canvas = h('canvas', { 'aria-label': '犬と人の実際の姿勢', role: 'img' }); stage.append(canvas);
-  const status = h('p', { class: 'free-status', role: 'status', 'data-testid': 'free-status' });
+  const status = h('div', { class: 'free-status', role: 'status', 'data-testid': 'free-status' });
   const meter = h('output', { class: 'free-meter', 'data-testid': 'free-speed' });
   const score = h('output', { 'data-testid': 'free-score' }, '0点');
   const pad = h('div', { class: 'free-pad', 'data-testid': 'free-pad', 'aria-label': 'ここをスワイプして空中で回転' }, h('span', {}, 'ここをスワイプ'), h('small', {}, '横・縦・斜め、自由に動かせます'));
@@ -26,16 +29,28 @@ export function startFreeReview(root: HTMLElement): void {
     lastWall = now; clockAnchor = now;
   };
   const sync = () => { tickClock(performance.now()); arena.advance(Math.round(clockUs)); };
+  const audio = new AudioEngine();
+  let soundOn = true;
+  let shownResult: FreeResult | null = null;
+  let playedResult: FreeResult | null = null;
+  const syncSound = () => audio.update(soundOn && !paused ? 0.7 : 0, { steps: null, wind: null, grind: null }, lastWall);
+  const sound = h('button', { 'aria-pressed': 'true', onclick: () => {
+    soundOn = !soundOn;
+    sound.setAttribute('aria-pressed', String(soundOn));
+    sound.textContent = soundOn ? '音あり' : '消音';
+    if (soundOn) audio.unlock();
+    syncSound();
+  } }, '音あり');
   for (const [value, text] of [['common', '一緒'], ['dog', '犬'], ['rider', '人']] as const) {
     const b = h('button', { type: 'button', 'aria-pressed': value === target ? 'true' : 'false', 'data-testid': `target-${value}`, onclick: () => {
       target = value; for (const c of targets.children) c.setAttribute('aria-pressed', c === b ? 'true' : 'false');
     } }, text); targets.append(b);
   }
-  const jump = h('button', { class: 'free-primary', 'data-testid': 'free-jump', onclick: () => { sync(); clearPointers(); arena.jump(); update(); } }, 'ジャンプ');
-  const high = h('button', { 'data-testid': 'free-high', onclick: () => { sync(); clearPointers(); arena.jump(true); update(); } }, '高く跳ぶ');
-  const pause = h('button', { 'data-testid': 'free-pause', onclick: () => { sync(); setPause(!paused); } }, '一時停止');
-  const setPause = (v: boolean) => { paused = v; clearPointers(); lastWall = performance.now(); update(); };
-  const retry = h('button', { 'data-testid': 'free-retry', onclick: () => { arena = new FreeArena(scenario); clockUs = 0; clearPointers(); setPause(false); } }, 'やり直す');
+  const jump = h('button', { class: 'free-primary', 'data-testid': 'free-jump', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(); update(); } }, 'ジャンプ');
+  const high = h('button', { 'data-testid': 'free-high', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(true); update(); } }, '高く跳ぶ');
+  const pause = h('button', { 'data-testid': 'free-pause', onclick: () => { if (paused && soundOn) audio.unlock(); sync(); setPause(!paused); } }, '一時停止');
+  const setPause = (v: boolean) => { paused = v; clearPointers(); lastWall = performance.now(); syncSound(); update(); };
+  const retry = h('button', { 'data-testid': 'free-retry', onclick: () => { audio.stopTrickLanding(); arena = new FreeArena(scenario); clockUs = 0; clearPointers(); setPause(false); } }, 'やり直す');
   const slow = h('button', { 'aria-pressed': 'true', 'data-testid': 'free-slow', onclick: () => { sync(); half = !half; slow.setAttribute('aria-pressed', String(half)); slow.textContent = half ? '速さ ½' : '速さ 1'; } }, '速さ ½');
   const select = h('select', { 'aria-label': '確認する場所', onchange: () => {
     scenario = select.value as FreeScenario; scene.setScenario(scenario); retry.click();
@@ -45,7 +60,7 @@ export function startFreeReview(root: HTMLElement): void {
     h('header', { class: 'free-header' }, h('div', {}, h('h1', {}, 'イヌボー 自由操作'), h('p', {}, '慣性で回して、着地を決めよう')), h('span', { class: 'free-badge' }, '操作確認版')),
     h('p', { class: 'free-note' }, '確認版の点は、本番の記録・ランキングに反映しません。'),
     h('div', { class: 'free-work' }, h('div', { class: 'free-viewport' }, stage, h('div', { class: 'free-hud' }, status, h('div', { class: 'free-readings' }, meter, score))), h('section', { class: 'free-control', 'aria-label': '自由操作' }, targets, pad)),
-    h('div', { class: 'free-actions' }, jump, high, pause, retry, slow, select), details);
+    h('div', { class: 'free-actions' }, jump, high, pause, retry, slow, select, sound), details);
   let scene: FreeScene;
   try { scene = new FreeScene(canvas); scene.setScenario(scenario); }
   catch { status.textContent = '描画を開始できません。ページを再読み込みしてください。'; jump.disabled = high.disabled = true; return; }
@@ -101,12 +116,26 @@ export function startFreeReview(root: HTMLElement): void {
     const speeds = [omega.common, omega.dog, omega.rider].map(v => length(v) * 180 / Math.PI);
     meter.textContent = `回転の勢い ${speeds.map(v => Math.round(v)).join(' / ')}°/秒`;
     meter.dataset.common = String(speeds[0]); meter.dataset.dog = String(speeds[1]); meter.dataset.rider = String(speeds[2]);
-    score.textContent = arena.result ? `${arena.result.points}点` : '着地後に採点';
-    score.dataset.points = String(arena.result?.points ?? 0);
-    status.dataset.trickTier = String(arena.result?.tier ?? 0);
-    status.textContent = paused ? '停止中 — 再開で続きから動きます' : arena.result ?
-      (arena.result.landing === 'landed' && arena.result.points > 0 ? `着地｜${arena.result.label}` : arena.result.label) :
-      arena.phase === 'air' ? '空中 — 指を離しても回り続けます' : 'ジャンプしてから、画面をなぞろう';
+    const result = arena.result;
+    const stage = result ? TRICK_LANDING[result.tier - 1] : undefined;
+    score.textContent = result ? `${result.points}点` : '着地後に採点';
+    score.dataset.points = String(result?.points ?? 0);
+    score.hidden = !!stage;
+    status.dataset.trickTier = String(result?.tier ?? 0);
+    if (result && stage) {
+      if (shownResult !== result) {
+        showTrickLanding(status, trickLandingText(`着地｜${result.label}`, result.points, result.points));
+        shownResult = result;
+      }
+      if (!paused && playedResult !== result) {
+        playedResult = result;
+        if (soundOn) audio.play({ name: stage.sound, gain: 0.7, pitch: 1, reverse: false });
+      }
+    } else {
+      shownResult = null;
+      status.textContent = paused ? '停止中 — 再開で続きから動きます' : result?.label ??
+        (arena.phase === 'air' ? '空中 — 指を離しても回り続けます' : 'ジャンプしてから、画面をなぞろう');
+    }
     pause.textContent = paused ? '再開' : '一時停止';
     jump.disabled = high.disabled = paused || arena.phase === 'air' || arena.phase === 'done';
     pad.dataset.active = String(!paused && arena.phase === 'air');

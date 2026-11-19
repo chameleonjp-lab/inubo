@@ -38,10 +38,6 @@ button, select { font: inherit; color: inherit; }
   .free-work { grid-template-columns: 1.55fr 1fr; }
   .free-viewport { height: max(210px, calc(100dvh - 158px)); }
   .free-control { min-height: 0; } .free-pad { height: auto; flex: 1; min-height: 145px; }
-  .free-actions { grid-template-columns: repeat(6, 1fr); }
+  .free-actions { grid-template-columns: repeat(7, 1fr); }
 }
-
-.free-status[data-trick-tier="2"] { color: #075b68; }
-.free-status[data-trick-tier="3"] { color: #164a89; text-shadow: 0 0 6px #7ce6ff; }
-.free-status[data-trick-tier="4"] { color: #714600; text-shadow: 0 0 7px #ffc337; font-weight: 800; }
-.free-status[data-trick-tier="5"] { color: #501538; text-shadow: 0 0 4px #ffdd71, 0 0 9px #ff88a1; font-weight: 900; }
+.free-status:has(.trick-landing-card) { padding: 0; background: none; }

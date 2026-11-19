@@ -80,7 +80,15 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     expect(observed.landing).toMatchObject({ names: [expect.stringContaining('犬と人の右スピン')], tenths: 10 });
     expect(observed.landing.points).toBeGreaterThan(0);
     const title = page.getByTestId('center-text');
-    await expect(title).toContainText(observed.landing.names[0]);
+    const name = page.getByTestId('landing-trick-name');
+    const score = page.getByTestId('landing-trick-score');
+    await expect(name).toHaveText(observed.landing.names[0]);
+    await expect(score).toBeVisible();
+    const awarded = entry === 'practice' ? observed.landing.points : observed.landing.awarded;
+    if (awarded > 0) await expect(score).toContainText('＋' + awarded.toLocaleString('ja-JP'));
+    else await expect(score).toHaveText(/区間採点済み|加点なし/);
+    await expect(name).toBeInViewport();
+    await expect(score).toBeInViewport();
     await expect(title).toHaveAttribute('data-trick-tier', /^[1-5]$/);
     expect(errors).toEqual([]);
   });

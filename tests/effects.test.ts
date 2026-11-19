@@ -66,9 +66,41 @@ describe('V14 演出', () => {
     const rail = cueForEvent(ev('railScore', 100, { points: 80, distMm: 8_000 }))!;
     const center = new CenterText();
     center.push([land, rail], 1000);
-    expect(center.current(2700)).toBe(name + ' ＋1000');
+    expect(center.current(2950)).toBe(name);
+    expect(center.landingText).toEqual({ name, score: '＋1,000', full: true });
     expect(center.trickTier).toBe(5);
-    expect(center.current(2900)).toBeNull();
+    expect(center.current(3000)).toBeNull();
+  });
+
+  test.each([
+    [1, 1, 1000, 'trickLandingTap'],
+    [2, 200, 1200, 'trickLandingChime'],
+    [3, 400, 1400, 'trickLandingRise'],
+    [4, 650, 1700, 'trickLandingChord'],
+    [5, 850, 2000, 'trickLandingFinale'],
+  ] as const)('段階%dで専用音を鳴らし、別行の点数を指定時間表示する', (tier, points, duration, sound) => {
+    const land = cueForEvent(ev('land', 0, { names: ['技名'], trickTier: tier, points }))!;
+    const scheduler = new SoundScheduler(DEFAULT_SETTINGS);
+    expect(scheduler.onCues([land], 0)).toMatchObject([{ name: sound, gain: DEFAULT_SETTINGS.volume }]);
+    expect(scheduler.onCues([land], 16)).toEqual([]);
+    const center = new CenterText();
+    center.push([land], 0);
+    expect(center.landingText).toEqual({ name: '技名', score: '＋' + points, full: false });
+    center.setPaused(true, 100);
+    expect(center.current(duration + 100)).toBe('技名');
+    center.setPaused(false, duration + 100);
+    expect(center.current(2 * duration - 1)).toBe('技名');
+    expect(center.current(2 * duration)).toBeNull();
+  });
+
+  test('公園の区間加点がなくても、技自体の難易度で音と満点表示を決める', () => {
+    const land = cueForEvent(ev('land', 0, {
+      names: ['技名'], points: 0, trickPoints: 1000, trickTier: 5, sectionUsed: true,
+    }))!;
+    expect(land.sound).toBe('trickLandingFinale');
+    expect(land.landingText).toEqual({ name: '技名', score: '区間採点済み', full: true });
+    const muted = new SoundScheduler({ ...DEFAULT_SETTINGS, soundOn: false });
+    expect(muted.onCues([land], 0)).toEqual([]);
   });
 
   test('同じ壁に当たり続けても、接触の音は最初の1回だけ', () => {
