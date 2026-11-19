@@ -98,11 +98,11 @@ export function cueForEvent(ev: SimEvent): Cue | null {
       const pts = Number(d.points ?? 0);
       const names = Array.isArray(d.names) ? d.names.join('＋') : '';
       if (d.composite) return cue(ev, 'E09', 'pawTrails', 'chord2', { text: `${names} ${pts > 0 ? `＋${pts}` : '（採点済みの区間）'}`, priority: 2 });
-      if (d.tenths === 12) return cue(ev, 'E13', 'fourPaws', 'landPerfect', { text: `ぴたり ${pts > 0 ? `＋${pts}` : ''}`.trim(), priority: 2 });
+      if (d.tenths === 12) return cue(ev, 'E13', 'fourPaws', 'landPerfect', { text: `${names === 'フリースタイル' ? 'フリースタイル　' : ''}ぴたり ${pts > 0 ? `＋${pts}` : ''}`.trim(), priority: 2 });
       return cue(ev, 'E13', 'sandRing', 'landSoft', { text: pts > 0 ? `${names} ＋${pts}` : names, priority: 2 });
     }
     case 'landFail':
-      return cue(ev, 'E14', 'underRotatedLabel', 'landBad', { text: d.reason === 'tilted' ? '足が傾いた' : '回転不足', priority: 1 });
+      return cue(ev, 'E14', 'underRotatedLabel', 'landBad', { text: d.freestyle ? '着地が乱れた' : d.reason === 'tilted' ? '足が傾いた' : '回転不足', priority: 1 });
     case 'collide':
       return cue(ev, 'E15', 'impactLines', 'thud', { text: 'ストップ', priority: 1 });
     case 'relaunch':

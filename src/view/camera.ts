@@ -33,12 +33,13 @@ export class FollowCamera {
     this.shake = 0;
   }
 
-  update(path: PathRt, s: number, x: number, y: number, dtMs: number, shakeOn: boolean): void {
+  update(path: PathRt, s: number, x: number, y: number, dtMs: number, shakeOn: boolean, flightHeading?: number): void {
     const sc = Math.max(0, Math.min(path.length, s));
     const here = sampleAt(path, sc);
     const aheadS = Math.min(path.length, sc + 11);
     const ahead = sampleAt(path, aheadS);
-    const fwd = new THREE.Vector3(Math.cos(here.heading), 0, Math.sin(here.heading));
+    const angle = flightHeading ?? here.heading;
+    const fwd = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
     const right = new THREE.Vector3(-Math.sin(here.heading), 0, Math.cos(here.heading));
     const dogPos = new THREE.Vector3(here.x, 0, here.z).addScaledVector(right, x);
     const ground = baseHeight(path, sc);
@@ -63,6 +64,6 @@ export class FollowCamera {
       this.camera.position.y += (Math.random() - 0.5) * this.shake;
     }
     this.shake *= Math.exp(-dtMs / 120);
-    this.camera.lookAt(this.look);
+    this.camera.lookAt(flightHeading === undefined ? this.look : this.camera.position.clone().addScaledVector(fwd, 16).add(new THREE.Vector3(0, -2.1, 0)));
   }
 }

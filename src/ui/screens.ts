@@ -5,12 +5,14 @@ import { TrickLabScreen } from './trick-lab';
 import { formatTime, homeShareText, officialUrl, resultShareText, shareOnX, shareableResult } from './share';
 import { RunSession } from '../game/run';
 import { RULES_VERSION } from '../game/rules';
+import { FREE_RULES_VERSION, type FreeTarget } from '../game/free-motion';
 import { Autopilot } from '../game/autopilot';
 import { trickScore } from '../game/scoring';
 import { sampleAt, uAtS } from '../game/track';
 import { foodActive } from '../game/items';
 import { maxSpeed } from '../game/motion';
 import { GestureRecognizer } from '../input/gestures';
+import { FreePointerController } from '../input/free-pointer';
 import { COURSE_DEFS, RACE_COURSES, getCourse } from '../content/courses/index';
 import { DOGS, DOG_ORDER } from '../content/dogs';
 import { GameView } from '../view/scene';
@@ -128,8 +130,8 @@ export class App {
     void this.ranking.flush();
   }
 
-  private rankingFor(courseId: CourseId): boolean {
-    return this.ranking.enabled && (this.opts.testBuild || courseId === 'park');
+  private rankingFor(courseId: CourseId, rulesVersion = RULES_VERSION): boolean {
+    return rulesVersion === RULES_VERSION && this.ranking.enabled && (this.opts.testBuild || courseId === 'park');
   }
 
   ensureView(): GameView {
@@ -146,7 +148,7 @@ export class App {
     const w = window.innerWidth;
     const hgt = window.innerHeight;
     this.view?.resize(w, hgt);
-    this.game?.recognizer.setViewport(w, hgt);
+    this.game?.setInputViewport(w, hgt);
     const portrait = hgt >= w;
     if (this.lastPortrait !== null && portrait !== this.lastPortrait) {
       if (this.lab) this.lab.onOrientationChange();
@@ -181,8 +183,10 @@ export class App {
     this.root.classList.remove('in-game');
     const courseCards = RACE_COURSES.map((id) => {
       const def = COURSE_DEFS[id]!;
-      const best = this.records.bestScore({ courseId: id, courseVersion: def.version, rulesVersion: RULES_VERSION });
-      const fast = this.records.bestTime({ courseId: id, courseVersion: def.version, rulesVersion: RULES_VERSION });
+      const key = { courseId: id, courseVersion: def.version, rulesVersion: FREE_RULES_VERSION };
+      const legacyKey = { ...key, rulesVersion: RULES_VERSION };
+      const best = this.records.bestScore(key), fast = this.records.bestTime(key);
+      const oldBest = this.records.bestScore(legacyKey), oldFast = this.records.bestTime(legacyKey);
       return h(
         'button',
         {
@@ -197,8 +201,11 @@ export class App {
           },
         },
         h('span', { class: 'card-title' }, def.name),
-        h('span', { class: 'card-sub' }, best ? `最高 ${fmtInt(best.total)}点` : '記録なし'),
+        h('span', { class: 'card-sub' }, best ? `自由操作　最高 ${fmtInt(best.total)}点` : '自由操作の記録なし'),
         h('span', { class: 'card-sub' }, fast ? `最速 ${formatTime(fast.recordCs)}（${DOGS[fast.dogId].name}）` : ''),
+        oldBest || oldFast ? h('span', { class: 'card-sub' }, [
+          '従来の記録', oldBest ? `最高 ${fmtInt(oldBest.total)}点` : '', oldFast ? `最速 ${formatTime(oldFast.recordCs)}（${DOGS[oldFast.dogId].name}）` : '',
+        ].filter(Boolean).join('　')) : null,
       );
     });
     const dogCards = DOG_ORDER.map((id) =>
@@ -242,7 +249,7 @@ export class App {
             });
             return inp;
           })(),
-          h('p', { id: 'ranking-name-note' }, '名前を入力すると、名前と記録がランキングに公開されます。空欄でも遊べます。'),
+          h('p', { id: 'ranking-name-note' }, '名前を入れて「従来ルールで走る」を押すと、名前と記録が公開されます。'),
         )
       : null;
     this.setScreen(
@@ -263,8 +270,7 @@ export class App {
           { class: 'actions' },
           h('button', { class: 'btn primary big', 'data-testid': 'start', onclick: () => (this.uiSound('decide'), this.startRun('competition')) }, 'スタート'),
           h('button', { class: 'btn', 'data-testid': 'practice', onclick: () => (this.uiSound('decide'), this.startRun('practice')) }, '練習広場'),
-          /^\.\/review\/[a-f0-9]{40}\/[0-9]+-[0-9]+\/$/.test(reviewPath)
-            ? h('a', { class: 'btn', href: reviewPath, 'data-testid': 'free-review-link' }, '自由操作を試す') : null,
+          h('button', { class: 'btn small', 'data-testid': 'ranked-start', onclick: () => (this.uiSound('decide'), this.startRun('competition', RULES_VERSION)) }, '従来ルールで走る'),
         ),
         h(
           'div',
@@ -273,6 +279,8 @@ export class App {
           h('button', { class: 'btn small', 'data-testid': 'settings', onclick: () => this.showSettings() }, '設定'),
           h('button', { class: 'btn small', onclick: () => this.showStamps() }, 'スタンプ帳'),
           hasRanking ? h('button', { class: 'btn small', onclick: () => this.showRanking() }, 'ランキング') : null,
+          /^\.\/review\/[a-f0-9]{40}\/[0-9]+-[0-9]+\/$/.test(reviewPath)
+            ? h('a', { class: 'btn small', href: reviewPath, 'data-testid': 'free-review-link' }, '自由操作の試験場') : null,
           h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(officialUrl()), shareFallback) }, 'Xでシェア'),
         ),
         shareFallback,
@@ -295,12 +303,12 @@ export class App {
         h('ul', {}, [
           h('li', {}, '地面で左右に払う: 払った幅の分だけ横へ動きます。'),
           h('li', {}, '上へ払う: 1回跳びます。踏切台からは高く跳べます。'),
-          h('li', {}, '空中で円を描いて閉じる: 犬だけが回ります。縦長の円は前後、横長や真円は横転。向きは描く向きで変わります。'),
-          h('li', {}, '空中で直線を引いて離す: 人と犬が一緒に回ります。上=前宙、下=後宙、左右=ひねり、斜め=組み合わせ。'),
-          h('li', {}, '円と線を重ねる（2本指、または片手で円→線）: 複合技。犬が回り終わる前に線を離します。'),
+          h('li', {}, '跳んだら一度指を離し、空中で画面をなぞります。なぞる間に回転し、指を離した後も勢いが続きます。'),
+          h('li', {}, '反対へ払うと勢いを弱められます。「一緒」「犬だけ」「人だけ」で回す対象を選び、足から着地しましょう。'),
           h('li', {}, '手すりには上から乗ると滑り、前へ払うと跳び降ります。正面や側面に当たると止まります。'),
         ]),
-        h('p', {}, '総合点はタイム点（最大5,000）と技点（最大5,000）の合計です。同じ区間で点になるのは、最初に成功した技のジャンプ1回だけです。3区間続けて成功すると100点を加えます。'),
+        h('p', {}, '着地までに実際に回った動きが技点になります。同じ区間で点になるのは、最初に成功した技のジャンプ1回です。3区間続けて成功すると100点を加えます。タイム点と技点はそれぞれ最大5,000点です。'),
+        h('details', {}, h('summary', {}, '従来ルールの操作'), h('p', {}, '空中で円を閉じると犬が回り、線を引いて離すと人と犬が一緒に回ります。円を描いてから線を引くと複合技になります。')),
         h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
       ),
     );
@@ -390,7 +398,7 @@ export class App {
       h(
         'section',
         { class: 'screen text-screen' },
-        h('h2', {}, `ランキング｜${def.name}`),
+        h('h2', {}, `従来ルールのランキング｜${def.name}`),
         h('div', { class: 'ranking-tabs' }, h('button', { class: 'btn small', onclick: () => load('total') }, '総合'), h('button', { class: 'btn small', onclick: () => load('time') }, 'タイム')),
         board,
         h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
@@ -417,7 +425,7 @@ export class App {
   }
 
   // ---------------------------------------------------------------- 走行
-  startRun(mode: 'competition' | 'practice'): void {
+  startRun(mode: 'competition' | 'practice', rulesVersion = FREE_RULES_VERSION): void {
     this.closeTrickLab();
     if (mode === 'competition') this.practiceMemory = null;
     this.game?.destroy();
@@ -425,12 +433,12 @@ export class App {
     const courseId: CourseId = mode === 'practice' ? 'practice' : this.courseId;
     const course = getCourse(courseId);
     const name = this.profile.name.trim();
-    const opt = this.rankingFor(courseId) && this.ranking.canParticipate(name, mode, true);
+    const opt = this.rankingFor(courseId, rulesVersion) && this.ranking.canParticipate(name, mode, true);
     const identity: RunIdentity = {
       runId: newId(),
       courseId,
       courseVersion: course.def.version,
-      rulesVersion: RULES_VERSION,
+      rulesVersion,
       dogId: this.dogId,
       mode,
       playerName: opt ? name : '',
@@ -443,7 +451,7 @@ export class App {
     const view = this.ensureView();
     view.setCourse(course);
     view.setRider(DOGS[this.dogId].look, this.profile.clothes, this.profile.helmet);
-    const key = { courseId, courseVersion: course.def.version, rulesVersion: RULES_VERSION };
+    const key = { courseId, courseVersion: course.def.version, rulesVersion };
     const ghost = mode === 'competition' ? this.records.bestTimeReplay(key) : null;
     view.setGhost(ghost, ghost ? DOGS[ghost.dogId].look : null);
     view.resetEffects();
@@ -473,7 +481,7 @@ export class App {
       clothes: this.profile.clothes,
       helmet: this.profile.helmet,
       uiSound: (name) => this.uiSound(name),
-      exit: () => this.startRun('practice'),
+      exit: () => this.startRun('practice', memory ? RULES_VERSION : FREE_RULES_VERSION),
     });
     this.lab = lab;
     this.root.classList.add('in-game');
@@ -497,14 +505,14 @@ export class App {
     const el = renderResults(result, def.name, saved, def.challenge?.label ?? null, {
       retry: () => {
         this.uiSound('retry');
-        this.startRun('competition');
+        this.startRun('competition', result.rulesVersion);
       },
       home: () => this.back(),
       share: () => {
         if (!shareableResult(result)) return;
         void this.share(resultShareText(result, def.name, DOGS[result.dogId].name, officialUrl()), fallbackHolder.el);
       },
-      ranking: this.rankingFor(result.courseId)
+      ranking: this.rankingFor(result.courseId, result.rulesVersion)
         ? (metric, onState) => {
             onState({ kind: 'loading' });
             void sent.then(() => this.ranking.loadBoard({ courseId: result.courseId, courseVersion: result.courseVersion, rulesVersion: result.rulesVersion, metric }, onState));
@@ -563,7 +571,11 @@ function dogIcon(id: DogId, wag: boolean): HTMLElement {
 class GameRun {
   readonly el: HTMLElement;
   readonly session: RunSession;
-  readonly recognizer = new GestureRecognizer();
+  readonly recognizer: GestureRecognizer;
+  private readonly freePointer: FreePointerController | null;
+  private readonly freePractice: boolean;
+  private readonly freeStrokes = new Map<number, { id: number; atUs: number }>();
+  private freeTarget: FreeTarget = 'common';
   private trails: HTMLCanvasElement;
   private hud: Record<string, HTMLElement> = {};
   private center = new CenterText();
@@ -590,8 +602,13 @@ class GameRun {
     readonly identity: RunIdentity,
     private view: GameView,
   ) {
+    const freestyle = identity.rulesVersion === FREE_RULES_VERSION;
+    this.freePractice = freestyle && identity.mode === 'practice';
+    this.recognizer = new GestureRecognizer({}, 1, !freestyle);
+    this.freePointer = freestyle ? new FreePointerController(undefined, true, false) : null;
+    if (freestyle) this.recorder = new ReplayRecorder(50);
     this.session = new RunSession(identity, getCourse(identity.courseId), DOGS[identity.dogId]);
-    this.recognizer.setViewport(window.innerWidth, window.innerHeight);
+    this.setInputViewport(window.innerWidth, window.innerHeight);
     this.trails = h('canvas', { class: 'trails', 'data-testid': 'surface' });
     const H = (k: string, el: HTMLElement) => (this.hud[k] = el);
     this.pauseCover = h(
@@ -603,7 +620,7 @@ class GameRun {
       h('button', { class: 'btn', 'data-testid': 'retire', onclick: () => this.retire() }, 'やめる'),
     );
     const isPractice = identity.mode === 'practice';
-    if (isPractice) {
+    if (isPractice && !freestyle) {
       this.coach = new PracticeCoach();
       const memory = app.practiceMemory;
       if (memory) {
@@ -637,6 +654,7 @@ class GameRun {
         H('debug', h('pre', { class: 'debug hidden' })),
       ),
       H('fade', h('div', { class: 'fade' })),
+      freestyle ? this.freeControls() : null,
       this.practicePanel,
       this.pauseCover,
     );
@@ -650,7 +668,29 @@ class GameRun {
   }
 
   private wallUs(): number {
-    return this.app.opts.autoplay || this.coach ? this.virtualWallUs : nowMs() * 1000;
+    return this.app.opts.autoplay || this.coach || this.freePractice ? this.virtualWallUs : nowMs() * 1000;
+  }
+
+  setInputViewport(width: number, height: number): void {
+    this.recognizer.setViewport(width, height);
+    this.freePointer?.setSurface(width, height);
+  }
+
+  private freeControls(): HTMLElement {
+    const targets = h('div', { class: 'free-run-targets', role: 'group', 'aria-label': '空中で回す対象' });
+    for (const [target, label] of [['common', '一緒'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
+      const button = h('button', { type: 'button', 'aria-pressed': String(target === this.freeTarget), 'data-testid': `run-target-${target}`, onclick: () => {
+        this.freeTarget = target;
+        for (const child of targets.children) child.setAttribute('aria-pressed', String(child === button));
+      } }, label);
+      targets.append(button);
+    }
+    this.hud.freeStatus = h('p', { class: 'free-run-hint' });
+    return h('div', { class: 'free-run-controls', 'data-testid': 'free-run-controls' }, this.hud.freeStatus, targets,
+      this.freePractice ? h('div', { class: 'free-run-lessons' },
+        h('button', { type: 'button', class: 'btn small', 'data-testid': 'legacy-practice', onclick: () => this.app.startRun('practice', RULES_VERSION) }, '基本操作のお手本'),
+        h('button', { type: 'button', class: 'btn small', 'data-testid': 'free-trick-guide', onclick: () => this.app.startTrickLab(null) }, '38技のお手本'),
+      ) : null);
   }
 
   start(): void {
@@ -669,6 +709,8 @@ class GameRun {
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
     this.stopPracticeDemo(false);
+    this.freePointer?.clear();
+    this.freeStrokes.clear();
     if (this.session.paused) this.app.sound.setPaused(false, nowMs());
   }
 
@@ -690,6 +732,20 @@ class GameRun {
       const r = el.getBoundingClientRect();
       return [e.clientX - r.left, e.clientY - r.top] as const;
     };
+    const moveFree = (e: PointerEvent, x: number, y: number, at: number, now: number) => {
+      const stroke = this.freeStrokes.get(e.pointerId);
+      if (!stroke || !this.freePointer) return;
+      const lag = Math.max(0, Math.min(100, now - e.timeStamp));
+      const atUs = Math.max(stroke.atUs, this.session.sim.simUs, Math.round(at - lag * (this.freePractice ? 500 : 1000)));
+      stroke.atUs = atUs;
+      const inputs = this.freePointer.move(e.pointerId, x, y, atUs);
+      if (!inputs.length) return;
+      const rotation: [number, number, number] = [0, 0, 0];
+      for (const input of inputs) {
+        for (const axis of [0, 1, 2] as const) rotation[axis] += input.rotation[axis];
+      }
+      this.submit([{ kind: 'freeRotate', atUs, strokeId: stroke.id, seq: inputs[inputs.length - 1].seq, rotation }]);
+    };
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (this.practiceDemo) return;
@@ -706,29 +762,44 @@ class GameRun {
         return;
       }
       const [x, y] = pos(e);
-      this.submit(this.recognizer.pointerDown(e.pointerId, x, y, at, nowMs()));
+      const [fact] = this.recognizer.pointerDown(e.pointerId, x, y, at, nowMs());
+      if (this.freePointer?.down(e.pointerId, x, y, this.freeTarget)) {
+        this.freeStrokes.set(e.pointerId, { id: fact.strokeId, atUs: at });
+        fact.freeTarget = this.freeTarget;
+      }
+      this.submit([fact]);
     });
     el.addEventListener('pointermove', (e) => {
       const at = this.session.runClockUs(this.wallUs());
       if (at === null) return;
-      const list = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
-      for (const ce of list.length ? list : [e]) {
+      const now = nowMs();
+      const list = e.getCoalescedEvents?.() ?? [];
+      const last = list[list.length - 1];
+      if (!last || last.clientX !== e.clientX || last.clientY !== e.clientY) list.push(e);
+      for (const ce of list) {
         const [x, y] = pos(ce);
         this.submit(this.recognizer.pointerMove(e.pointerId, x, y, at));
+        moveFree(ce, x, y, at, now);
       }
     });
     const end = (e: PointerEvent, cancelled: boolean) => {
-      const at = this.session.runClockUs(this.wallUs()) ?? this.session.sim.simUs;
+      const clock = this.session.runClockUs(this.wallUs());
+      const at = clock ?? this.session.sim.simUs;
       const [x, y] = pos(e);
+      if (!cancelled && clock !== null) moveFree(e, x, y, at, nowMs());
+      this.freePointer?.up(e.pointerId);
+      this.freeStrokes.delete(e.pointerId);
       this.submit(cancelled ? this.recognizer.pointerCancel(e.pointerId, at, nowMs()) : this.recognizer.pointerUp(e.pointerId, x, y, at, nowMs()));
       this.session.pointerUp(e.pointerId, this.wallUs());
       if (!this.session.paused) this.app.sound.setPaused(false, nowMs());
     };
     el.addEventListener('pointerup', (e) => end(e, false));
     el.addEventListener('pointercancel', (e) => end(e, true));
+    el.addEventListener('lostpointercapture', (e) => end(e, true));
     // 画面のほかの場所（一時停止の覆いなど）で離した指も数える。
     this.pauseCover.addEventListener('pointerdown', (e) => this.session.pointerDown(e.pointerId));
     this.pauseCover.addEventListener('pointerup', (e) => this.session.pointerUp(e.pointerId, this.wallUs()));
+    this.pauseCover.addEventListener('pointercancel', (e) => this.session.pointerUp(e.pointerId, this.wallUs()));
   }
 
   pauseFor(reason: 'manual' | 'hidden' | 'orientation'): void {
@@ -737,6 +808,8 @@ class GameRun {
       this.stopPracticeDemo(false);
     }
     this.session.pause(reason);
+    this.freePointer?.clear();
+    this.freeStrokes.clear();
     this.submit(this.recognizer.suspend(this.session.sim.simUs, nowMs()));
     this.app.sound.setPaused(true, nowMs());
     this.pauseCover.classList.remove('hidden');
@@ -801,8 +874,9 @@ class GameRun {
         if (this.session.phase === 'running') this.recorder.sample(sim);
       }
     } else {
-      if (this.coach) {
-        const rate = this.coach.done || this.session.phase !== 'running' ? 1 : practiceRate(this.coach.step.id);
+      if (this.coach || this.freePractice) {
+        const rate = this.session.phase !== 'running' ? 1 : this.freePractice ? 0.5 :
+          this.coach!.done ? 1 : practiceRate(this.coach!.step.id);
         this.virtualWallUs += dtMs * 1000 * rate;
       }
       events = this.session.update(this.wallUs());
@@ -838,6 +912,11 @@ class GameRun {
     );
     this.app.audio.update(this.app.sound.master(t), loops, t);
     this.view.frame(sim, renderUs, cues, this.app.settings, t, dtMs);
+    if (this.hud.freeStatus) {
+      const text = sim.freeLanding ? '着地を確認中' : sim.freeFlight ? '画面をなぞって回る。反対へ払うと減速' :
+        this.freePractice ? '上へ払ってジャンプ。指を離して置き直すと回転できます' : '上へ払ってジャンプ';
+      if (this.hud.freeStatus.textContent !== text) this.hud.freeStatus.textContent = text;
+    }
     this.updateHud(renderUs, t);
     this.drawTrails(t);
     if (sim.finished && sim.result && this.finishedAtMs === null) this.finishedAtMs = t;

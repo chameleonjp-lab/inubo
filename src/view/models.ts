@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { DogLook } from '../content/types';
+import { BOARD_PIVOT_Y, DOG_PIVOT_Y, DOG_SCALE, RIDER_SCALE, riderFootHeight } from '../game/free-flight';
 
 /**
  * 犬（＝スケートボード）と、背に乗る1人の乗り手。見た目だけの形で、当たり判定には使わない。
@@ -34,19 +35,12 @@ function mat(color: string, list: THREE.MeshStandardMaterial[]): THREE.MeshStand
   return m;
 }
 
-/** 回転の中心（体ごとの回転は、乗り手を含めた重心のあたりを中心にする）。 */
-export const BOARD_PIVOT_Y = 0.75;
-export const DOG_PIVOT_Y = 0.35;
-
 export function createRig(look: DogLook, clothes: string, helmet: string, ghost = false): Rig {
   const materials: THREE.MeshStandardMaterial[] = [];
   const root = new THREE.Group();
   const board = new THREE.Group();
   board.position.y = BOARD_PIVOT_Y;
   root.add(board);
-  // 見た目の縮尺（当たり判定には使わない）: 犬を少し大きく、乗り手を少し小さく描く。
-  const DOG_SCALE = 1.35;
-  const RIDER_SCALE = 0.72;
   const dog = new THREE.Group();
   // 縮尺を掛けても足先が地面（足元の中心）に来る高さに置く。
   dog.position.y = DOG_PIVOT_Y * DOG_SCALE - BOARD_PIVOT_Y;
@@ -147,7 +141,7 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
   // 乗り手（1人）。服とヘルメットの色だけを選べる。
   const rider = new THREE.Group();
   // 乗り手の足は犬の背中の上（体ごとの回転の中心からの高さ）。
-  rider.position.y = (legLen + look.bodyHeight) * DOG_SCALE - BOARD_PIVOT_Y;
+  rider.position.y = riderFootHeight(look) - BOARD_PIVOT_Y;
   rider.scale.setScalar(RIDER_SCALE);
   board.add(rider);
   const cloth = mat(clothes, materials);
@@ -221,6 +215,7 @@ export interface RigPose {
   blocked: boolean;
   timeMs: number;
   wag: boolean;
+  free?: boolean;
 }
 
 /** 走り方に合わせて脚と体を動かす（平地・上りは地面を蹴り、下りは足をたたんで滑る）。 */
@@ -233,7 +228,7 @@ export function animateRig(rig: Rig, p: RigPose, phase: number): void {
       a = Math.sin(phase + (i % 2 === 0 ? 0 : Math.PI) + (i < 2 ? 0 : Math.PI / 2)) * 0.7;
     } else if (p.mode === 'ground' && downhill) {
       a = i < 2 ? -1.1 : 1.1; // 足をたたんで滑る
-    } else if (p.mode === 'air') {
+    } else if (p.mode === 'air' && !p.free) {
       a = p.feetDown ? (i < 2 ? -0.5 : 0.5) : i < 2 ? -0.9 : 0.9; // 足が下を向くと四肢を広げる
     } else if (p.mode === 'rail') {
       a = i < 2 ? -0.6 : 0.6;
@@ -241,7 +236,7 @@ export function animateRig(rig: Rig, p: RigPose, phase: number): void {
       a = i < 2 ? -0.3 : 0.3; // 踏ん張る
     }
     leg.rotation.z = a;
-    leg.rotation.x = p.mode === 'air' && p.feetDown ? (i % 2 === 0 ? -0.25 : 0.25) : 0;
+    leg.rotation.x = p.mode === 'air' && p.feetDown && !p.free ? (i % 2 === 0 ? -0.25 : 0.25) : 0;
   });
   rig.tail.rotation.x = p.wag ? Math.sin(p.timeMs / 70) * 0.6 : Math.sin(p.timeMs / 400) * 0.1;
   const flutter = Math.min(1, p.speed / Math.max(1, p.maxSpeed));
@@ -249,9 +244,11 @@ export function animateRig(rig: Rig, p: RigPose, phase: number): void {
     e.rotation.z = -flutter * 0.5 + Math.sin(p.timeMs / 50 + i) * 0.08 * flutter;
   });
   // 乗り手: 上りは前かがみ、カーブは内側へ傾く、着地前は膝をゆるめる。
-  rig.rider.rotation.z = uphill ? -0.25 : downhill ? 0.05 : -0.08 * flutter;
-  rig.rider.rotation.x = -p.lean * 0.35;
+  if (!p.free) {
+    rig.rider.rotation.z = uphill ? -0.25 : downhill ? 0.05 : -0.08 * flutter;
+    rig.rider.rotation.x = -p.lean * 0.35;
+  }
   const knee = p.mode === 'air' && p.feetDown ? 0.35 : p.blocked ? 0.25 : 0.1;
-  rig.riderLegs.forEach((l, i) => (l.rotation.z = (i === 0 ? 1 : 1) * knee));
-  rig.riderArms.forEach((a, i) => (a.rotation.x = (i === 0 ? 1 : -1) * (0.5 + (p.mode === 'air' ? 0.6 : 0) + (p.blocked ? 0.4 : 0))));
+  rig.riderLegs.forEach(l => (l.rotation.z = p.free ? 0 : knee));
+  rig.riderArms.forEach((a, i) => (a.rotation.x = p.free ? 0 : (i === 0 ? 1 : -1) * (0.5 + (p.mode === 'air' ? 0.6 : 0) + (p.blocked ? 0.4 : 0))));
 }

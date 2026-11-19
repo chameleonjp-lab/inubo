@@ -2,7 +2,7 @@ import type { DogId, DogSpec } from './types';
 
 /**
  * 3種の犬。性能の違いは「直線の最高速」と「目標の横位置に届く速さ」の2つだけ（R32）。
- * ジャンプ・回転・接触判定の大きさ・技の配点は全犬種で共通（R35）。look は見た目専用。
+ * ジャンプ・回転の係数・技の配点は全犬種で共通。従来ルールは全犬種で足元の判定も共通。
  */
 export const DOGS: Record<DogId, DogSpec> = {
   shiba: {

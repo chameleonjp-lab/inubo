@@ -8,7 +8,7 @@ import { FreeScene } from '../view/free-scene';
 
 export function startFreeReview(root: HTMLElement): void {
   document.title = 'イヌボー｜慣性で自由操作';
-  const stage = h('div', { class: 'free-stage' });
+  const stage = h('div', { class: 'free-stage', 'data-testid': 'free-stage', 'aria-label': 'この画面をなぞって空中で回転' });
   const canvas = h('canvas', { 'aria-label': '犬と人の実際の姿勢', role: 'img' }); stage.append(canvas);
   const status = h('p', { class: 'free-status', role: 'status', 'data-testid': 'free-status' });
   const meter = h('output', { class: 'free-meter', 'data-testid': 'free-speed' });
@@ -18,8 +18,8 @@ export function startFreeReview(root: HTMLElement): void {
   const targets = h('div', { class: 'free-targets', role: 'group', 'aria-label': '回す対象' });
   let target: FreeTarget = 'common', arena = new FreeArena(), scenario: FreeScenario = 'flat';
   let paused = false, half = true, clockUs = 0, lastWall = performance.now(), clockAnchor = lastWall;
-  const pointer = new FreePointerController({ right: [0.8320502943, 0, -0.5547001962], up: [0, 1, 0], toward: [0.5547001962, 0, 0.8320502943] });
-  const trails = new Map<number, SVGPolylineElement>();
+  const pointer = new FreePointerController({ right: [0.8320502943, 0, -0.5547001962], up: [0, 1, 0], toward: [0.5547001962, 0, 0.8320502943] }, true);
+  const trails = new Map<number, SVGPolylineElement | null>();
   const clearPointers = () => { pointer.clear(); trails.clear(); svg.replaceChildren(); };
   const tickClock = (now: number) => {
     if (!paused && (arena.phase === 'air' || arena.phase === 'settling')) clockUs += Math.max(0, now - lastWall) * 1000 * (half ? 0.5 : 1);
@@ -40,7 +40,7 @@ export function startFreeReview(root: HTMLElement): void {
   const select = h('select', { 'aria-label': '確認する場所', onchange: () => {
     scenario = select.value as FreeScenario; scene.setScenario(scenario); retry.click();
   } }, ...([['flat', '平地'], ['wall', '壁あり'], ['rail', 'レールあり']] as const).map(([value, label]) => h('option', { value }, label)));
-  const details = h('details', {}, h('summary', {}, '遊び方と確認版の情報'), h('p', {}, 'ジャンプしてから下のパッドをなぞります。指を離しても回り続け、逆になぞると勢いを抑えられます。向きを自動では戻さないので、足から着地できるように調整してください。'), h('p', {}, '犬と人を別々に回せます。着地時に足が足置きから離れていると失敗します。点は接触までの動きから計算し、安定した着地の後に確定します。'), h('p', {}, '操作を試す最初の確認版です。レールは接触で停止します。つかむ操作・技名の照合・本コースへの接続は後続です。'), h('code', {}, `${FREE_RULES_VERSION} / interaction / ${__FREE_SOURCE__} / ${__FREE_BUILD__}`));
+  const details = h('details', {}, h('summary', {}, '遊び方と確認版の情報'), h('p', {}, '跳んだら、犬が映る画面か操作パッドをなぞります。指を離しても回り続け、逆になぞると勢いを抑えられます。足から着地できるように調整してください。'), h('p', {}, '犬と人を別々に回せます。着地時に足が足置きから離れていると失敗します。点は接触までの動きから計算し、安定した着地の後に確定します。'), h('p', {}, '壁やレールへの接触を試せる確認版です。レールは接触で止まります。'), h('code', {}, `${FREE_RULES_VERSION} / interaction / ${__FREE_SOURCE__} / ${__FREE_BUILD__}`));
   root.className = 'free-review'; root.replaceChildren(
     h('header', { class: 'free-header' }, h('div', {}, h('h1', {}, 'イヌボー 自由操作'), h('p', {}, '慣性で回して、着地を決めよう')), h('span', { class: 'free-badge' }, '操作確認版')),
     h('p', { class: 'free-note' }, '確認版の点は、本番の記録・ランキングに反映しません。'),
@@ -52,29 +52,44 @@ export function startFreeReview(root: HTMLElement): void {
   const resize = () => { const r = pad.getBoundingClientRect(); pointer.setSurface(r.width, r.height); clearPointers(); };
   resize();
   const coords = (e: PointerEvent) => { const r = pad.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top] as const; };
-  pad.addEventListener('pointerdown', e => {
-    if (paused || (arena.phase !== 'air' && arena.phase !== 'settling')) return;
-    const [x, y] = coords(e);
-    if (!pointer.down(e.pointerId, x, y, target)) return;
-    e.preventDefault(); pad.setPointerCapture(e.pointerId);
-    const line = document.createElementNS(svg.namespaceURI, 'polyline') as SVGPolylineElement;
-    line.setAttribute('points', `${x},${y}`); line.setAttribute('class', `trail-${target}`); svg.append(line); trails.set(e.pointerId, line);
-  });
-  pad.addEventListener('pointermove', e => {
+  const move = (e: PointerEvent) => {
     if (paused || !trails.has(e.pointerId)) return;
     e.preventDefault(); tickClock(performance.now());
     const samples = e.getCoalescedEvents?.() ?? [];
-    const inputs = (samples.length ? samples : [e]).flatMap(sample => {
+    const last = samples[samples.length - 1];
+    if (!last || last.clientX !== e.clientX || last.clientY !== e.clientY) samples.push(e);
+    const inputs = samples.flatMap(sample => {
       const [x, y] = coords(sample);
       const eventUs = clockUs + (sample.timeStamp - clockAnchor) * 1000 * (half ? 0.5 : 1);
       const atUs = Math.max(arena.motion.timeUs, Math.round(Math.min(clockUs, Math.max(0, eventUs))));
-      const line = trails.get(e.pointerId)!; line.setAttribute('points', `${line.getAttribute('points')} ${x},${y}`);
+      const line = trails.get(e.pointerId);
+      if (line) line.setAttribute('points', `${line.getAttribute('points')} ${x},${y}`);
       return pointer.move(e.pointerId, x, y, atUs);
     });
     arena.advance(Math.round(clockUs), inputs); update();
-  });
-  const release = (e: PointerEvent) => { pointer.up(e.pointerId); trails.get(e.pointerId)?.remove(); trails.delete(e.pointerId); };
-  pad.addEventListener('pointerup', release); pad.addEventListener('pointercancel', release); pad.addEventListener('lostpointercapture', release);
+  };
+  const release = (e: PointerEvent) => {
+    if (e.type === 'pointerup') move(e);
+    pointer.up(e.pointerId); trails.get(e.pointerId)?.remove(); trails.delete(e.pointerId);
+  };
+  for (const surface of [stage, pad]) {
+    surface.addEventListener('pointerdown', e => {
+      if (paused || (arena.phase !== 'air' && arena.phase !== 'settling')) return;
+      const [x, y] = coords(e);
+      if (!pointer.down(e.pointerId, x, y, target)) return;
+      e.preventDefault();
+      try { surface.setPointerCapture(e.pointerId); } catch { /* 捕捉できない場合も操作面内の入力は使う。 */ }
+      if (surface === pad) {
+        const line = document.createElementNS(svg.namespaceURI, 'polyline') as SVGPolylineElement;
+        line.setAttribute('points', `${x},${y}`); line.setAttribute('class', `trail-${target}`); svg.append(line);
+        trails.set(e.pointerId, line);
+      } else trails.set(e.pointerId, null);
+    });
+    surface.addEventListener('pointermove', move);
+    surface.addEventListener('pointerup', release);
+    surface.addEventListener('pointercancel', release);
+    surface.addEventListener('lostpointercapture', release);
+  }
   document.addEventListener('visibilitychange', () => { if (document.hidden) { sync(); setPause(true); } });
   window.addEventListener('blur', () => { sync(); setPause(true); });
   window.addEventListener('resize', () => { sync(); resize(); if (arena.phase !== 'ready') setPause(true); });
@@ -90,7 +105,7 @@ export function startFreeReview(root: HTMLElement): void {
     score.dataset.points = String(arena.result?.points ?? 0);
     status.textContent = paused ? '停止中 — 再開で続きから動きます' : arena.result ?
       (arena.result.landing === 'crash' ? `転倒・0点｜${arena.result.reason}` : `${arena.result.landing === 'clean' ? 'きれいな着地' : '着地成功'}｜${arena.result.label} ${arena.result.points}点`) :
-      arena.phase === 'air' ? '空中 — 指を離しても回り続けます' : arena.phase === 'settling' ? '着地を確認中…' : 'ジャンプしてから、下のパッドをなぞろう';
+      arena.phase === 'air' ? '空中 — 指を離しても回り続けます' : arena.phase === 'settling' ? '着地を確認中…' : 'ジャンプしてから、画面をなぞろう';
     pause.textContent = paused ? '再開' : '一時停止';
     jump.disabled = high.disabled = paused || arena.phase === 'air' || arena.phase === 'done';
     pad.dataset.active = String(!paused && (arena.phase === 'air' || arena.phase === 'settling'));

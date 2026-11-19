@@ -1,6 +1,9 @@
 import type { CourseId, DogId, DogSpec } from '../content/types';
 import type { CourseRt } from './track';
 import type { Candidate, TrickResolution } from './tricks';
+import type { FreeTarget } from './free-motion';
+import type { CourseFlight, CourseLanding } from './free-flight';
+import type { Vec3 } from './math';
 
 export type RunMode = 'competition' | 'practice';
 
@@ -23,7 +26,8 @@ export interface RunIdentity {
 
 /** 指の操作から作る入力。時刻は走行時計の整数マイクロ秒。 */
 export type GestureFact =
-  | { kind: 'down'; atUs: number; strokeId: number }
+  | { kind: 'down'; atUs: number; strokeId: number; freeTarget?: FreeTarget }
+  | { kind: 'freeRotate'; atUs: number; strokeId: number; seq: number; rotation: Vec3 }
   | { kind: 'steer'; atUs: number; strokeId: number; dx: number }
   | { kind: 'forward'; atUs: number; strokeId: number }
   | { kind: 'circle'; atUs: number; strokeId: number; vertical: boolean; clockwise: boolean; aspect: number }
@@ -48,6 +52,7 @@ export interface StrokeRec {
   baseTargetX: number;
   consumed: boolean;
   candidates: Candidate[];
+  freeTarget?: FreeTarget;
 }
 
 export interface JumpRec {
@@ -242,6 +247,8 @@ export interface SimState {
   guide: { active: boolean; forkId: string | null };
   jump: JumpRec | null;
   jumpCounter: number;
+  freeFlight: CourseFlight | null;
+  freeLanding: CourseLanding | null;
   rail: RailGrind | null;
   pendingRail: PendingRail | null;
   railsCompleted: string[];

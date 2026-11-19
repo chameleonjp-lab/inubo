@@ -20,7 +20,9 @@ import {
 import { extrapolate } from '../game/run';
 import { maxSpeed } from '../game/motion';
 import { foodActive, poopActive } from '../game/items';
-import { quatAxisAngle } from '../game/math';
+import { length, quatAxisAngle, quatRotate } from '../game/math';
+import { add3 } from '../game/free-math';
+import { BOARD_PIVOT_Y, DOG_PIVOT_Y, DOG_SCALE, RIDER_HIP_Y, riderFootHeight } from '../game/free-flight';
 import { FollowCamera } from './camera';
 import { animateRig, createRig, type Rig } from './models';
 import { poseOf, replayPoseAt, type Pose, type ReplayData } from './replay';
@@ -694,7 +696,7 @@ export class GameView {
     const speed = run.finished ? 0 : run.forwardSpeed;
     this.legPhase += dt * (3 + speed * 1.6);
     const feetDown = run.mode === 'air' && run.vy < 0 && (run.jump?.resolution.rotations ?? []).every((r) => renderUs >= r.startUs + r.durUs);
-    animateRig(this.rig, { mode: run.mode, speed, maxSpeed: maxSpeed(run), grade, lean: run.lateralSpeed / 4.5, feetDown, blocked: !!run.blocked, timeMs: nowMs, wag: wag || nowMs < this.wagUntil }, this.legPhase);
+    animateRig(this.rig, { mode: run.mode, speed, maxSpeed: maxSpeed(run), grade, lean: run.lateralSpeed / 4.5, feetDown, blocked: !!run.blocked, timeMs: nowMs, wag: wag || nowMs < this.wagUntil, free: !!pose.free }, this.legPhase);
     this.rig.root.visible = run.mode !== 'falling' || nowMs % 200 < 100;
 
     // 影: 犬の真下。着地が近いほど濃く、小さくする（R62）。
@@ -708,8 +710,9 @@ export class GameView {
 
     // 犬だけの回転は足先の線、体ごとの回転には肩の線を加える（R63）。
     const rots = run.jump?.resolution.rotations ?? [];
-    const dogSpinning = rots.some((r) => r.channel === 'dog' && renderUs >= r.startUs && renderUs < r.startUs + r.durUs);
-    const bodySpinning = rots.some((r) => r.channel === 'body' && renderUs >= r.startUs && renderUs < r.startUs + r.durUs);
+    const omega = run.freeFlight?.motion.omega;
+    const dogSpinning = omega ? length(add3(omega.common, omega.dog)) > 0.3 : rots.some((r) => r.channel === 'dog' && renderUs >= r.startUs && renderUs < r.startUs + r.durUs);
+    const bodySpinning = omega ? length(add3(omega.common, omega.rider)) > 0.3 : rots.some((r) => r.channel === 'body' && renderUs >= r.startUs && renderUs < r.startUs + r.durUs);
     this.rig.root.updateMatrixWorld(true);
     if (dogSpinning) this.dogTrail.push(this.rig.paw.getWorldPosition(new THREE.Vector3()));
     else this.dogTrail.fade();
@@ -838,13 +841,27 @@ export class GameView {
 
     this.particles.update(dt);
     this.prints.update(nowMs, 2600);
-    this.cam.update(path, ex.s, ex.x, ex.y, dtMs, settings.shake);
+    this.cam.update(path, ex.s, ex.x, ex.y, dtMs, settings.shake, run.freeFlight?.heading);
     this.sun.intensity = 1.2 + 0.4 * lightK;
     this.renderer.render(this.scene, this.cam.camera);
   }
 
   private placeRig(rig: Rig, pose: Pose): void {
     rig.root.position.set(pose.x, pose.y, pose.z);
+    if (pose.free) {
+      const { dog, rider } = pose.free;
+      const hipOffset = quatRotate(rider.q, [0, RIDER_HIP_Y, 0]);
+      rig.root.quaternion.identity();
+      rig.board.quaternion.identity();
+      rig.dog.position.set(dog.p[0], dog.p[1] - BOARD_PIVOT_Y, dog.p[2]);
+      rig.dog.quaternion.set(...dog.q);
+      rig.rider.position.set(rider.p[0] - hipOffset[0], rider.p[1] - hipOffset[1] - BOARD_PIVOT_Y, rider.p[2] - hipOffset[2]);
+      rig.rider.quaternion.set(...rider.q);
+      return;
+    }
+    rig.dog.position.set(0, DOG_PIVOT_Y * DOG_SCALE - BOARD_PIVOT_Y, 0);
+    rig.rider.position.set(0, riderFootHeight(rig.look) - BOARD_PIVOT_Y, 0);
+    rig.rider.quaternion.identity();
     // 向き（道の接線）→ 体ごとの回転（基本姿勢を含む）→ 犬だけの回転、の順に重ねる。
     const yaw = quatAxisAngle([0, 1, 0], -pose.heading);
     rig.root.quaternion.set(yaw[0], yaw[1], yaw[2], yaw[3]);

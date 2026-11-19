@@ -32,7 +32,7 @@ type LabWindow = Window & {
 async function openLab(page: Page, lessonId: string) {
   await page.goto('/');
   await page.getByTestId('practice').click();
-  await page.getByTestId('trick-lab').click();
+  await page.getByTestId('free-trick-guide').click();
   await expect(page.getByTestId('trick-lab')).toBeVisible();
   await page.selectOption('[data-testid="lab-lesson"]', lessonId);
 }
@@ -246,6 +246,7 @@ test('お手本は別の試行で再生し、ボタンを強調する。プレ�
 test('練習広場へ戻ると直前の段階に戻り、競技の記録・送信待ちに変化がない', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('practice').click();
+  await page.getByTestId('legacy-practice').click();
   await page.getByTestId('practice-next').click();
   await page.getByTestId('practice-next').click();
   await expect(page.getByTestId('practice-title')).toHaveText('3. 犬だけを回す（円）');

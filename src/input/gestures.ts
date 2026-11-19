@@ -126,7 +126,7 @@ export class GestureRecognizer {
   /** 試験時だけ見る、入力の長さ・判定名。 */
   debugLog: string[] = [];
 
-  constructor(cfg: Partial<GestureConfig> = {}, firstStrokeId = 1) {
+  constructor(cfg: Partial<GestureConfig> = {}, firstStrokeId = 1, private readonly classifyTricks = true) {
     this.cfg = { ...DEFAULT_GESTURE, ...cfg };
     this.nextId = firstStrokeId;
   }
@@ -140,7 +140,7 @@ export class GestureRecognizer {
     return this.strokes.size;
   }
 
-  pointerDown(pointerId: number, px: number, py: number, atUs: number, nowMs = 0): GestureFact[] {
+  pointerDown(pointerId: number, px: number, py: number, atUs: number, nowMs = 0): [Extract<GestureFact, { kind: 'down' }>] {
     this.dead.delete(pointerId);
     const st: Stroke = {
       strokeId: this.nextId++,
@@ -181,7 +181,7 @@ export class GestureRecognizer {
     if (!st.steering && Math.abs(dx) >= this.cfg.steerDead && Math.abs(dx) >= 0.75 * Math.abs(dy)) st.steering = true;
     if (st.steering) out.push({ kind: 'steer', atUs: p.tUs, strokeId: st.strokeId, dx });
 
-    const circle = this.detectCircle(st);
+    const circle = this.classifyTricks ? this.detectCircle(st) : null;
     if (circle) {
       out.push(circle);
       if (tr) {
@@ -230,12 +230,12 @@ export class GestureRecognizer {
     const chord = Math.hypot(b.x - a.x, b.y - a.y);
     const segLen = polyLength(seg);
     const tr = this.trails.find((t) => t.strokeId === st.strokeId);
-    if (chord >= this.cfg.lineMin && segLen > 0 && chord / segLen >= this.cfg.lineStraightness) {
+    if (this.classifyTricks && chord >= this.cfg.lineMin && segLen > 0 && chord / segLen >= this.cfg.lineStraightness) {
       const dir8 = dir8FromVector(b.x - a.x, b.y - a.y);
       out.push({ kind: 'line', atUs: tEnd, strokeId: st.strokeId, dir8, afterCircle: st.circles > 0 });
       this.debugLog.push(`線 方向${dir8} 長さ${chord.toFixed(2)}${st.circles > 0 ? '（円の後）' : ''}`);
       if (tr) tr.label = tr.label ? `${tr.label}＋線` : '線';
-    } else if (st.circles === 0) {
+    } else if (this.classifyTricks && st.circles === 0) {
       const reason = st.pathLen < this.cfg.tapMax ? 'short' : bbox(st.samples).w + bbox(st.samples).h < this.cfg.circleMinSize ? 'small' : 'open';
       out.push({ kind: 'reject', atUs: tEnd, strokeId: st.strokeId, reason });
       this.debugLog.push(`未成立 ${reason} 長さ${st.pathLen.toFixed(2)}`);

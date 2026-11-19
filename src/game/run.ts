@@ -15,6 +15,7 @@ import { createEffects, nextEffectEnd, stepPoop, takeFood } from './items';
 import {
   currentPath,
   forwardSpeedAt,
+  offRoad,
   pointAt,
   segmentMotion,
   setTarget,
@@ -24,7 +25,10 @@ import {
   type SegmentMotion,
 } from './motion';
 import { blocksAt, findContacts, insideExpanded, orderContacts, sMmOf, type Contact } from './contacts';
-import { breakStreak, createScore, exitSection, finishRun, settleLanding } from './scoring';
+import { breakStreak, createScore, exitSection, finishRun, settleLanding, type LandingContact } from './scoring';
+import { advanceCourseFlight, applyCourseRotation, gradeCourseLanding, launchCourseFlight,
+  stabilizeCourseLanding, supportCourseFlight, type CourseAirHit } from './free-flight';
+import { FREE_RULES_VERSION } from './free-motion';
 import { leaveRail, loseRail, mountRail } from './rails';
 import { resolveTricks, type TrickResolution } from './tricks';
 import {
@@ -32,9 +36,13 @@ import {
   gatePhase,
   railGrade,
   railTopAt,
+  sampleAt,
+  sectionAt,
   supportGrade,
   supportHeight,
+  worldXZ,
   type CourseRt,
+  type SectionRt,
 } from './track';
 import type { DogSpec } from '../content/types';
 import type { GestureFact, JumpRec, RunIdentity, SimEvent, SimState, StrokeRec } from './types';
@@ -82,6 +90,8 @@ export function createRun(identity: RunIdentity, course: CourseRt, dog: DogSpec)
     guide: { active: false, forkId: null },
     jump: null,
     jumpCounter: 0,
+    freeFlight: null,
+    freeLanding: null,
     rail: null,
     pendingRail: null,
     railsCompleted: [],
@@ -156,7 +166,7 @@ function tickStart(run: SimState, t0: number, emit: Emit): void {
   if (run.mode === 'falling') return;
   const p = currentPath(run);
   updateBaseSpeed(run, TICK_US);
-  updateAttitude(run, TICK_US);
+  if (!run.freeFlight) updateAttitude(run, TICK_US);
   if (run.mode !== 'rail') setTarget(run, run.targetX);
 
   // 塞がっていた前方が開いたら、その瞬間に自動で再発進する。
@@ -225,6 +235,13 @@ function moveSegment(run: SimState, ta: number, tb: number, emit: Emit): void {
       continue;
     }
     let te = tb;
+    const pending = run.freeLanding;
+    if (pending) {
+      for (const delay of [40_000, 150_000]) {
+        const boundary = pending.contact.atUs + delay;
+        if (boundary > t) te = Math.min(te, boundary);
+      }
+    }
     const eff = nextEffectEnd(run.effects, t, te);
     if (eff !== null) te = eff;
     const m = segmentMotion(run, t);
@@ -236,15 +253,27 @@ function moveSegment(run: SimState, ta: number, tb: number, emit: Emit): void {
       break;
     }
     const found = findContacts(run, m, span);
-    const tau = found ? found.tau : span;
+    const nominal = found?.tau ?? span;
+    const impact = advanceCourseFlight(run, m, t + nominal);
+    const tau = impact ? impact.atUs - t : nominal;
     applyMotion(run, m, tau, t + tau);
     t += tau;
-    if (found) {
+    const contacts = found?.tau === tau ? found.contacts : [];
+    if (pending) {
+      const p = currentPath(run);
+      const staysSupported = !run.blocked && !contacts.some(c => c.type === 'solid' || c.type === 'ledge' || c.type === 'dropOff' || c.type === 'fallDepth');
+      const pitch = Math.atan(surfaceGradeAt(run));
+      const progress = staysSupported ? stabilizeCourseLanding(pending, sampleAt(p, run.s).heading, pitch, t,
+        Math.hypot(m.dsdt, m.latV) * tau / 1e6) : 'failed';
+      if (progress !== 'pending') finishCourseLanding(run, t, emit, progress === 'failed');
+    }
+    if (impact) handleCourseImpact(run, impact, t, emit);
+    if (contacts.length) {
       // 動き方を変える接触（跳ぶ・着く・止まる・落ちる）のあとは、同じ時刻に見つけた残りの接触のうち
       // 位置だけで決まるもの（区間・復帰地点・取得・道の終わり・ゴール）だけを処理する。
       const modeBefore = run.mode;
-      let changed = false;
-      for (const c of found.contacts) {
+      let changed = !!impact;
+      for (const c of contacts) {
         if (run.finished) break;
         if (changed && !POSITION_ONLY.has(c.type)) continue;
         processContact(run, c, t, emit);
@@ -294,11 +323,87 @@ function onKicker(run: SimState): boolean {
 }
 
 function takeoff(run: SimState, t: number, kind: JumpRec['kind'], vy: number, emit: Emit, fromRail: string | null = null, viaSwipe = false): void {
+  if (run.id.rulesVersion === FREE_RULES_VERSION) {
+    const previous = run.freeLanding?.flight.motion;
+    finishCourseLanding(run, t, emit, true);
+    const heading = sampleAt(currentPath(run), run.s).heading;
+    run.freeFlight = launchCourseFlight(run.dog.look, heading, run.basePitch, t, previous);
+  }
   run.jumpCounter += 1;
   run.jump = { jumpId: run.jumpCounter, takeoffUs: t, kind, fromRail, strokes: [], resolution: EMPTY_RESOLUTION };
   run.mode = 'air';
   run.vy = vy;
   if (kind !== 'drop') emit('jump', t, { jumpId: run.jumpCounter, kind, ...(viaSwipe ? { viaSwipe } : {}) });
+}
+
+function recordSectionExit(run: SimState, section: SectionRt, atUs: number, emit: Emit): void {
+  run.exitedSection = { key: section.key, atUs };
+  const landing = run.freeLanding;
+  if (landing?.opp === section.opp) landing.exits.push({ section, atUs });
+  else exitSection(run.score, section, atUs, emit);
+}
+
+function finishCourseLanding(run: SimState, atUs: number, emit: Emit, unsafe: boolean): void {
+  const landing = run.freeLanding;
+  if (!landing) return;
+  run.freeLanding = null;
+  const score = unsafe ? { ...landing.score, points: 0, tenths: 0 as const } : landing.score;
+  settleLanding(run, { ...landing.contact, atUs }, emit, { jump: landing.jump, score });
+  // 採点先は最初の接地地点で固定する。接地後に同じ区間を抜けても先に失敗扱いにしない。
+  for (const exit of landing.exits) exitSection(run.score, exit.section, exit.atUs, emit);
+}
+
+function closeAirborneJump(run: SimState, contact: LandingContact, emit: Emit, hit?: CourseAirHit, shift: [number, number, number] = [0, 0, 0]): boolean {
+  const { freeFlight: flight, jump } = run;
+  run.freeFlight = null;
+  if (!flight || !jump || !flight.controlled) {
+    settleLanding(run, contact, emit);
+    return true;
+  }
+  const p = currentPath(run);
+  const heading = hit?.heading ?? sampleAt(p, run.s).heading;
+  const score = gradeCourseLanding(flight, heading, contact.surfacePitch, hit?.supportsPaw ?? true);
+  if (score.tenths === 0) {
+    settleLanding(run, contact, emit, { jump, score });
+    return false;
+  }
+  const opp = sectionAt(p, contact.sMm)?.opp ?? null;
+  supportCourseFlight(flight, shift, heading, contact.surfacePitch, contact.atUs);
+  run.freeLanding = { flight, jump, contact, score, opp, travel: 0, exits: [] };
+  return true;
+}
+
+function handleCourseImpact(run: SimState, hit: CourseAirHit, t: number, emit: Emit): void {
+  const p = currentPath(run);
+  const rail = hit.rail;
+  const readyS = rail ? Math.max(rail.s0, Math.min(run.s, rail.s1)) : run.s;
+  const [oldX, oldZ] = worldXZ(p, run.s, run.x);
+  const [newX, newZ] = worldXZ(p, readyS, rail?.x ?? run.x);
+  const safe = closeAirborneJump(run, { atUs: t, pathId: p.id, sMm: sMmOf(run.s), surfacePitch: hit.pitch, onRail: rail?.id ?? null }, emit,
+    hit, [oldX - newX, run.y - hit.supportY, oldZ - newZ]);
+  run.jump = null;
+  if (hit.obstacle) {
+    const so = hit.obstacle;
+    const side = run.x < so.x0 ? 1 : run.x > so.x1 ? -1 : 0;
+    const face = side === 0 ? 'front' : 'side';
+    run.blocked = { solidId: so.id, face, side, sinceUs: t };
+    run.baseSpeed = 0;
+    emitCollide(run, so.id, face, t, emit);
+    return;
+  }
+  if (!safe && (rail || offRoad(p, run.s, run.x))) {
+    startFall(run, t, emit);
+    return;
+  }
+  run.s = readyS;
+  run.y = rail ? railTopAt(rail, readyS) : hit.supportY;
+  run.vy = 0;
+  run.basePitch = hit.pitch;
+  if (rail) mountRail(run, rail, t, sMmOf(run.s), emit);
+  else {
+    run.mode = 'ground';
+    landedInsideCheck(run, t);
+  }
 }
 
 function landedInsideCheck(run: SimState, t: number): void {
@@ -324,11 +429,11 @@ function processContact(run: SimState, c: Contact, t: number, emit: Emit): void 
   const p = currentPath(run);
   switch (c.type) {
     case 'sectionEnd':
-      run.exitedSection = { key: c.section.key, atUs: t };
-      exitSection(run.score, c.section, t, emit);
+      recordSectionExit(run, c.section, t, emit);
       break;
     case 'goal':
       if (!run.finished) {
+        finishCourseLanding(run, t, emit, true);
         run.finished = true;
         run.result = finishRun(run, t);
         emit('goal', t, { recordCs: run.result.recordCs, total: run.result.total });
@@ -378,7 +483,7 @@ function processContact(run: SimState, c: Contact, t: number, emit: Emit): void 
       const r = c.rail;
       run.s = Math.max(run.s, r.s0);
       run.y = railTopAt(r, run.s);
-      settleLanding(run, { atUs: t, pathId: p.id, sMm: sMmOf(run.s), surfacePitch: Math.atan(railGrade(r)), onRail: r.id }, emit);
+      closeAirborneJump(run, { atUs: t, pathId: p.id, sMm: sMmOf(run.s), surfacePitch: Math.atan(railGrade(r)), onRail: r.id }, emit);
       run.jump = null;
       mountRail(run, r, t, sMmOf(run.s), emit);
       run.basePitch = Math.atan(railGrade(r));
@@ -388,7 +493,7 @@ function processContact(run: SimState, c: Contact, t: number, emit: Emit): void 
       const sup = supportHeight(p, run.s, run.x, run.y, t);
       run.y = sup;
       const pitch = Math.atan(supportGrade(p, run.s, run.x, run.y, t));
-      if (run.jump) settleLanding(run, { atUs: t, pathId: p.id, sMm: sMmOf(run.s), surfacePitch: pitch, onRail: null }, emit);
+      if (run.jump) closeAirborneJump(run, { atUs: t, pathId: p.id, sMm: sMmOf(run.s), surfacePitch: pitch, onRail: null }, emit);
       run.jump = null;
       run.mode = 'ground';
       run.vy = 0;
@@ -421,6 +526,8 @@ export function forceFall(run: SimState, t: number): SimEvent[] {
 }
 
 function startFall(run: SimState, t: number, emit: Emit): void {
+  finishCourseLanding(run, t, emit, true);
+  run.freeFlight = null;
   run.mode = 'falling';
   run.fallUntilUs = t + FALL_US;
   if (run.rail) {
@@ -476,8 +583,7 @@ function transition(run: SimState, t: number, emit: Emit): void {
   // 道の最後の採点区間を、まだ抜けていなければここで抜ける。
   const last = p.sections[p.sections.length - 1];
   if (last && !(run.exitedSection && run.exitedSection.key === last.key && t - run.exitedSection.atUs < 100_000)) {
-    run.exitedSection = { key: last.key, atUs: t };
-    exitSection(run.score, last, t, emit);
+    recordSectionExit(run, last, t, emit);
   }
   const np = run.course.paths.get(toId)!;
   const dx = p.offEnd - np.offStart;
@@ -538,14 +644,31 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
     };
     run.strokes[f.strokeId] = rec;
     if (tag === 'air' && run.jump) {
-      run.jump.strokes.push(f.strokeId);
-      resolveCurrentJump(run, atUs, emit);
+      if (run.freeFlight) {
+        const target = f.freeTarget;
+        const occupied = run.jump.strokes.some(id => {
+          const other = run.strokes[id];
+          return other.upUs === null && (other.freeTarget === target || other.freeTarget === 'common' || target === 'common');
+        });
+        if (target && !occupied) {
+          rec.freeTarget = target;
+          run.jump.strokes.push(f.strokeId);
+        }
+      } else {
+        run.jump.strokes.push(f.strokeId);
+        resolveCurrentJump(run, atUs, emit);
+      }
     }
     return;
   }
   const rec = run.strokes[f.strokeId];
   if (!rec) return;
   switch (f.kind) {
+    case 'freeRotate':
+      if (run.freeFlight && run.jump?.jumpId === rec.jumpId && rec.freeTarget && rec.upUs === null) {
+        applyCourseRotation(run.freeFlight, atUs, f.seq, rec.freeTarget, f.rotation);
+      }
+      break;
     case 'steer':
       if (rec.tag === 'ground' && !rec.consumed && run.mode !== 'rail' && run.mode !== 'falling') setTarget(run, rec.baseTargetX + f.dx * STEER_GAIN);
       break;
@@ -563,7 +686,7 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
       break;
     case 'circle':
     case 'line':
-      if (rec.tag !== 'air' || !run.jump || rec.jumpId !== run.jump.jumpId || rec.upUs !== null) break;
+      if (run.freeFlight || rec.tag !== 'air' || !run.jump || rec.jumpId !== run.jump.jumpId || rec.upUs !== null) break;
       if (f.kind === 'circle') rec.candidates.push({ kind: 'dog', strokeId: f.strokeId, establishedUs: atUs, vertical: f.vertical, clockwise: f.clockwise });
       else rec.candidates.push({ kind: 'body', strokeId: f.strokeId, establishedUs: atUs, dir8: f.dir8, afterCircle: f.afterCircle });
       resolveCurrentJump(run, atUs, emit);
@@ -575,7 +698,7 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
       if (rec.upUs !== null) break;
       rec.upUs = atUs;
       rec.cancelled = f.cancelled;
-      if (rec.tag === 'air' && run.jump && rec.jumpId === run.jump.jumpId) resolveCurrentJump(run, atUs, emit);
+      if (!run.freeFlight && rec.tag === 'air' && run.jump && rec.jumpId === run.jump.jumpId) resolveCurrentJump(run, atUs, emit);
       break;
   }
 }
@@ -712,6 +835,14 @@ export class RunSession {
       this.paused = true;
       // 描きかけの指は捨てる。計算済みの状態（物理・確定済みの角度）はそのまま保持する。
       this.pending = this.pending.filter((f) => f.kind === 'up').map((f) => ({ ...f, atUs: this.sim.simUs, cancelled: true }));
+      if (this.sim.id.rulesVersion === FREE_RULES_VERSION) {
+        this.sim.inputQueue.length = 0;
+        for (const stroke of Object.values(this.sim.strokes)) {
+          if (stroke.upUs !== null) continue;
+          stroke.upUs = this.sim.simUs;
+          stroke.cancelled = true;
+        }
+      }
       this.sessionEvent('pause', { reason });
     }
   }

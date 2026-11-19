@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
-async function swipe(page: Page, from: number, to: number): Promise<void> {
-  const r = (await page.getByTestId('free-pad').boundingBox())!;
+async function swipe(page: Page, from: number, to: number, surface = 'free-pad'): Promise<void> {
+  const r = (await page.getByTestId(surface).boundingBox())!;
   const x = r.x + r.width / 2, y = r.y + r.height / 2;
   await page.mouse.move(x + from, y); await page.mouse.down();
   await page.mouse.move(x + to, y, { steps: 6 }); await page.mouse.up();
@@ -31,7 +31,7 @@ test('生のスワイプ・指離しの慣性・逆入力・停止再開・未�
 
 test('犬だけの操作・取消・画面回転で勢いを混ぜず、402×700と700×402に収まる', async ({ page }) => {
   await page.goto('/'); await page.getByTestId('target-dog').click(); await page.getByTestId('free-high').click();
-  await swipe(page, -10, 10);
+  await swipe(page, -10, 10, 'free-stage');
   expect(Number(await page.getByTestId('free-speed').getAttribute('data-dog'))).toBeGreaterThan(10);
   expect(await commonSpeed(page)).toBe(0); expect(Number(await page.getByTestId('free-speed').getAttribute('data-rider'))).toBe(0);
   for (const viewport of [{ width: 402, height: 700 }, { width: 700, height: 402 }]) {
