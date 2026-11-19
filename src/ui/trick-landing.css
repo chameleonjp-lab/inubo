@@ -1,0 +1,72 @@
+.trick-landing-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 3px #0c1819;
+  -webkit-text-stroke: 0;
+  border-radius: 9px;
+  background: #102423ed;
+}
+.trick-landing-name {
+  font-weight: 850;
+  font-size: clamp(16px, 4vw, 23px);
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.trick-landing-score {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.trick-landing-full {
+  padding: 1px 7px;
+  border: 1px solid #efc95e;
+  border-radius: 999px;
+  color: #fff6c2;
+}
+[data-trick-tier='2'] .trick-landing-card { color: #c7f8ff; box-shadow: inset 0 -1px #68ddea; }
+[data-trick-tier='3'] .trick-landing-card { color: #e4f7ff; text-shadow: 0 0 8px #2698ff; }
+[data-trick-tier='3'] .trick-landing-score { color: #c7ebff; }
+[data-trick-tier='4'] .trick-landing-card { color: #fff1a3; box-shadow: inset 0 -1px #f5c856; }
+[data-trick-tier='4'] .trick-landing-name { text-shadow: 0 0 8px #b96b1e; }
+[data-trick-tier='4'] .trick-landing-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 6%;
+  width: 22%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #fff4a1, transparent);
+  animation: trick-landing-sweep 160ms ease-out both;
+}
+[data-trick-tier='5'] .trick-landing-card {
+  color: #fff3b9;
+  border-block: 1px solid #d7af62;
+  box-shadow: inset 0 0 12px #73159597, 0 0 12px #edb94578;
+  background: #272232f5;
+}
+[data-trick-tier='5'] .trick-landing-name {
+  -webkit-text-stroke: .55px #814576;
+  text-shadow: 0 0 8px #e38f56;
+}
+[data-trick-tier='5'] .trick-landing-score { font-size: 20px; color: #fff5bf; }
+[data-paused='true'] .trick-landing-card::after { animation-play-state: paused; }
+@keyframes trick-landing-sweep {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(300%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-trick-tier='4'] .trick-landing-card::after { animation: none; display: none; }
+  .center-text:has(.trick-landing-card) { transition: none; transform: none; }
+}

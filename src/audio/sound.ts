@@ -132,6 +132,20 @@ const TONES: Record<string, Tone[]> = {
   confirm: [{ f: 1046, t: 0, d: 0.08 }],
   landSoft: [{ f: 180, t: 0, d: 0.08, type: 'triangle' }],
   landPerfect: [{ f: 1046, t: 0, d: 0.12 }, { f: 1568, t: 0.08, d: 0.16 }],
+  trickLandingTap: [{ f: 330, t: 0, d: 0.09, type: 'triangle', g: 0.54 }],
+  trickLandingChime: [{ f: 523, t: 0, d: 0.09, g: 0.53 }, { f: 784, t: 0.065, d: 0.13, g: 0.48 }],
+  trickLandingRise: [
+    { f: 523, t: 0, d: 0.1, g: 0.54 }, { f: 659, t: 0.065, d: 0.12, g: 0.49 }, { f: 1047, t: 0.13, d: 0.16, g: 0.43 },
+  ],
+  trickLandingChord: [
+    { f: 392, t: 0, d: 0.12, type: 'triangle', g: 0.5 }, { f: 523, t: 0.055, d: 0.11, g: 0.42 },
+    { f: 784, t: 0.13, d: 0.22, g: 0.32 }, { f: 1047, t: 0.13, d: 0.24, g: 0.27 }, { f: 1319, t: 0.13, d: 0.25, g: 0.2 },
+  ],
+  trickLandingFinale: [
+    { f: 262, t: 0, d: 0.19, type: 'triangle', g: 0.5 }, { f: 523, t: 0.045, d: 0.12, g: 0.37 },
+    { f: 659, t: 0.095, d: 0.12, g: 0.39 }, { f: 784, t: 0.145, d: 0.14, g: 0.4 },
+    { f: 1047, t: 0.21, d: 0.3, g: 0.29 }, { f: 1319, t: 0.21, d: 0.28, g: 0.23 }, { f: 1568, t: 0.21, d: 0.24, g: 0.17 },
+  ],
   landBad: [{ f: 110, t: 0, d: 0.14, type: 'square', g: 0.4 }],
   recover: [{ f: 260, t: 0, d: 0.06, type: 'triangle' }, { f: 330, t: 0.06, d: 0.06, type: 'triangle' }],
   thud: [{ f: 90, t: 0, d: 0.12, type: 'square', g: 0.6 }],
@@ -176,6 +190,7 @@ export class AudioEngine {
   private grindOsc: OscillatorNode | null = null;
   private grindGain: GainNode | null = null;
   private nextStepMs = 0;
+  private trickLandingNotes = new Set<OscillatorNode>();
 
   /** 最初の操作・再開の操作の中で呼ぶ（ブラウザはユーザー操作から音を開始できる）。 */
   unlock(): void {
@@ -199,6 +214,11 @@ export class AudioEngine {
     }
   }
 
+  stopTrickLanding(): void {
+    for (const osc of this.trickLandingNotes) osc.stop();
+    this.trickLandingNotes.clear();
+  }
+
   suspend(): void {
     try {
       if (this.ctx && this.ctx.state === 'running') void this.ctx.suspend();
@@ -213,6 +233,8 @@ export class AudioEngine {
     const tones = TONES[cmd.name];
     if (!tones) return;
     const now = ctx.currentTime;
+    const isTrickLanding = cmd.name.startsWith('trickLanding');
+    if (isTrickLanding) this.stopTrickLanding();
     const list = cmd.reverse ? tones.slice().reverse().map((t, i, arr) => ({ ...t, t: arr[arr.length - 1 - i].t })) : tones;
     for (const t of list) {
       const osc = ctx.createOscillator();
@@ -226,6 +248,10 @@ export class AudioEngine {
       osc.connect(g).connect(this.master);
       osc.start(now + t.t);
       osc.stop(now + t.t + t.d + 0.02);
+      if (isTrickLanding) {
+        this.trickLandingNotes.add(osc);
+        osc.onended = () => this.trickLandingNotes.delete(osc);
+      }
     }
   }
 
@@ -250,6 +276,7 @@ export class AudioEngine {
     const ctx = this.ctx;
     if (!ctx || !this.master || !this.noise) return;
     const t = ctx.currentTime;
+    if (masterGain <= 0) this.stopTrickLanding();
     this.master.gain.setTargetAtTime(masterGain > 0 ? 1 : 0, t, 0.05);
     // 風
     if (loops.wind) {

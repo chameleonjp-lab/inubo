@@ -1,3 +1,4 @@
+import { TRICK_LANDING, trickLandingText, type TrickLandingText } from './trick-landing';
 import type { SimEvent } from '../game/types';
 import { DIR8_NAMES } from '../game/tricks';
 
@@ -28,7 +29,7 @@ export const EFFECTS: EffectSpec[] = [
   { id: 'E10', scene: '入力が短い／技が未成立', visual: ['traceFade', 'practiceHint'], sound: ['hintSoft'] },
   { id: 'E11', scene: '壁・柵・階段を跳び越す／坂で迂回', visual: ['edgePaw', 'signSway'], sound: ['tap', 'stepsSurface'] },
   { id: 'E12', scene: '手すりに乗る／滑る／離れる', visual: ['railDot', 'railSpark', 'railLineEnd'], sound: ['railOn', 'grindLoop', 'confirm'] },
-  { id: 'E13', scene: '通常着地／ぴたりと着地', visual: ['sandRing', 'fourPaws'], sound: ['landSoft', 'landPerfect'] },
+  { id: 'E13', scene: '通常着地／ぴたりと着地', visual: ['sandRing', 'fourPaws'], sound: ['landSoft', 'landPerfect', ...TRICK_LANDING.map(stage => stage.sound)] },
   { id: 'E14', scene: '着地失敗／姿勢を立て直す', visual: ['stumble', 'underRotatedLabel'], sound: ['landBad', 'recover'] },
   { id: 'E15', scene: '壁・正面・手すり側面への衝突／停止／再発進', visual: ['impactLines', 'stopLabel', 'brace'], sound: ['thud', 'kick'] },
   { id: 'E16', scene: '踏切予告／骨形ゲートの上下', visual: ['lamp', 'gateMove'], sound: ['bell', 'mech'] },
@@ -52,6 +53,7 @@ export interface Cue {
   text?: string;
   priority?: TextPriority;
   trickTier?: number;
+  landingText?: TrickLandingText;
   /** 中央に出さなかった出来事は、足元の印として残す。 */
   footMark?: string;
   objId?: string;
@@ -98,10 +100,13 @@ export function cueForEvent(ev: SimEvent): Cue | null {
       if (d.plain) return cue(ev, 'E13', 'sandRing', 'landSoft');
       const pts = Number(d.points ?? 0);
       const names = Array.isArray(d.names) ? d.names.join('＋') : '';
-      if (typeof d.trickTier === 'number') {
-        const text = pts > 0 ? `${names} ＋${pts}` : names;
-        return cue(ev, 'E13', d.trickTier >= 4 ? 'fourPaws' : 'sandRing', d.trickTier >= 4 ? 'landPerfect' : 'landSoft',
-          { text, priority: 2, trickTier: d.trickTier });
+      const tier = typeof d.trickTier === 'number' ? d.trickTier : 0;
+      const stage = TRICK_LANDING[tier - 1];
+      if (stage) {
+        const landingText = trickLandingText(names, pts, Number(d.trickPoints ?? pts), d.sectionUsed === true);
+        return cue(ev, 'E13', tier >= 4 ? 'fourPaws' : 'sandRing', stage.sound, {
+          text: names, priority: 2, trickTier: tier, landingText,
+        });
       }
       if (d.composite) return cue(ev, 'E09', 'pawTrails', 'chord2', { text: `${names} ${pts > 0 ? `＋${pts}` : '（採点済みの区間）'}`, priority: 2 });
       if (d.tenths === 12) return cue(ev, 'E13', 'fourPaws', 'landPerfect', { text: `ぴたり ${pts > 0 ? `＋${pts}` : ''}`.trim(), priority: 2 });
@@ -186,7 +191,7 @@ export const UI_CUES = {
  * 同じ時期に起きた出来事のうち、中央に出す文字を1つ選ぶ。「停止・失敗」→「着地・技」→「アイテム」の順。
  * 同じ優先度なら、あとから起きた方。選ばれなかった文字は足元の印として残す。
  */
-export function pickCenterText(cues: Cue[]): { text: string | null; priority: TextPriority | null; footMarks: string[]; trickTier?: number } {
+export function pickCenterText(cues: Cue[]): { text: string | null; priority: TextPriority | null; footMarks: string[]; trickTier?: number; landingText?: TrickLandingText } {
   let best: Cue | null = null;
   for (const c of cues) {
     if (!c.text || !c.priority) continue;
@@ -195,7 +200,7 @@ export function pickCenterText(cues: Cue[]): { text: string | null; priority: Te
   }
   const footMarks = cues.filter((c) => c !== best && (c.text || c.footMark)).map((c) => c.footMark ?? c.text!);
   return { text: best?.text ?? null, priority: best?.priority ?? null, footMarks,
-    ...(best?.trickTier ? { trickTier: best.trickTier } : {}) };
+    ...(best?.trickTier ? { trickTier: best.trickTier, landingText: best.landingText } : {}) };
 }
 
 /** 中央の文字を、優先度と表示時間で管理する（新しい文字は、同じか高い優先度なら差し替える）。 */
@@ -204,6 +209,16 @@ export class CenterText {
   priority: TextPriority = 3;
   untilMs = 0;
   trickTier = 0;
+  landingText?: TrickLandingText;
+  private pausedAtMs: number | null = null;
+
+  setPaused(paused: boolean, nowMs: number): void {
+    if (paused && this.pausedAtMs === null) this.pausedAtMs = nowMs;
+    if (!paused && this.pausedAtMs !== null) {
+      this.untilMs += nowMs - this.pausedAtMs;
+      this.pausedAtMs = null;
+    }
+  }
   footMarks: { text: string; untilMs: number }[] = [];
 
   push(cues: Cue[], nowMs: number): void {
@@ -215,7 +230,8 @@ export class CenterText {
         this.text = pick.text;
         this.priority = pick.priority;
         this.trickTier = pick.trickTier ?? 0;
-        this.untilMs = nowMs + (this.trickTier >= 4 ? 1850 : pick.priority === 1 ? 1100 : 1300);
+        this.landingText = pick.landingText;
+        this.untilMs = nowMs + (TRICK_LANDING[this.trickTier - 1]?.durationMs ?? (pick.priority === 1 ? 1100 : 1300));
       } else {
         this.footMarks.push({ text: pick.text, untilMs: nowMs + 1800 });
       }
@@ -225,6 +241,6 @@ export class CenterText {
   }
 
   current(nowMs: number): string | null {
-    return nowMs < this.untilMs ? this.text : null;
+    return (this.pausedAtMs ?? nowMs) < this.untilMs ? this.text : null;
   }
 }

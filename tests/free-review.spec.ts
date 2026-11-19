@@ -22,7 +22,8 @@ test('生のスワイプ・指離しの慣性・逆入力・停止再開・未�
   expect(await page.locator('#app').getAttribute('data-time-us')).toBe(time);
   await page.getByTestId('free-pause').click();
   await expect(page.locator('#app')).toHaveAttribute('data-phase', 'done', { timeout: 7000 });
-  await expect(page.getByTestId('free-status')).toContainText('着地');
+  await expect(page.getByTestId('landing-trick-name')).toContainText('着地');
+  await expect(page.getByTestId('landing-trick-score')).toHaveText(/＋[0-9,]+/);
   expect(Number(await page.getByTestId('free-score').getAttribute('data-points'))).toBeGreaterThan(0);
   await page.getByTestId('free-retry').click();
   await expect(page.locator('#app')).toHaveAttribute('data-phase', 'ready'); expect(await commonSpeed(page)).toBe(0);

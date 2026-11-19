@@ -8,6 +8,8 @@
   --line: #e3dccb;
   --good: #2f9e6b;
   --bad: #d64545;
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   color-scheme: light;
@@ -379,19 +381,19 @@ canvas.trails {
 }
 
 .center-text[data-trick-tier]:not([data-trick-tier='0']) {
+  left: calc(var(--safe-left) + 8px);
+  right: calc(var(--safe-right) + 8px);
+  top: max(22%, calc(var(--safe-top) + 76px));
+  width: fit-content;
+  max-width: min(520px, calc(100% - var(--safe-left) - var(--safe-right) - 16px));
   margin-inline: auto;
-  max-width: min(92vw, 34ch);
-  padding-inline: 10px;
-  text-wrap: balance;
-  overflow-wrap: anywhere;
+  pointer-events: none;
 }
-.center-text[data-trick-tier='2'] { color: #bff3ff; }
-.center-text[data-trick-tier='3'] { color: #dcf6ff; text-shadow: 0 2px 5px #071b2f, 0 0 16px #1580cb; }
-.center-text[data-trick-tier='4'] { color: #ffe393; text-shadow: 0 2px 6px #321700, 0 0 18px #eb8e22; }
-.center-text[data-trick-tier='5'] {
-  color: #fff0a4;
-  -webkit-text-stroke: 1px #4a1d3f;
-  text-shadow: 0 2px 0 #4a1d3f, 0 0 11px #ee8d3c, 0 0 24px #be55dd;
+@media (orientation: landscape) and (max-height: 500px) {
+  .center-text[data-trick-tier]:not([data-trick-tier='0']) {
+    top: max(18%, calc(var(--safe-top) + 62px));
+    max-width: min(470px, calc(100% - var(--safe-left) - var(--safe-right) - 16px));
+  }
 }
 
 .foot-marks {

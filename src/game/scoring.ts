@@ -148,7 +148,7 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
     names: js.names,
     sectionUsed: !!sec && awarded === 0,
     onRail: contact.onRail,
-    ...(js.trickTier ? { trickTier: js.trickTier } : {}),
+    ...(js.trickTier ? { trickTier: js.trickTier, trickPoints: js.points } : {}),
   });
   return js;
 }

@@ -1,3 +1,4 @@
+import { showTrickLanding } from './trick-landing';
 import { h, clear, fmtInt } from './dom';
 import { renderBoard, renderResults } from './results';
 import { PRACTICE_STEPS, PracticeCoach, PracticeDemo, practiceGuide, practiceRate, type PracticePoint, type PracticeStepId } from './practice';
@@ -559,6 +560,7 @@ class GameRun {
   private readonly freePointer: FreePointerController | null;
   private readonly freePractice: boolean;
   private readonly freeStrokes = new Map<number, { id: number; atUs: number }>();
+  private shownLanding: CenterText['landingText'];
   private freeTarget: FreeTarget = 'common';
   private trails: HTMLCanvasElement;
   private hud: Record<string, HTMLElement> = {};
@@ -693,6 +695,7 @@ class GameRun {
   destroy(): void {
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
+    this.app.audio.stopTrickLanding();
     this.stopPracticeDemo(false);
     this.freePointer?.clear();
     this.freeStrokes.clear();
@@ -793,6 +796,8 @@ class GameRun {
       this.stopPracticeDemo(false);
     }
     this.session.pause(reason);
+    this.center.setPaused(true, nowMs());
+    this.app.audio.stopTrickLanding();
     this.freePointer?.clear();
     this.freeStrokes.clear();
     this.submit(this.recognizer.suspend(this.session.sim.simUs, nowMs()));
@@ -820,6 +825,7 @@ class GameRun {
     if (!this.session.paused) {
       this.pauseCover.classList.add('hidden');
       this.app.sound.setPaused(false, nowMs());
+      this.center.setPaused(false, nowMs());
     } else {
       // 指が離れたら進む（再開の指は使い切り、次の新しいタッチから操作を受け取る）。
       setTimeout(() => !this.destroyed && this.session.paused && this.session.resumeRequested && this.afterResumeCheck(), 120);
@@ -938,9 +944,14 @@ class GameRun {
       this.hud.boost.replaceChildren(boneGauge(left / 5), h('span', {}, `加速 ${left.toFixed(1)}秒`));
     } else this.hud.boost.classList.add('hidden');
     const ct = this.center.current(t);
-    this.hud.center.textContent = ct ?? '';
-    this.hud.center.dataset.trickTier = ct ? String(this.center.trickTier) : '0';
-    this.hud.center.classList.toggle('show', !!ct);
+    const landing = ct ? this.center.landingText : undefined;
+    const center = this.hud.center;
+    if (landing && this.shownLanding !== landing) showTrickLanding(center, landing);
+    if (!landing && center.textContent !== (ct ?? '')) center.textContent = ct ?? '';
+    this.shownLanding = landing;
+    center.dataset.trickTier = ct ? String(this.center.trickTier) : '0';
+    center.dataset.paused = String(this.session.paused);
+    center.classList.toggle('show', !!ct);
     this.hud.marks.replaceChildren(...this.center.footMarks.map((f) => h('span', {}, f.text)));
     (this.hud.fade as HTMLElement).style.opacity = sim.mode === 'falling' ? '0.7' : '0';
     if (this.app.opts.debug) {
