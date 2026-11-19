@@ -60,6 +60,17 @@ test('完走 → 結果: 総合点を大きく、その下にタイム・タイ�
   expect(totalBox!.height).toBeGreaterThan(timeBox!.height * 1.8);
   expect(totalBox!.y).toBeLessThan(timeBox!.y);
   await expect(page.locator('.res-course')).toContainText('ウィペット');
+  const celebration = page.getByTestId('result-celebration');
+  const stage = Math.min(30, 1 + Math.floor(total * 30 / 10_000));
+  await expect(celebration).toHaveAttribute('data-result-stage', String(stage));
+  await expect(celebration.locator('.result-ornament')).toHaveCount(stage);
+  const title = page.getByTestId('result-title');
+  await expect(title).toHaveText(/\S/);
+  for (const viewport of [{ width: 402, height: 700 }, { width: 700, height: 402 }]) {
+    await page.setViewportSize(viewport);
+    await expect(title).toBeInViewport();
+    expect(await celebration.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  }
   // 再挑戦: 前の走行の時計・所持状態を引き継がない
   await page.click('[data-testid="retry"]');
   await page.waitForSelector('[data-testid="surface"]');
