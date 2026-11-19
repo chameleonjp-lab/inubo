@@ -123,7 +123,7 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
     sc.failures.push(fail);
     breakStreak(sc);
     sc.jumps.push({ jumpId: jump.jumpId, atUs: contact.atUs, opp: fail.opp, sectionKey: fail.sectionKey, names: js.names, base: js.base, composite: js.composite, tenths: 0, points: 0, awarded: 0, onRail: !!contact.onRail });
-    emit('landFail', contact.atUs, { jumpId: jump.jumpId, reason: fail.reason, residual: Math.round(js.residualDeg), names: js.names, section: sec?.key ?? null });
+    emit('landFail', contact.atUs, { jumpId: jump.jumpId, reason: fail.reason, residual: Math.round(js.residualDeg), names: js.names, section: sec?.key ?? null, ...(actual ? { freestyle: true } : {}) });
     return js;
   }
   let awarded = 0;

@@ -65,6 +65,7 @@ test('画面の端から払っても反応し、長い払いも指を置いた�
     const first = pointer.move(1, width - 32, height * 0.78, 1_000);
     expect(first.reduce((sum, i) => sum + i.rotation[1], 0)).toBeLessThan(-0.1);
     pointer.move(1, 45, height * 0.78, 2_000);
+    pointer.setSurface(width, height - 16); // 同じ向きでアドレスバー等の高さだけ変わる。
     const end = pointer.move(1, 6, height * 0.78, 3_000);
     expect(end.reduce((sum, i) => sum + i.rotation[1], 0)).toBeLessThan(-0.01);
   }
@@ -160,8 +161,10 @@ test('一時停止は入力待ちを捨て、空中姿勢と勢いを保存す�
   session.update(900_000);
   expect(poseOf(session.sim).free!.dog.q).toEqual(before);
   expect(session.sim.freeFlight!.motion.omega.common[1]).toBe(omega);
+  expect(session.sim.strokes[1]).toMatchObject({ upUs: 80_000, cancelled: true });
   session.requestResume(900_000);
+  session.submit(session.runId, [down(2, 90_000), turn(2, 95_000, 3, [0, 0.2, 0])]);
   session.update(930_000);
-  expect(session.sim.freeFlight!.motion.omega.common[1]).toBeGreaterThan(0);
+  expect(session.sim.freeFlight!.motion.omega.common[1]).toBeGreaterThan(omega);
   expect(qDistance(poseOf(session.sim).free!.dog.q, before)).toBeGreaterThan(0.03);
 });

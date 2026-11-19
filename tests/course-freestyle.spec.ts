@@ -23,7 +23,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
         const deadline = performance.now() + 15_000;
         while (!pass()) {
           if (performance.now() > deadline) throw Error(`待機上限。時刻 ${sim.simUs}、状態 ${sim.mode}`);
-          await new Promise(requestAnimationFrame);
+          await new Promise(resolve => requestAnimationFrame(resolve));
         }
       };
       const pointer = (type: string, id: number, clientX: number, clientY: number) => {

@@ -835,7 +835,14 @@ export class RunSession {
       this.paused = true;
       // 描きかけの指は捨てる。計算済みの状態（物理・確定済みの角度）はそのまま保持する。
       this.pending = this.pending.filter((f) => f.kind === 'up').map((f) => ({ ...f, atUs: this.sim.simUs, cancelled: true }));
-      this.sim.inputQueue = this.sim.inputQueue.filter(f => f.kind !== 'freeRotate');
+      if (this.sim.id.rulesVersion === FREE_RULES_VERSION) {
+        this.sim.inputQueue.length = 0;
+        for (const stroke of Object.values(this.sim.strokes)) {
+          if (stroke.upUs !== null) continue;
+          stroke.upUs = this.sim.simUs;
+          stroke.cancelled = true;
+        }
+      }
       this.sessionEvent('pause', { reason });
     }
   }
