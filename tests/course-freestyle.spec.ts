@@ -93,3 +93,53 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     expect(errors).toEqual([]);
   });
 }
+
+
+test('ジャンプの指を保持したまま即回転し、ボタンを押した瞬間に対象を変えられる', async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 700 });
+  await page.goto('/?ranking=mock');
+  await page.getByTestId('practice').click();
+  const observed = await page.evaluate(async () => {
+    const { session } = (window as unknown as { __inubo: { app: { game: TestGame } } }).__inubo.app.game;
+    const sim = session.sim;
+    const surface = document.querySelector('[data-testid="surface"]')!;
+    const until = async (condition: () => boolean) => {
+      const max = performance.now() + 12_000;
+      while (!condition()) {
+        if (performance.now() > max) throw Error('入力の反応待ちが上限を超過しました: ' + sim.mode);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+    };
+    const pointer = (kind: string, x: number, y: number) =>
+      surface.dispatchEvent(new PointerEvent(kind, { pointerId: 19, pointerType: 'touch', clientX: x, clientY: y,
+        bubbles: true, cancelable: true }));
+    const choose = (target: string) => {
+      const button = document.querySelector(`[data-testid="run-target-${target}"]`)!;
+      button.dispatchEvent(new PointerEvent('pointerdown', { pointerId: target === 'dog' ? 40 : 41,
+        pointerType: 'touch', bubbles: true, cancelable: true }));
+      return button.getAttribute('aria-pressed');
+    };
+    await until(() => session.phase === 'running' && sim.simUs >= 40_000);
+    const x = innerWidth * 0.45, y = innerHeight * 0.62;
+    pointer('pointerdown', x, y);
+    pointer('pointermove', x, y - 90); // 同じ指で踏切
+    await until(() => sim.freeFlight !== null);
+    pointer('pointermove', x + 80, y - 96); // 指を離さず回転
+    await until(() => sim.freeFlight!.motion.omega.common.some(v => Math.abs(v) > 0.2));
+    const common = sim.freeFlight!.motion.omega.common.some(v => Math.abs(v) > 0.2);
+    const dogPressed = choose('dog');
+    pointer('pointermove', x + 135, y - 102);
+    await until(() => sim.freeFlight!.motion.omega.dog.some(v => Math.abs(v) > 0.2));
+    const riderPressed = choose('rider');
+    pointer('pointermove', x + 180, y - 108);
+    await until(() => sim.freeFlight!.motion.omega.rider.some(v => Math.abs(v) > 0.2));
+    const record = Object.values(sim.strokes).find(stroke => stroke.downUs < sim.simUs && stroke.upUs === null && stroke.freeTarget === 'rider');
+    const result = { common, dogPressed, riderPressed, rider: sim.freeFlight!.motion.omega.rider,
+      sameFinger: !!record && record.tag === 'air', rules: sim.id.rulesVersion };
+    pointer('pointerup', x + 180, y - 108);
+    return result;
+  });
+  expect(observed).toMatchObject({ common: true, dogPressed: 'true', riderPressed: 'true',
+    sameFinger: true, rules: 'rules-freestyle-2' });
+  expect(observed.rider.some(v => Math.abs(v) > 0.2)).toBe(true);
+});

@@ -665,7 +665,7 @@ class GameRun {
 
   private freeControls(): HTMLElement {
     const targets = h('div', { class: 'free-run-targets', role: 'group', 'aria-label': '空中で回す対象' });
-    for (const [target, label] of [['common', '一緒'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
+    for (const [target, label] of [['common', '両方'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
       const select = () => {
         if (this.freeTarget === target) return;
         this.freeTarget = target;

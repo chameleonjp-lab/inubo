@@ -45,7 +45,7 @@ export function startFreeReview(root: HTMLElement): void {
     if (soundOn) audio.unlock();
     syncSound();
   } }, '音あり');
-  for (const [value, text] of [['common', '一緒'], ['dog', '犬'], ['rider', '人']] as const) {
+  for (const [value, text] of [['common', '両方'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
     const selectTarget = () => {
       if (target === value) return;
       target = value;
@@ -54,11 +54,11 @@ export function startFreeReview(root: HTMLElement): void {
     };
     const b = h('button', { type: 'button', 'aria-pressed': value === target ? 'true' : 'false', 'data-testid': `target-${value}`, onpointerdown: selectTarget, onclick: selectTarget }, text); targets.append(b);
   }
-  const jump = h('button', { class: 'free-primary', 'data-testid': 'free-jump', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(); update(); } }, 'ジャンプ');
-  const high = h('button', { 'data-testid': 'free-high', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(true); update(); } }, '高く跳ぶ');
+  const jump = h('button', { class: 'free-primary', 'data-testid': 'free-jump', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(); lastFxClock = -100_000; currentFx = null; update(); } }, 'ジャンプ');
+  const high = h('button', { 'data-testid': 'free-high', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(true); lastFxClock = -100_000; currentFx = null; update(); } }, '高く跳ぶ');
   const pause = h('button', { 'data-testid': 'free-pause', onclick: () => { if (paused && soundOn) audio.unlock(); sync(); setPause(!paused); } }, '一時停止');
   const setPause = (v: boolean) => { paused = v; clearPointers(); lastWall = performance.now(); syncSound(); update(); };
-  const retry = h('button', { 'data-testid': 'free-retry', onclick: () => { audio.stopTrickLanding(); arena = new FreeArena(scenario); clockUs = 0; clearPointers(); setPause(false); } }, 'やり直す');
+  const retry = h('button', { 'data-testid': 'free-retry', onclick: () => { audio.stopTrickLanding(); arena = new FreeArena(scenario); clockUs = 0; lastFxClock = -100_000; currentFx = null; clearPointers(); setPause(false); } }, 'やり直す');
   const slow = h('button', { 'aria-pressed': 'true', 'data-testid': 'free-slow', onclick: () => { sync(); half = !half; slow.setAttribute('aria-pressed', String(half)); slow.textContent = half ? '速さ ½' : '速さ 1'; } }, '速さ ½');
   const select = h('select', { 'aria-label': '確認する場所', onchange: () => {
     scenario = select.value as FreeScenario; scene.setScenario(scenario); retry.click();
@@ -156,7 +156,7 @@ export function startFreeReview(root: HTMLElement): void {
       currentFx = arena.motion.history.length && free.dogDegrees + free.riderDegrees >= 3
         ? chooseTrickFx(free.points, free.label) : null;
     }
-    scene.draw(arena.motion.pose, window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? null : currentFx);
+    scene.draw(arena.motion.pose, paused || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? null : currentFx);
   }
   const frame = () => { sync(); update(); requestAnimationFrame(frame); }; frame();
 }
