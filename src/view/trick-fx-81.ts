@@ -169,7 +169,7 @@ const B_L: Row[] = [
 // ---------------------------------------------------------------- H：人のみ（青）
 const H_F: Row[] = [
   { name: 'ヘルメットの光点', anchors: ['riderHelmet'], recipe: [
-    s('glow', ['riderHelmet'], 'rider', { dur: 300, size: 0.12, p: { rise: 40, fall: 240 } })] },
+    s('glow', ['riderHelmet'], 'rider', { dur: 300, size: 0.17, p: { rise: 40, fall: 240 } })] },
   { name: '肩の細い縁光', anchors: SHOULDERS, recipe: [
     s('rim', SHOULDERS, 'ice', { size: 0.13, p: { speedFade: 1 } })] },
   { name: '手先のきらめき', anchors: HANDS, recipe: [
@@ -234,7 +234,7 @@ const H_L: Row[] = [
 // ---------------------------------------------------------------- D：犬のみ（橙・琥珀）
 const D_F: Row[] = [
   { name: '鼻先の光', anchors: ['dogNose'], recipe: [
-    s('glow', ['dogNose'], 'dog', { dur: 250, size: 0.11, p: { rise: 30, fall: 200 } })] },
+    s('glow', ['dogNose'], 'dog', { dur: 250, size: 0.16, p: { rise: 30, fall: 200 } })] },
   { name: '前足の縁光', anchors: FRONT, recipe: [
     s('rim', FRONT, 'dog', { size: 0.1, p: { speedFade: 1, full: 1 } })] },
   { name: 'しっぽの光点', anchors: ['dogTail'], recipe: [
