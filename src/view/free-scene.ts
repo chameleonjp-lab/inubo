@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { freeParts } from '../game/free-geometry';
 import { freeBoxes, type FreeScenario } from '../game/free-arena';
 import type { FreePose } from '../game/free-motion';
-import { FxEngine } from './trick-fx-engine';
+import { FxEngine, type FxSpinSample } from './trick-fx-engine';
 import { FreePartsFxSource } from './trick-fx-anchors';
 import { ThreeFxSink } from './trick-fx-three';
 import type { FxVisualEvent } from './trick-fx-timeline';
 
-export interface FreeFxFlags { paused: boolean; reduced: boolean; dtMs: number }
+export interface FreeFxFlags { paused: boolean; reduced: boolean; dtMs: number; spin?: FxSpinSample | null }
 
 export class FreeScene {
   private renderer: THREE.WebGLRenderer;
@@ -19,6 +19,8 @@ export class FreeScene {
   private obstacles: THREE.Mesh[] = [];
   /** 競技と同じ81種類の演出。球の模型の部品の位置を計測点として読む。 */
   readonly fx = new FxEngine();
+  private floor!: THREE.Mesh;
+  private grid!: THREE.GridHelper;
   private fxSource = new FreePartsFxSource();
   private fxSink = new ThreeFxSink(null);
   fxStats = { lines: 0, dots: 0, decals: 0, bursts: 0 };
@@ -28,15 +30,35 @@ export class FreeScene {
     this.renderer.setClearColor('#d7eced'); this.scene.fog = new THREE.Fog('#d7eced', 14, 40);
     this.scene.add(new THREE.HemisphereLight('#fff9ed', '#739188', 3));
     const sun = new THREE.DirectionalLight('#fff1d5', 3); sun.position.set(4, 8, 5); this.scene.add(sun);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), this.material('#a5bcad'));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: '#a5bcad', roughness: 0.75 }));
+    this.floor = floor;
     floor.rotation.x = -Math.PI / 2; floor.position.set(20, -0.002, 0); this.scene.add(floor);
     const grid = new THREE.GridHelper(100, 100, '#729b8d', '#94afa1'); grid.position.set(20, 0, 0); this.scene.add(grid);
+    this.grid = grid;
     this.scene.add(this.fxSink.group);
   }
   private material(color: string): THREE.MeshStandardMaterial {
     if (!this.materials.has(color)) this.materials.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.75 }));
     return this.materials.get(color)!;
   }
+  /**
+   * 確認用の背景（光の見え方を確かめるため）。明るい空・明るい路面・暗い路面。
+   * 演出・判定には関係しない。
+   */
+  setBackdrop(kind: 'sky' | 'bright-road' | 'dark-road'): void {
+    const [sky, floor, line] = kind === 'bright-road' ? ['#f3f1ea', '#e6dfcf', '#d2c8b3'] : kind === 'dark-road' ? ['#5f6a73', '#3a3e44', '#4a5058'] : ['#d7eced', '#a5bcad', '#94afa1'];
+    this.renderer.setClearColor(sky);
+    (this.scene.fog as THREE.Fog).color.set(sky);
+    (this.floor.material as THREE.MeshStandardMaterial).color.set(floor);
+    this.grid.visible = kind !== 'bright-road';
+    void line;
+  }
+
+  /** 確認用：演出だけを隠して、前後を見比べる。 */
+  setFxVisible(visible: boolean): void {
+    this.fxSink.group.visible = visible;
+  }
+
   setScenario(s: FreeScenario): void {
     for (const mesh of this.obstacles) { this.scene.remove(mesh); mesh.geometry.dispose(); }
     this.obstacles = freeBoxes(s).map(b => {
@@ -65,7 +87,7 @@ export class FreeScene {
     // 競技と同じ81種類の演出を、球の模型の足・手・靴・鼻・耳・しっぽの位置から描く。
     this.fxSource.update(pose, parts);
     this.fxSink.begin();
-    this.fx.frame(flags.dtMs, this.fxSource, this.fxSink, { reduced: flags.reduced, weak: false, paused: flags.paused, alpha: 1, heading: 0, groundY: 0 });
+    this.fx.frame(flags.dtMs, this.fxSource, this.fxSink, { reduced: flags.reduced, weak: false, paused: flags.paused, alpha: 1, heading: 0, groundY: 0, spin: flags.spin });
     this.fxSink.end();
     this.fxStats = { ...this.fxSink.stats };
     // 水平の視点を保ち、パッドの右向き入力が水平回転になるようにする.

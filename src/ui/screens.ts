@@ -123,6 +123,11 @@ export class App {
       if (this.lab) this.lab.onVisibility(document.hidden);
       else this.game?.onVisibility(document.hidden);
     });
+    // iPhone の Safari でページを離れるとき（アプリ切替・タブ切替）も、隠れたときと同じく一時停止する。
+    window.addEventListener('pagehide', () => {
+      if (this.lab) this.lab.onVisibility(true);
+      else this.game?.onVisibility(true);
+    });
     this.onResize();
     void this.ranking.flush();
   }

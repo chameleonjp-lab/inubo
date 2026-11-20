@@ -18,10 +18,16 @@ function frameOf(ctx: FxDrawContext, step: FxStep, t: number) {
 }
 
 /** 計測点を床へ下ろした位置。contact はそのまま。 */
-function onGround(ctx: FxDrawContext, key: AnchorKey, y: number, out: Vec): boolean {
+function onGround(ctx: FxDrawContext, key: AnchorKey, _y: number, out: Vec): boolean {
   if (!ctx.pos(key, out)) return false;
-  out.y = y;
+  out.y = ctx.groundAt(out.x, out.z) + 0.03;
   return true;
+}
+
+/** 接地点から前後左右にずらした位置を、斜面の高さへ合わせる。 */
+function lift(ctx: FxDrawContext, out: Vec): Vec {
+  out.y = ctx.groundAt(out.x, out.z) + 0.03;
+  return out;
 }
 
 function contactOf(ctx: FxDrawContext, y: number, out: Vec): Vec {
@@ -95,6 +101,7 @@ export const LAND_DRAWERS: FxDrawerTable = {
           contactOf(ctx, y, A);
           addScaled(A, A, R, i === 0 ? -0.26 : 0.26);
           addScaled(A, A, F, pair * 0.42 - 0.2);
+          lift(ctx, A);
           ctx.pen.decal(A, ctx.yaw, shapeOf(key), step.size, ctx.color(step, key), alpha * env);
         }
         return;
@@ -102,6 +109,7 @@ export const LAND_DRAWERS: FxDrawerTable = {
       if (p.side) {
         contactOf(ctx, y, A);
         addScaled(A, A, R, (i === 0 ? -1 : 1) * p.side);
+        lift(ctx, A);
       } else if (key === 'contact') contactOf(ctx, y, A);
       else if (!onGround(ctx, key, y, A)) return;
       ctx.pen.decal(A, ctx.yaw, shapeOf(key, p.shape), step.size * pop, ctx.color(step, key), alpha * env);
@@ -127,8 +135,8 @@ export const LAND_DRAWERS: FxDrawerTable = {
     const { u, y } = frameOf(ctx, step, t);
     contactOf(ctx, y, C);
     const apart = (p.apart ?? 0.5) * (p.merge ? 1 - easeOut(Math.min(1, u / 0.6)) : 1);
-    addScaled(A, C, R, -apart);
-    addScaled(B, C, R, apart);
+    lift(ctx, addScaled(A, C, R, -apart));
+    lift(ctx, addScaled(B, C, R, apart));
     const r = step.size * (0.2 + 0.8 * easeOut(u));
     const k = (1 - u) * Math.min(1, t / 80);
     ctx.pen.groundArc(A, r, FX_RGB.dog, alpha * k);
@@ -289,7 +297,7 @@ export const LAND_DRAWERS: FxDrawerTable = {
       const hop = ctx.reduced ? 0 : Math.abs(Math.sin(u * 2 * Math.PI)) * (p.height ?? 0.5) * (1 - u);
       setV(A, C.x + Math.cos(a) * r * (0.5 + u), y + hop, C.z + Math.sin(a) * r * (0.5 + u));
       ctx.pen.dot(A, step.size * 0.5, c, alpha * env);
-      if (hop < 0.04) { A.y = y; ctx.pen.decal(A, ctx.yaw, 0, step.size, c, alpha * env * 0.6); }
+      if (hop < 0.04) { lift(ctx, A); ctx.pen.decal(A, ctx.yaw, 0, step.size, c, alpha * env * 0.6); }
     }
   },
 
@@ -329,7 +337,7 @@ export const LAND_DRAWERS: FxDrawerTable = {
       if (t < appear || t > Math.min(step.dur, gone + 200)) continue;
       const k01 = Math.min(1, (t - appear) / 80) * (t > gone ? 1 - (t - gone) / 200 : 1);
       addScaled(A, C, F, 0.2 + k * 0.3);
-      addScaled(A, A, R, k % 2 ? 0.1 : -0.1);
+      lift(ctx, addScaled(A, A, R, k % 2 ? 0.1 : -0.1));
       ctx.pen.decal(A, ctx.yaw, 0, step.size, c, alpha * k01);
     }
   },

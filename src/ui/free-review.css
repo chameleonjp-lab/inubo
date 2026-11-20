@@ -41,3 +41,4 @@ button, select { font: inherit; color: inherit; }
   .free-actions { grid-template-columns: repeat(7, 1fr); }
 }
 .free-status:has(.trick-landing-card) { padding: 0; background: none; }
+.free-perf { font: 11px/1.4 ui-monospace, monospace; overflow-wrap: anywhere; flex-basis: 100%; }

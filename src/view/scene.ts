@@ -24,9 +24,8 @@ import { length, quatAxisAngle, quatRotate } from '../game/math';
 import type { FreeTarget } from '../game/free-motion';
 import { FxEngine, type FxFrameFlags } from './trick-fx-engine';
 import { RigFxSource } from './trick-fx-anchors';
-import { FxRunReader } from './trick-fx-sim';
+import { FxRunReader, FxSpinReader } from './trick-fx-sim';
 import { ThreeFxSink } from './trick-fx-three';
-import type { FxVisualEvent } from './trick-fx-timeline';
 import { add3 } from '../game/free-math';
 import { BOARD_PIVOT_Y, DOG_PIVOT_Y, DOG_SCALE, RIDER_HIP_Y, riderFootHeight } from '../game/free-flight';
 import { FollowCamera } from './camera';
@@ -120,8 +119,10 @@ interface Particle {
   b: number;
 }
 
-class Particles {
+export class Particles {
   readonly points: THREE.Points;
+  /** 一時停止中は、粒を動かさず・寿命を減らさず・新しく出さない。 */
+  paused = false;
   private list: Particle[] = [];
   private geo = new THREE.BufferGeometry();
   private pos: Float32Array;
@@ -136,6 +137,7 @@ class Particles {
   }
   /** dir を与えると、その向き（床の上の角度）を中心に spread の幅で散らす。 */
   emit(n: number, at: THREE.Vector3, color: THREE.Color, speed: number, up: number, life = 0.6, dir?: { x: number; z: number; spread: number }): void {
+    if (this.paused) return;
     const center = dir ? Math.atan2(dir.z, dir.x) : 0;
     for (let i = 0; i < n && this.list.length < this.cap; i++) {
       const a = dir ? center + (Math.random() - 0.5) * dir.spread : Math.random() * Math.PI * 2;
@@ -144,6 +146,7 @@ class Particles {
     }
   }
   update(dt: number): void {
+    if (this.paused) dt = 0;
     this.list = this.list.filter((p) => (p.life -= dt) > 0);
     for (const p of this.list) {
       p.vy -= 9 * dt;
@@ -284,6 +287,9 @@ export class GameView {
   private fxSource = new RigFxSource();
   private fxSelected: FreeTarget = 'common';
   private fxPaused = false;
+  private pauseStartMs: number | null = null;
+  private pausedTotalMs = 0;
+  private fxSpin = new FxSpinReader();
   private fxComboSeen = -1e9;
   private fxReduced: MediaQueryList | null = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null;
   /** 半透明の再生（自分の最速）の演出。保存された演出の出来事があるときだけ描く。 */
@@ -394,6 +400,8 @@ export class GameView {
     this.wagUntil = 0;
     this.fxReader.reset();
     this.fxEngine.clear();
+    this.fxSpin.reset();
+    this.pauseStartMs = null;
     this.ghostFx.clear();
     this.ghostFxIndex = 0;
     this.ghostFxLastUs = -1;
@@ -744,7 +752,12 @@ export class GameView {
   frame(run: SimState, renderUs: number, cues: Cue[], settings: Settings, nowMs: number, dtMs: number, wag = false): void {
     const course = this.course;
     if (!course || !this.rig) return;
-    const dt = Math.min(0.1, dtMs / 1000);
+    // 一時停止中は、粒・足跡・旗・アイテムの動き・演出の時計をまとめて止める（停止していた時間は後から進めない）。
+    if (this.fxPaused && this.pauseStartMs === null) this.pauseStartMs = nowMs;
+    if (!this.fxPaused && this.pauseStartMs !== null) { this.pausedTotalMs += nowMs - this.pauseStartMs; this.pauseStartMs = null; }
+    const vnow = (this.pauseStartMs ?? nowMs) - this.pausedTotalMs;
+    this.particles.paused = this.fxPaused;
+    const dt = this.fxPaused ? 0 : Math.min(0.1, dtMs / 1000);
     const lightK = settings.light === 'weak' ? 0.35 : 1;
     const path = course.paths.get(run.pathId)!;
     const ex = extrapolate(run, renderUs);
@@ -754,8 +767,8 @@ export class GameView {
     const speed = run.finished ? 0 : run.forwardSpeed;
     this.legPhase += dt * (3 + speed * 1.6);
     const feetDown = run.mode === 'air' && run.vy < 0 && (run.jump?.resolution.rotations ?? []).every((r) => renderUs >= r.startUs + r.durUs);
-    animateRig(this.rig, { mode: run.mode, speed, maxSpeed: maxSpeed(run), grade, lean: run.lateralSpeed / 4.5, feetDown, blocked: !!run.blocked, timeMs: nowMs, wag: wag || nowMs < this.wagUntil, free: !!pose.free }, this.legPhase);
-    this.rig.root.visible = run.mode !== 'falling' || nowMs % 200 < 100;
+    animateRig(this.rig, { mode: run.mode, speed, maxSpeed: maxSpeed(run), grade, lean: run.lateralSpeed / 4.5, feetDown, blocked: !!run.blocked, timeMs: vnow, wag: wag || vnow < this.wagUntil, free: !!pose.free }, this.legPhase);
+    this.rig.root.visible = run.mode !== 'falling' || vnow % 200 < 100;
 
     // 影: 犬の真下。着地が近いほど濃く、小さくする（R62）。
     const groundY = supportHeight(path, Math.max(0, Math.min(path.length, ex.s)), ex.x, ex.y, run.simUs);
@@ -781,8 +794,17 @@ export class GameView {
 
     // 81種類の演出：走行の時計で段階を決め（描画の速さに左右されない）、実際の身体の計測点から描く。
     const reduced = this.fxReduced?.matches ?? false;
-    const fxFlags: FxFrameFlags = { reduced, weak: settings.light === 'weak', paused: this.fxPaused, alpha: 1, heading: pose.heading, groundY };
-    for (const { ev, source } of this.fxReader.read(run, this.fxSelected)) this.applyFx(this.fxEngine, ev, source ? this.contactOf(source) : null);
+    // 回転の向き・速さ・累積角は、ゲームが計算した値を描画の時刻で読む（描画の前後の姿勢差からは求めない）。
+    const flight = run.freeFlight;
+    const spin = flight && run.jump ? this.fxSpin.read(flight.motion, `${run.id.runId}:${run.jump.jumpId}`, Math.max(flight.takeoffUs, renderUs)) : null;
+    const fxFlags: FxFrameFlags = { reduced, weak: settings.light === 'weak', paused: this.fxPaused, alpha: 1, heading: pose.heading, groundY, spin };
+    if (!this.fxPaused) {
+      for (const { ev, source } of this.fxReader.read(run, this.fxSelected)) {
+        this.fxSource.rig = this.rig;
+        this.fxEngine.apply(ev, ev.contact ? { contact: ev.contact, yaw: ev.contact.yaw, grade: ev.contact.grade,
+          switchCount: Number(source?.data?.switchCount ?? 0), source: this.fxSource, sourceHeading: pose.heading } : {});
+      }
+    }
     this.fxSource.rig = this.rig;
     this.fxSink.begin();
     this.fxEngine.frame(dtMs, this.fxSource, this.fxSink, fxFlags);
@@ -798,7 +820,7 @@ export class GameView {
         case 'kickMark':
         case 'kickMarkBig':
           this.particles.emit(Math.round((c.visual === 'kickMarkBig' ? 26 : 12) * lightK + 4), at, sand, c.visual === 'kickMarkBig' ? 3 : 2, 2);
-          this.prints.add(new THREE.Vector3(pose.x, groundY + 0.03, pose.z), pose.heading, new THREE.Color('#6b5a3a'), nowMs, c.visual === 'kickMarkBig' ? 2.2 : 1.4);
+          this.prints.add(new THREE.Vector3(pose.x, groundY + 0.03, pose.z), pose.heading, new THREE.Color('#6b5a3a'), vnow, c.visual === 'kickMarkBig' ? 2.2 : 1.4);
           break;
         case 'sandRing':
           this.particles.emit(Math.round(16 * lightK + 4), new THREE.Vector3(pose.x, groundY + 0.05, pose.z), sand, 2.5, 0.6);
@@ -811,17 +833,17 @@ export class GameView {
             [-0.35, 0.12],
           ]) {
             const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-            this.prints.add(new THREE.Vector3(pose.x, groundY + 0.03, pose.z).addScaledVector(fwd, dx).addScaledVector(right, dz), pose.heading, new THREE.Color('#ffd23f'), nowMs, 0.9);
+            this.prints.add(new THREE.Vector3(pose.x, groundY + 0.03, pose.z).addScaledVector(fwd, dx).addScaledVector(right, dz), pose.heading, new THREE.Color('#ffd23f'), vnow, 0.9);
           }
           break;
         case 'pawTrails':
           // 複合成功: 2本の軌跡が足跡の形で重なる（R64）。
           for (const pt of [...this.dogTrail.points(), ...this.shoulderTrail.points()].filter((_, i) => i % 4 === 0)) {
-            this.prints.add(new THREE.Vector3(pt.x, Math.max(groundY + 0.04, pt.y), pt.z), pose.heading, new THREE.Color('#ff7ab6'), nowMs, 1.1);
+            this.prints.add(new THREE.Vector3(pt.x, Math.max(groundY + 0.04, pt.y), pt.z), pose.heading, new THREE.Color('#ff7ab6'), vnow, 1.1);
           }
           break;
         case 'impactLines':
-          this.showImpact(at.clone().addScaledVector(fwd, 0.5).add(new THREE.Vector3(0, 0.5, 0)), nowMs);
+          this.showImpact(at.clone().addScaledVector(fwd, 0.5).add(new THREE.Vector3(0, 0.5, 0)), vnow);
           if (settings.shake) this.cam.kick(0.25);
           break;
         case 'underRotatedLabel':
@@ -830,7 +852,7 @@ export class GameView {
           break;
         case 'flagUp': {
           const f = c.objId ? this.flags.get(c.objId) : null;
-          if (f) f.userData.raiseAt = nowMs;
+          if (f) f.userData.raiseAt = vnow;
           break;
         }
         case 'tape':
@@ -838,7 +860,7 @@ export class GameView {
           this.particles.emit(Math.round(40 * lightK + 6), at.clone().add(new THREE.Vector3(0, 1.5, 0)), new THREE.Color('#ffef5a'), 4, 3, 1.2);
           break;
         case 'tailWag':
-          this.wagUntil = nowMs + 1200;
+          this.wagUntil = vnow + 1200;
           break;
       }
       if (c.effect === 'E18' && c.visual === 'boostGauge') this.particles.emit(10, at, new THREE.Color('#ffb347'), 2, 1.5);
@@ -856,7 +878,7 @@ export class GameView {
         this.lastPrintS = run.s;
         const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
         const sideOff = (Math.round(run.s / 0.9) % 2 ? 0.12 : -0.12);
-        this.prints.add(new THREE.Vector3(pose.x, groundY + 0.025, pose.z).addScaledVector(right, sideOff), pose.heading, slowed ? new THREE.Color('#6b4423') : new THREE.Color('#bba57a'), nowMs, slowed ? 1 : 0.7);
+        this.prints.add(new THREE.Vector3(pose.x, groundY + 0.025, pose.z).addScaledVector(right, sideOff), pose.heading, slowed ? new THREE.Color('#6b4423') : new THREE.Color('#bba57a'), vnow, slowed ? 1 : 0.7);
       }
     }
     // 加速中は犬の後ろに風の線（R67）
@@ -868,7 +890,7 @@ export class GameView {
       for (let i = 0; i < 10; i++) {
         const off = ((i * 37) % 10) / 10 - 0.5;
         const y = pose.y + 0.2 + ((i * 53) % 10) / 10;
-        const start = at.clone().addScaledVector(right, off * 1.4).addScaledVector(fwd, -0.6 - ((nowMs / 40 + i * 13) % 10) / 6);
+        const start = at.clone().addScaledVector(right, off * 1.4).addScaledVector(fwd, -0.6 - ((vnow / 40 + i * 13) % 10) / 6);
         start.y = y;
         const end = start.clone().addScaledVector(fwd, -(boosted ? 1.6 : 0.9));
         a.setXYZ(i * 2, start.x, start.y, start.z);
@@ -877,24 +899,24 @@ export class GameView {
       a.needsUpdate = true;
       (this.windLines.material as THREE.LineBasicMaterial).opacity = 0.6 * lightK + 0.15;
     }
-    if (this.impact.visible && nowMs > this.impactUntil) this.impact.visible = false;
+    if (this.impact.visible && vnow > this.impactUntil) this.impact.visible = false;
 
     // アイテム、ゲート、旗、道しるべの足跡
     for (const [id, o] of this.items) {
       o.visible = !run.consumed[id];
       o.rotation.y += dt * 1.2;
-      o.position.y = (o.userData.baseY as number) + Math.sin(nowMs / 300 + o.position.x) * 0.05;
+      o.position.y = (o.userData.baseY as number) + Math.sin(vnow / 300 + o.position.x) * 0.05;
     }
     for (const g of this.gates.values()) {
       const ph = gatePhase(g.solid.gate!, run.simUs);
       g.bar.position.y = g.solid.height * ph.raise;
       g.bar.visible = ph.raise > 0;
-      (g.lamp.material as THREE.MeshBasicMaterial).color.set(ph.phase === 'lamp' || ph.phase === 'rising' ? (nowMs % 300 < 150 ? '#ff4040' : '#aa2020') : '#552222');
+      (g.lamp.material as THREE.MeshBasicMaterial).color.set(ph.phase === 'lamp' || ph.phase === 'rising' ? (vnow % 300 < 150 ? '#ff4040' : '#aa2020') : '#552222');
     }
     for (const [id, f] of this.flags) {
       const t0 = f.userData.raiseAt as number | undefined;
       const passed = run.lastCheckpoint.id === id || (t0 !== undefined);
-      f.position.y = passed ? Math.min(1.85, 0.2 + (t0 ? (nowMs - t0) / 300 : 2)) : 0.2;
+      f.position.y = passed ? Math.min(1.85, 0.2 + (t0 ? (vnow - t0) / 300 : 2)) : 0.2;
     }
     for (const [forkId, g] of this.guideGroups) {
       g.visible = run.guide.active && (run.guide.forkId === null || run.guide.forkId === forkId);
@@ -908,43 +930,50 @@ export class GameView {
       this.frameGhostFx(renderUs, gp, dtMs, settings, groundY);
     } else if (this.ghostRig) {
       this.ghostRig.root.visible = false;
+      // 非表示の間は演出を持たない。再び表示したら、その時刻の出来事から組み立て直す。
+      this.ghostFx.clear();
+      this.ghostFxIndex = 0;
+      this.ghostFxLastUs = -1;
       this.ghostFxSink.begin();
       this.ghostFxSink.end();
     }
 
     this.particles.update(dt);
-    this.prints.update(nowMs, 2600);
+    this.prints.update(vnow, 2600);
     this.cam.update(path, ex.s, ex.x, ex.y, dtMs, settings.shake, run.freeFlight?.heading);
     this.sun.intensity = 1.2 + 0.4 * lightK;
     this.renderer.render(this.scene, this.cam.camera);
   }
 
-  /** 着地の出来事の位置（その瞬間の接地点）を世界座標にする。描画の時点の位置は使わない。 */
-  private contactOf(e: { pathId: string; sMm: number; x: number; y: number }): { contact: { x: number; y: number; z: number }; yaw: number; switchCount: number } | null {
-    const p = this.course?.paths.get(e.pathId);
-    if (!p) return null;
-    const s = Math.max(0, Math.min(p.length, e.sMm / 1000));
-    const [x, z] = worldXZ(p, s, e.x);
-    const d = (e as { data?: Record<string, unknown> }).data;
-    return { contact: { x, y: e.y, z }, yaw: sampleAt(p, s).heading, switchCount: Number(d?.switchCount ?? 0) };
-  }
-
-  private applyFx(engine: FxEngine, ev: FxVisualEvent, at: { contact: { x: number; y: number; z: number }; yaw: number; switchCount: number } | null): void {
-    engine.apply(ev, at ?? {});
-  }
-
-  /** 保存された演出の出来事を、半透明の再生の身体に合わせて描く。古い記録（出来事なし）は演出なし。 */
+  /**
+   * 保存された演出の出来事を、半透明の再生の身体に合わせて描く（F06）。
+   * 着地L は出来事に残した接地点で描き、そのときのゴーストの位置へはずらさない。
+   * 接地点の無い記録は、その時刻の再生姿勢から求め、求められなければ着地の飾りだけ省く。出来事の無い古い記録は演出なし。
+   */
   private frameGhostFx(renderUs: number, gp: Pose | null, dtMs: number, settings: Settings, groundY: number): void {
-    const events = this.ghost?.visualEvents;
+    const replay = this.ghost;
+    const events = replay?.visualEvents;
     this.ghostFxSink.begin();
-    if (events && events.length && this.ghostRig) {
+    if (replay && events && events.length && this.ghostRig) {
       if (renderUs < this.ghostFxLastUs) { this.ghostFx.clear(); this.ghostFxIndex = 0; }
       this.ghostFxLastUs = renderUs;
-      this.ghostRig.root.updateMatrixWorld(true);
-      while (this.ghostFxIndex < events.length && events[this.ghostFxIndex].tUs <= renderUs) {
+      while (!this.fxPaused && this.ghostFxIndex < events.length && events[this.ghostFxIndex].tUs <= renderUs) {
         const ev = events[this.ghostFxIndex++];
-        this.ghostFx.apply(ev, gp ? { contact: { x: gp.x, y: gp.y, z: gp.z }, yaw: gp.heading } : {});
+        // 表示を再開したときなど、とうに終わった出来事は描き直さない。
+        if (ev.tUs < renderUs - 2_100_000) continue;
+        const ageMs = (renderUs - ev.tUs) / 1000;
+        if (ev.kind !== 'L') { this.ghostFx.apply(ev); continue; }
+        const then = replayPoseAt(replay, ev.tUs);
+        const contact = ev.contact ?? (then ? { x: then.x, y: then.y, z: then.z, yaw: then.heading } : null);
+        if (!contact || !then) { this.ghostFx.apply({ ...ev, kind: 'X', id: null }); continue; }
+        // 計測点をその時刻の姿勢で読んでから固定する。
+        this.placeRig(this.ghostRig, then);
+        this.ghostRig.root.updateMatrixWorld(true);
+        this.ghostFxSource.rig = this.ghostRig;
+        this.ghostFx.apply(ev, { contact, yaw: contact.yaw, grade: contact.grade, ageMs, source: this.ghostFxSource, sourceHeading: then.heading });
       }
+      if (gp) this.placeRig(this.ghostRig, gp);
+      this.ghostRig.root.updateMatrixWorld(true);
       this.ghostFxSource.rig = gp ? this.ghostRig : null;
       this.ghostFx.frame(dtMs, this.ghostFxSource, this.ghostFxSink, {
         reduced: this.fxReduced?.matches ?? false, weak: settings.light === 'weak', paused: this.fxPaused, alpha: 0.35,

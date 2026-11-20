@@ -90,15 +90,39 @@ test('81種類の確認：空中の派手さF・軌跡Aの54件すべてが、�
   expect(errors).toEqual([]);
 });
 
-test('81種類の確認：着地L の代表（B/H/D の L01・L05・L10）が着地の瞬間に出る', async ({ page }) => {
-  test.setTimeout(90_000);
+const L_IDS = ['B', 'H', 'D'].flatMap(t => Array.from({ length: 10 }, (_, i) => `${t}-L${String(i + 1).padStart(2, '0')}`));
+
+test('81種類の確認：着地L の30件すべてが着地の瞬間に出て、描かれ、対応する着地音を選ぶ', async ({ page }) => {
+  test.setTimeout(240_000);
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto('/');
   await page.getByTestId('free-slow').click();
-  for (const id of ['B', 'H', 'D'].flatMap(t => ['01', '05', '10'].map(l => `${t}-L${l}`))) {
+  const review = page.locator('.free-review');
+  for (const id of L_IDS) {
     await page.getByTestId('fx-gallery').selectOption(id);
     await page.getByTestId('fx-gallery-play').click();
-    await expect(page.locator('.free-review')).toHaveAttribute('data-fx-ids', new RegExp(`(^| )${id}( |$)`), { timeout: 6_000 });
+    await expect(review, id).toHaveAttribute('data-fx-ids', new RegExp(`(^| )${id}( |$)`), { timeout: 8_000 });
+    await expect.poll(() => review.getAttribute('data-fx-lines').then(Number), { message: id }).toBeGreaterThan(0);
+    await expect(review, id).toHaveAttribute('data-last-sound', `trickLanding${id[0]}${id.slice(3)}`);
   }
+  expect(errors).toEqual([]);
+});
+
+test('確認用：着地音30種を1つずつ選んで鳴らせ、背景の切替と描画の計測ができる', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  const review = page.locator('.free-review');
+  await expect(page.getByTestId('fx-sound').locator('option')).toHaveCount(30);
+  for (const name of ['trickLandingB01', 'trickLandingH05', 'trickLandingD10']) {
+    await page.getByTestId('fx-sound').selectOption(name);
+    await page.getByTestId('fx-sound-play').click();
+    await expect(review).toHaveAttribute('data-last-sound', name);
+  }
+  for (const bg of ['bright-road', 'dark-road', 'sky']) await page.getByTestId('fx-backdrop').selectOption(bg);
+  await page.getByTestId('perf-run').click();
+  await expect(review).toHaveAttribute('data-perf', /"frames":[1-9]/, { timeout: 15_000 });
+  const perf = JSON.parse((await review.getAttribute('data-perf'))!);
+  expect(perf).toMatchObject({ stallsOver100ms: expect.any(Number), p95GapMs: expect.any(Number), viewport: '402x700' });
   expect(errors).toEqual([]);
 });

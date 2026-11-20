@@ -16,6 +16,14 @@ import { fxId, type FxId, type FxTarget } from './trick-fx-81';
 
 export const FX_AIR_TICK_US = 90_000;
 const HALF_TURN = 180;
+/**
+ * 空中の表示専用の難度（F01対応）。公式の得点・閾値には使わない。
+ * - 物理上限（1身体あたり3600度/秒）の90%で回し続けていれば「全力」とみなす。
+ * - 予測滞空時間の80%を過ぎるまでは、どれほど速く回しても最高段階（難度1650）に届かせない。
+ */
+export const FX_AIR_EFFORT_RATE = 0.9;
+export const FX_AIR_MATURE_SHARE = 0.8;
+const FX_AIR_EARLY_CAP = 1649;
 const MIN_AIR_US = 450_000;
 const MAX_AIR_US = 1_800_000;
 
@@ -28,7 +36,14 @@ export interface FxVisualEvent {
   target: FxTarget | null;
   level: number;
   id: FxId | null;
+  /**
+   * 着地L だけが持つ接地点（世界座標の m、yaw はラジアン、grade は接地面の傾き）。
+   * 再生では、この位置で着地の演出を描く（そのときのゴーストの位置は使わない）。
+   */
+  contact?: FxContact;
 }
+
+export interface FxContact { x: number; y: number; z: number; yaw: number; grade?: number }
 
 export interface FxFlightView {
   jumpId: number;
@@ -176,8 +191,10 @@ export class FxTimeline {
   }
 
   private tick(j: JumpState, flight: FxFlightView, tickUs: number, out: FxVisualEvent[]): void {
-    const { base, bonus, count } = this.provisional(j, flight, tickUs);
-    const difficulty = visualDifficultyPoints(base, base + bonus);
+    const { base, bonus, count, mature } = this.provisional(j, flight, tickUs);
+    const raw = visualDifficultyPoints(base, base + bonus);
+    // 踏切から予測滞空時間の80%までは最高段階を出さない（序盤の誤った最高演出を防ぐ）。
+    const difficulty = mature ? raw : Math.min(FX_AIR_EARLY_CAP, raw);
     const f = Math.max(1, emphasisLevel(difficulty));
     if (f > j.fLevel) {
       j.fLevel = f;
@@ -195,8 +212,12 @@ export class FxTimeline {
     }
   }
 
-  /** tickUs までの実回転から、表示用の暫定の基礎点と連携点を求める。 */
-  private provisional(j: JumpState, flight: FxFlightView, tickUs: number): { base: number; bonus: number; count: number } {
+  /**
+   * tickUs までの実回転から、表示用の暫定の基礎点と連携点を求める。
+   * 基礎点は「経過時間に対して、物理上限の90%で回し続けた量にどれだけ近いか（effort）」と
+   * 「予測滞空時間のどこまで来たか（成熟度）」の積で決める。単独の犬・人でも、全力で回し続ければ1000に届く。
+   */
+  private provisional(j: JumpState, flight: FxFlightView, tickUs: number): { base: number; bonus: number; count: number; mature: boolean } {
     const history = flight.history;
     while (j.spanIndex < history.length && history[j.spanIndex].endUs <= tickUs) {
       this.accumulate(j.dog, j.rider, history[j.spanIndex], history[j.spanIndex].endUs - history[j.spanIndex].startUs, flight.heading);
@@ -212,12 +233,13 @@ export class FxTimeline {
     const end = j.spanIndex + (open && open.startUs < tickUs ? 1 : 0);
     const inputs = j.accepted.filter(input => input.atUs <= tickUs);
     const combo = scoreTargetSwitches(history.slice(0, end), inputs);
-    if (!directions) return { base: 0, bonus: combo.bonus, count: combo.count };
-    const ceiling = 2 * FREE_MAX_DEG_PER_SEC * j.predictedAirUs / 1e6;
-    const scored = Math.floor((measured + 1e-7) / HALF_TURN) * HALF_TURN;
-    const variety = 1 + 0.08 * Math.min(directions - 1, 2);
-    const base = Math.min(999, Math.max(1, Math.floor(980 * scored * variety / ceiling)));
-    return { base, bonus: combo.bonus, count: combo.count };
+    const elapsedUs = Math.min(j.predictedAirUs, Math.max(0, tickUs - j.takeoffUs));
+    const mature = elapsedUs >= j.predictedAirUs * FX_AIR_MATURE_SHARE;
+    if (!directions || elapsedUs <= 0) return { base: 0, bonus: combo.bonus, count: combo.count, mature };
+    const effort = Math.min(1, measured / (elapsedUs / 1e6 * FREE_MAX_DEG_PER_SEC * FX_AIR_EFFORT_RATE));
+    const maturity = Math.min(1, elapsedUs / (j.predictedAirUs * FX_AIR_MATURE_SHARE));
+    const base = Math.max(1, Math.floor(1000 * effort * maturity));
+    return { base, bonus: combo.bonus, count: combo.count, mature };
   }
 
   private accumulate(dog: number[], rider: number[], span: FreeSpan, dtUs: number, heading: number): void {

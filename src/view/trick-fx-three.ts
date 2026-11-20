@@ -217,6 +217,8 @@ export class ThreeFxSink implements FxSink {
     const k = size < 0.1 ? 0 : size < 0.18 ? 1 : 2;
     // 段の大きさとの差は濃さで補う（大きすぎる光で顔を隠さない）。
     this.dots[k].add(x, y, z, r, g, b, a * Math.min(1.3, size / DOT_SIZES[k]));
+    // 明るい空や路面でも小さな光点が読めるよう、下に薄い影を敷く（V04）。
+    this.shade.add(x, y, z, r * 0.25, g * 0.25, b * 0.3, a * 0.3);
     this.stats.dots++;
   }
 
