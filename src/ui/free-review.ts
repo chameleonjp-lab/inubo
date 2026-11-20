@@ -1,6 +1,8 @@
 import './free-review.css';
 import { h } from './dom';
 import { FreeArena, type FreeResult, type FreeScenario } from '../game/free-arena';
+import { scoreFreeMotion } from '../game/free-score';
+import { chooseTrickFx, type TrickFxVariant } from '../view/trick-fx';
 import { FREE_RULES_VERSION, type FreeTarget } from '../game/free-motion';
 import { length } from '../game/math';
 import { FreePointerController } from '../input/free-pointer';
@@ -33,6 +35,8 @@ export function startFreeReview(root: HTMLElement): void {
   let soundOn = true;
   let shownResult: FreeResult | null = null;
   let playedResult: FreeResult | null = null;
+  let lastFxClock = -100_000;
+  let currentFx: TrickFxVariant | null = null;
   const syncSound = () => audio.update(soundOn && !paused ? 0.7 : 0, { steps: null, wind: null, grind: null }, lastWall);
   const sound = h('button', { 'aria-pressed': 'true', onclick: () => {
     soundOn = !soundOn;
@@ -145,7 +149,14 @@ export function startFreeReview(root: HTMLElement): void {
     pause.textContent = paused ? '再開' : '一時停止';
     jump.disabled = high.disabled = paused || arena.phase === 'air' || arena.phase === 'done';
     pad.dataset.active = String(!paused && arena.phase === 'air');
-    scene.draw(arena.motion.pose);
+    if (arena.phase !== 'air') currentFx = null;
+    else if (arena.motion.timeUs - lastFxClock >= 90_000) {
+      lastFxClock = arena.motion.timeUs;
+      const free = scoreFreeMotion(arena.motion.history, Math.max(1, arena.motion.timeUs), 0, [...arena.motion.seen.values()]);
+      currentFx = arena.motion.history.length && free.dogDegrees + free.riderDegrees >= 3
+        ? chooseTrickFx(free.points, free.label) : null;
+    }
+    scene.draw(arena.motion.pose, window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? null : currentFx);
   }
   const frame = () => { sync(); update(); requestAnimationFrame(frame); }; frame();
 }
