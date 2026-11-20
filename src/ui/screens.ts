@@ -14,7 +14,7 @@ import { foodActive } from '../game/items';
 import { maxSpeed } from '../game/motion';
 import { GestureRecognizer } from '../input/gestures';
 import { FreePointerController } from '../input/free-pointer';
-import { COURSE_DEFS, RACE_COURSES, getCourse } from '../content/courses/index';
+import { COURSE_DEFS, getCourse } from '../content/courses/index';
 import { DOGS, DOG_ORDER } from '../content/dogs';
 import { GameView } from '../view/scene';
 import { CenterText, UI_CUES, cueForEvent, type Cue } from '../view/effects';
@@ -317,34 +317,6 @@ export class App {
         h('label', { class: 'setting' }, '光の量', light),
         toggle('自分の最速の走りを半透明で表示する', () => this.settings.ghost, (v) => (this.settings.ghost = v), 'ghost'),
         h('p', { class: 'note' }, '設定は成績に影響しません。消音・弱い演出でも、成功と失敗は文字と形で見分けられます。'),
-        h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
-      ),
-    );
-  }
-
-  showStamps(): void {
-    const stamps = this.records.stamps();
-    const ch = this.records.challenges();
-    this.setScreen(
-      h(
-        'section',
-        { class: 'screen text-screen' },
-        h('h2', {}, 'スタンプ帳'),
-        h(
-          'table',
-          { class: 'stamps' },
-          h('tr', {}, h('th', {}, ''), RACE_COURSES.map((c) => h('th', {}, COURSE_DEFS[c]!.name))),
-          DOG_ORDER.map((d) => h('tr', {}, h('th', {}, DOGS[d].name), RACE_COURSES.map((c) => h('td', {}, stamps[d]?.[c] ? '🐾' : '・')))),
-        ),
-        h('h3', {}, '寄り道課題'),
-        h(
-          'ul',
-          {},
-          RACE_COURSES.map((c) => {
-            const def = COURSE_DEFS[c]!;
-            return h('li', {}, `${def.name}: ${def.challenge?.label ?? '―'} ${ch[`${c}|${def.version}`] ? '🐾 達成' : ''}`);
-          }),
-        ),
         h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
       ),
     );
