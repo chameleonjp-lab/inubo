@@ -72,3 +72,33 @@ test('確認版は本番の保存・送信・検査用の書き換え口を初�
   expect(await page.evaluate(() => '__inubo' in window)).toBe(false);
   expect(external).toEqual([]);
 });
+
+const FA_IDS = ['B', 'H', 'D'].flatMap(t => [...Array.from({ length: 10 }, (_, i) => `${t}-F${String(i + 1).padStart(2, '0')}`),
+  ...Array.from({ length: 7 }, (_, i) => `${t}-A${String(i + 1).padStart(2, '0')}`)]);
+
+test('81種類の確認：空中の派手さF・軌跡Aの54件すべてが、球の模型の上に描かれる', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await page.getByTestId('free-slow').click();
+  for (const id of FA_IDS) {
+    await page.getByTestId('fx-gallery').selectOption(id);
+    await page.getByTestId('fx-gallery-play').click();
+    await expect(page.locator('.free-review')).toHaveAttribute('data-fx-ids', new RegExp(`(^| )${id}( |$)`));
+    await expect.poll(() => page.locator('.free-review').getAttribute('data-fx-lines').then(Number), { message: id }).toBeGreaterThan(0);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('81種類の確認：着地L の代表（B/H/D の L01・L05・L10）が着地の瞬間に出る', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await page.getByTestId('free-slow').click();
+  for (const id of ['B', 'H', 'D'].flatMap(t => ['01', '05', '10'].map(l => `${t}-L${l}`))) {
+    await page.getByTestId('fx-gallery').selectOption(id);
+    await page.getByTestId('fx-gallery-play').click();
+    await expect(page.locator('.free-review')).toHaveAttribute('data-fx-ids', new RegExp(`(^| )${id}( |$)`), { timeout: 6_000 });
+  }
+  expect(errors).toEqual([]);
+});

@@ -41,6 +41,8 @@ export class SoundScheduler {
   private lastByObj = new Map<string, number>();
   private resumedAtMs = -Infinity;
   private paused = false;
+  /** 着地音を鳴らした走行とジャンプ（同じ着地の通知が重なっても1回だけ鳴らす）。 */
+  private landedJumps = new Set<string>();
 
   constructor(private settings: Settings) {}
 
@@ -71,6 +73,12 @@ export class SoundScheduler {
     for (const c of cues) {
       if (!c.sound) continue;
       if (this.paused && c.sound !== 'ambientDown') continue;
+      if (c.effect === 'E13' && c.sound.startsWith('trickLanding') && typeof c.data?.jumpId === 'number') {
+        const key = `${c.runId}:${c.data.jumpId}`;
+        if (this.landedJumps.has(key)) continue;
+        this.landedJumps.add(key);
+        if (this.landedJumps.size > 200) this.landedJumps.delete(this.landedJumps.values().next().value!);
+      }
       const lastName = this.lastByName.get(c.sound);
       if (lastName !== undefined && nowMs - lastName < DEDUPE_MS) continue;
       if (c.objId && c.sound === 'thud') {
@@ -175,6 +183,38 @@ const TONES: Record<string, Tone[]> = {
   stepSwitch: [{ f: 260, t: 0, d: 0.03, type: 'square', g: 0.18 }],
   skid: [{ f: 180, t: 0, d: 0.12, type: 'sawtooth', g: 0.14 }],
 };
+
+/**
+ * 81種類の着地L の音。段階ごとに音の並び・重ね方・長さを変える（外部の音声ファイルは使わない）。
+ * 両方Bは犬（三角波・低め）と人（正弦波・高め）が交互に応える。人だけHは高めで軽く、犬だけDは低めで柔らかい。
+ * どの段階も同時に鳴る音は7つまで。急に大きな音にしないよう、音が増えるほど1音ずつは小さくする。
+ */
+type NoteStep = [semitone: number, t: number, d: number];
+const FX_LANDING_PATTERNS: readonly (readonly NoteStep[])[] = [
+  [[-5, 0, 0.09]], // 01 低い単音を短く1回
+  [[7, 0, 0.24]], // 02 明るい単音＋短い余韻
+  [[0, 0, 0.09], [4, 0.07, 0.12]], // 03 2音が順に上がる
+  [[-12, 0, 0.16], [7, 0, 0.16]], // 04 低音と高音の二音が同時
+  [[0, 0, 0.08], [4, 0.06, 0.08], [7, 0.12, 0.14]], // 05 3音の短い上昇
+  [[-5, 0, 0.1], [4, 0.07, 0.1], [12, 0.14, 0.18]], // 06 中低音から高音への3音
+  [[0, 0, 0.08], [4, 0.06, 0.08], [7, 0.12, 0.08], [12, 0.18, 0.12], [16, 0.26, 0.3], [19, 0.26, 0.3]], // 07 4音の上昇＋柔らかい和音
+  [[-12, 0, 0.1], [12, 0.08, 0.14], [16, 0.08, 0.14], [-12, 0.2, 0.1], [19, 0.28, 0.22]], // 08 低音の拍と高音の和音を交互
+  [[0, 0, 0.07], [2, 0.05, 0.07], [4, 0.1, 0.07], [7, 0.15, 0.07], [9, 0.2, 0.08], [12, 0.25, 0.42]], // 09 6音の連続上昇＋長めの余韻
+  [[-12, 0, 0.22], [0, 0.05, 0.12], [4, 0.1, 0.12], [7, 0.15, 0.14], [12, 0.23, 0.34], [16, 0.23, 0.32], [19, 0.23, 0.3]], // 10 7音の和音フィナーレ
+];
+const FX_LANDING_BASE = { B: 392, H: 494, D: 311 } as const;
+for (const [target, base] of Object.entries(FX_LANDING_BASE) as ['B' | 'H' | 'D', number][]) {
+  FX_LANDING_PATTERNS.forEach((pattern, i) => {
+    const each = 0.56 / Math.sqrt(pattern.length);
+    TONES[`trickLanding${target}${String(i + 1).padStart(2, '0')}`] = pattern.map(([semi, at, d], k) => ({
+      f: base * 2 ** (semi / 12),
+      t: at,
+      d: target === 'D' ? d * 1.15 : target === 'H' ? d * 0.9 : d,
+      type: target === 'D' ? 'triangle' : target === 'H' ? 'sine' : k % 2 ? 'sine' : 'triangle',
+      g: each,
+    }));
+  });
+}
 
 /** すべての1回音に合成の定義があるかを検査で確かめるため、名前の一覧を出す。 */
 export function synthNames(): string[] {

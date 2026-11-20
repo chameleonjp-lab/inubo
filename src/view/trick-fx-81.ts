@@ -119,7 +119,7 @@ const B_F: Row[] = [
   { name: '共鳴の大舞', anchors: ['dogBack', 'riderWaist'], recipe: [
     s('orbit', ['dogBack'], 'dog', { size: 0.8, n: 3, p: { tilt: 0.45, spin: 1.1, layers: 1 } }),
     s('orbit', ['riderWaist'], 'rider', { size: 0.75, n: 3, p: { tilt: -0.45, spin: -1, layers: 1 } }),
-    s('emblem', ['pivot'], 'white', { dur: 700, size: 0.9, combo: true, p: { shape: 4, air: 1 } })], opacity: 0.8 },
+    s('emblem', ['pivot'], 'white', { dur: 700, size: 0.9, combo: true, p: { shape: 4, air: 1 } })], opacity: 0.86 },
 ];
 const B_A: Row[] = [
   { name: '並走する2本線', anchors: ['dogPawFL', 'riderShoulderL'], recipe: [
@@ -163,7 +163,7 @@ const B_L: Row[] = [
   { name: '共演の大フィナーレ', anchors: ['contact'], life: 2000, recipe: [
     s('ring', ['contact'], 'body', { dur: 1800, size: 1.6, n: 2, p: { twoCenters: 0.5 } }),
     s('emblem', ['contact'], 'white', { t0: 350, dur: 1500, size: 1.0, p: { shape: 2 } }),
-    s('spray', ['contact'], 'body', { dur: 900, size: 1, n: 30, p: { fan: 3.1, up: 0.8 } })], opacity: 0.8 },
+    s('spray', ['contact'], 'body', { dur: 900, size: 1, n: 30, p: { fan: 3.1, up: 0.8 } })], opacity: 0.86 },
 ];
 
 // ---------------------------------------------------------------- H：人のみ（青）
@@ -188,7 +188,7 @@ const H_F: Row[] = [
     s('orbit', ['riderHead', 'riderShoulderL', 'riderWaist'], 'ice', { size: 0.42, n: 3, p: { tilt: 0.35, spin: 0.9, perAnchor: 1 } })] },
   { name: '乗り手の極限演技', anchors: ['riderHead', 'riderHandL', 'riderHandR'], recipe: [
     s('ghost', ['riderHandL', 'riderShoulderL', 'riderHead', 'riderShoulderR', 'riderHandR'], 'ice', { n: 2, size: 1, p: { lag: 90, life: 360 } }),
-    s('orbit', ['riderWaist'], 'rider', { size: 0.55, n: 4, p: { tilt: 0.3, spin: 1.3, stagger: 180, layers: 1 } })], opacity: 0.8 },
+    s('orbit', ['riderWaist'], 'rider', { size: 0.55, n: 4, p: { tilt: 0.3, spin: 1.3, stagger: 180, layers: 1 } })], opacity: 0.86 },
 ];
 const H_A: Row[] = [
   { name: '頭の一本線', anchors: ['riderHelmet'], recipe: [
@@ -227,7 +227,7 @@ const H_L: Row[] = [
     s('descend', ['riderWaist'], 'ice', { dur: 1400, size: 0.5, n: 2 })] },
   { name: '乗り手の大成功', anchors: ['riderHead', 'riderHandL', 'riderHandR', 'contact'], life: 2000, recipe: [
     s('ring', ['contact'], 'rider', { dur: 1800, size: 1.3, n: 4, p: { gap: 140 } }),
-    s('ghost', ['riderHandL', 'riderShoulderL', 'riderHead', 'riderShoulderR', 'riderHandR'], 'ice', { dur: 900, n: 2, size: 1, p: { lag: 120, life: 900, frozen: 1 } })], opacity: 0.8 },
+    s('ghost', ['riderHandL', 'riderShoulderL', 'riderHead', 'riderShoulderR', 'riderHandR'], 'ice', { dur: 900, n: 2, size: 1, p: { lag: 120, life: 900, frozen: 1 } })], opacity: 0.86 },
 ];
 
 // ---------------------------------------------------------------- D：犬のみ（橙・琥珀）
@@ -252,7 +252,7 @@ const D_F: Row[] = [
     s('orbit', ['dogNose', 'dogBack', 'dogTail'], 'amber', { size: 0.62, n: 1, p: { enclose: 1, spin: 0.8 } })] },
   { name: '肉球の極限舞', anchors: [...PAWS, 'dogTail'], recipe: [
     s('trail', [...PAWS, 'dogTail'], 'amber', { size: 1, p: { window: 300, style: 1 } }),
-    s('orbit', ['dogBack'], 'amber', { size: 0.85, n: 2, p: { tilt: 0.25, spin: 1.2, assemble: 900 } })], opacity: 0.8 },
+    s('orbit', ['dogBack'], 'amber', { size: 0.85, n: 2, p: { tilt: 0.25, spin: 1.2, assemble: 900 } })], opacity: 0.86 },
 ];
 const D_A: Row[] = [
   { name: 'しっぽの筆線', anchors: ['dogTail'], recipe: [
@@ -279,8 +279,8 @@ const D_L: Row[] = [
   { name: '短いしっぽの渦', anchors: ['dogTail', 'contact'], life: 900, recipe: [
     s('swirl', ['dogTail'], 'dog', { dur: 800, size: 0.45 })] },
   { name: '小さな肉球の輪', anchors: ['dogPawFL', 'contact'], life: 1000, recipe: [
-    s('prints', ['contact'], 'dog', { dur: 900, size: 0.3, p: { shape: 0 } }),
-    s('ring', ['contact'], 'dog', { t0: 120, dur: 800, size: 0.55, n: 1, p: { thin: 1 } })] },
+    s('prints', ['dogPawFL'], 'dog', { dur: 900, size: 0.3, p: { shape: 0 } }),
+    s('ring', ['dogPawFL'], 'dog', { t0: 120, dur: 800, size: 0.55, n: 1, p: { thin: 1 } })] },
   { name: '四足の波紋', anchors: [...PAWS, 'contact'], life: 1000, recipe: [
     s('ring', PAWS, 'dog', { dur: 900, size: 0.32, n: 1 })] },
   { name: '跳ねる肉球粒', anchors: ['contact'], life: 1100, recipe: [
@@ -297,7 +297,7 @@ const D_L: Row[] = [
     s('rays', PAWS, 'amber', { dur: 1300, size: 0.6, n: 5 }),
     s('arc', ['dogTail'], 'dog', { dur: 1200, size: 0.75, p: { sweep: 2.6, ground: 1 } }),
     s('ring', ['contact'], 'amber', { dur: 1800, size: 1.3, n: 2, p: { gap: 160 } }),
-    s('emblem', ['contact'], 'amber', { t0: 250, dur: 1600, size: 0.75, p: { shape: 1 } })], opacity: 0.8 },
+    s('emblem', ['contact'], 'amber', { t0: 250, dur: 1600, size: 0.75, p: { shape: 1 } })], opacity: 0.86 },
 ];
 
 const ROWS: Record<FxTarget, Record<FxKind, Row[]>> = {
@@ -321,7 +321,7 @@ function build(): readonly FxProgram[] {
           trigger: kind === 'L' ? 'land' : kind === 'A' ? 'rotation' : level === 1 ? 'takeoff' : 'level',
           lifetimeMs: kind === 'L' ? Math.min(2000, row.life ?? 1000) : 0,
           // 段階が上がるほど少し強くするが、顔や前方を隠さない上限に収める。
-          opacityMax: Math.min(row.opacity ?? 0.9, 0.55 + 0.04 * level),
+          opacityMax: Math.min(row.opacity ?? 0.92, 0.72 + 0.02 * level),
           sizeMax: row.sizeMax ?? (kind === 'L' ? 1.8 : 1.0),
           params: row.params ?? {},
         });

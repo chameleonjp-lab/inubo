@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { BodyAnchorKey } from './trick-fx-81';
 import type { DogLook } from '../content/types';
 import { BOARD_PIVOT_Y, DOG_PIVOT_Y, DOG_SCALE, RIDER_SCALE, riderFootHeight } from '../game/free-flight';
 
@@ -27,6 +28,16 @@ export interface Rig {
   paw: THREE.Object3D;
   materials: THREE.MeshStandardMaterial[];
   look: DogLook;
+  /** 演出用の見えない計測点（四足・耳・しっぽの先・頭・肩・手・腰・靴底など）。形・動き・当たり判定には使わない。 */
+  anchors: Record<BodyAnchorKey, THREE.Object3D>;
+}
+
+/** 親の中の位置に、見えない計測点を1つ付ける。 */
+function mark(parent: THREE.Object3D, x: number, y: number, z: number): THREE.Object3D {
+  const o = new THREE.Object3D();
+  o.position.set(x, y, z);
+  parent.add(o);
+  return o;
 }
 
 function mat(color: string, list: THREE.MeshStandardMaterial[]): THREE.MeshStandardMaterial {
@@ -80,6 +91,7 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
     head.add(eye);
   }
   const ears: THREE.Object3D[] = [];
+  const earTips: THREE.Object3D[] = [];
   for (const z of [-0.09, 0.09]) {
     let ear: THREE.Mesh;
     if (look.ear === 'pointy') {
@@ -96,6 +108,8 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
     }
     head.add(ear);
     ears.push(ear);
+    // 耳の先：立ち耳と大きな耳は円すいの頂点、垂れ耳は外側の端。
+    earTips.push(look.ear === 'pointy' ? mark(ear, 0, 0.075, 0) : look.ear === 'big' ? mark(ear, 0, 0.11, 0) : mark(ear, 0, 0, z > 0 ? 0.05 : -0.05));
   }
 
   let tail: THREE.Mesh;
@@ -112,9 +126,12 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
     tail.rotation.z = Math.PI / 2.6;
   }
   dog.add(tail);
+  // しっぽの実際の先：巻き尾は弧の終わり、短い尾は球の後ろ、棒状の尾は細い側の端。
+  const tailTip = look.tail === 'curl' ? mark(tail, 0, -0.09, 0) : look.tail === 'stub' ? mark(tail, -0.06, 0, 0) : mark(tail, 0, 0.2, 0);
 
   const legs: THREE.Group[] = [];
   const pawObj = new THREE.Object3D();
+  const pawTips: THREE.Object3D[] = [];
   for (const [lx, lz] of [
     [look.bodyLength * 0.36, -0.12],
     [look.bodyLength * 0.36, 0.12],
@@ -131,6 +148,8 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
     hip.add(foot);
     dog.add(hip);
     legs.push(hip);
+    // 足先の中心（前左・前右・後左・後右の順）。
+    pawTips.push(mark(hip, 0, -legLen, 0));
   }
   pawObj.position.set(0, -DOG_PIVOT_Y, 0);
   dog.add(pawObj);
@@ -149,6 +168,7 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
   const skin = mat('#f2c9a0', materials);
   const helm = mat(helmet, materials);
   const riderLegs: THREE.Group[] = [];
+  const shoes: THREE.Object3D[] = [];
   for (const z of [-0.12, 0.12]) {
     const hip = new THREE.Group();
     hip.position.set(0, 0.62, z);
@@ -160,11 +180,13 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
     hip.add(shoe);
     rider.add(hip);
     riderLegs.push(hip);
+    shoes.push(mark(hip, 0.04, -0.6, 0));
   }
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.36), cloth);
   torso.position.y = 0.88;
   rider.add(torso);
   const riderArms: THREE.Group[] = [];
+  const hands: THREE.Object3D[] = [];
   for (const z of [-0.23, 0.23]) {
     const sh = new THREE.Group();
     sh.position.set(0, 1.08, z);
@@ -177,6 +199,7 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
     sh.rotation.x = z > 0 ? -0.5 : 0.5;
     rider.add(sh);
     riderArms.push(sh);
+    hands.push(mark(sh, 0, -0.52, 0));
   }
   const headR = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skin);
   headR.position.y = 1.28;
@@ -201,7 +224,16 @@ export function createRig(look: DogLook, clothes: string, helmet: string, ghost 
   root.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = false;
   });
-  return { root, board, dog, rider, legs, tail, ears, riderTorso: torso, riderArms, riderLegs, shoulder, nose: noseObj, paw: pawObj, materials, look };
+  const anchors: Record<BodyAnchorKey, THREE.Object3D> = {
+    dogNose: noseObj, dogEarL: earTips[0], dogEarR: earTips[1], dogTail: tailTip,
+    dogPawFL: pawTips[0], dogPawFR: pawTips[1], dogPawBL: pawTips[2], dogPawBR: pawTips[3],
+    dogBack: mark(dog, 0, bodyY + look.bodyHeight / 2, 0), dogBelly: mark(dog, 0, bodyY - look.bodyHeight / 2, 0),
+    riderHead: mark(rider, 0, 1.28, 0), riderHelmet: mark(rider, 0, 1.46, 0),
+    riderShoulderL: riderArms[0], riderShoulderR: riderArms[1], riderHandL: hands[0], riderHandR: hands[1],
+    riderWaist: mark(rider, 0, 0.62, 0), riderShoeL: shoes[0], riderShoeR: shoes[1],
+    pivot: board,
+  };
+  return { root, board, dog, rider, legs, tail, ears, riderTorso: torso, riderArms, riderLegs, shoulder, nose: noseObj, paw: pawObj, materials, look, anchors };
 }
 
 export interface RigPose {

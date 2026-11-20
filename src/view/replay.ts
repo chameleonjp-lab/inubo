@@ -1,6 +1,8 @@
 import { quatAxisAngle, quatMul, type Quat, type Vec3 } from '../game/math';
 import { courseFlightPose } from '../game/free-flight';
-import { isFreestyleVersion, type FreeBody } from '../game/free-motion';
+import { isFreestyleVersion, type FreeBody, type FreeTarget } from '../game/free-motion';
+import { FxRunReader } from './trick-fx-sim';
+import type { FxVisualEvent } from './trick-fx-timeline';
 import { bodyQuat, dogQuat } from '../game/tricks';
 import { sampleAt, worldXZ } from '../game/track';
 import type { CourseId, DogId } from '../content/types';
@@ -25,6 +27,11 @@ export interface ReplayData {
   stepMs: number;
   /** 最初の12値は従来どおり。自由回転中だけ犬・人の相対位置(mm)と世界姿勢(×1000)を後ろに加える。 */
   frames: number[][];
+  /**
+   * 81種類の演出の出来事（段階・対象が変わった瞬間と着地だけ）。新しい走行だけが持つ。
+   * 無い記録は演出なしで再生し、姿勢から演出を推測して作らない。
+   */
+  visualEvents?: FxVisualEvent[];
 }
 
 export interface Pose {
@@ -52,7 +59,10 @@ export function poseOf(run: SimState, s = run.s, x = run.x, y = run.y, tUs = run
 export class ReplayRecorder {
   private frames: number[][] = [];
   private nextUs = 0;
-  constructor(private stepMs = 100) {}
+  private fx = new FxRunReader();
+  private visual: FxVisualEvent[] = [];
+  /** selected は画面で選んでいる回す対象（踏切直後の演出に使う。画面の描画と同じ値）。 */
+  constructor(private stepMs = 100, private selected: () => FreeTarget = () => 'common') {}
 
   /** 計算を進めるたびに呼ぶ。stepMs ごとに1枚残す。 */
   sample(run: SimState): void {
@@ -64,6 +74,8 @@ export class ReplayRecorder {
       this.frames.push(frame);
       this.nextUs += this.stepMs * 1000;
     }
+    // 画面と同じ決め方で演出の出来事を残す（走行の時計だけで決まるので、描画の速さに左右されない）。
+    for (const { ev } of this.fx.read(run, this.selected())) this.visual.push(ev);
   }
 
   finish(run: SimState): ReplayData {
@@ -76,6 +88,7 @@ export class ReplayRecorder {
       ...(isFreestyleVersion(run.id.rulesVersion) ? { motionVersion: 'freestyle-1' as const } : {}),
       stepMs: this.stepMs,
       frames: this.frames.slice(),
+      ...(this.visual.length ? { visualEvents: this.visual.slice().sort((a, b) => a.tUs - b.tUs) } : {}),
     };
   }
 }
