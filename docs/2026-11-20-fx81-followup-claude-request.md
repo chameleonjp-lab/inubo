@@ -3,6 +3,9 @@
 対象リポジトリ：
 https://github.com/chameleonjp-lab/inubo
 
+計画書PR：https://github.com/chameleonjp-lab/inubo/pull/30
+PR #30がまだmainにない場合は、同PRのブランチ `docs/20261120-fx81-followups-claude-plan` を参照してください。コード作業は最新mainから新ブランチを作り、PR #30を前提資料として明記し、計画PRがマージされたら競合を解消してください。計画書を読めないことを理由に推測で進めないでください。
+
 **あなたは今回、実装・画面・効果音・テスト・レビュー・PR作成まで担当します。** 仕様書と現行実装を先に照合し、残対応を完了させてください。現在mainへマージ済みのPR #29が出発点です。
 
 ## 最初に必ず読む資料
