@@ -21,8 +21,12 @@ import { extrapolate } from '../game/run';
 import { maxSpeed } from '../game/motion';
 import { foodActive, poopActive } from '../game/items';
 import { length, quatAxisAngle, quatRotate } from '../game/math';
-import { scoreFreeMotion } from '../game/free-score';
-import { chooseTrickFx } from './trick-fx';
+import type { FreeTarget } from '../game/free-motion';
+import { FxEngine, type FxFrameFlags } from './trick-fx-engine';
+import { RigFxSource } from './trick-fx-anchors';
+import { FxRunReader } from './trick-fx-sim';
+import { ThreeFxSink } from './trick-fx-three';
+import type { FxVisualEvent } from './trick-fx-timeline';
 import { add3 } from '../game/free-math';
 import { BOARD_PIVOT_Y, DOG_PIVOT_Y, DOG_SCALE, RIDER_HIP_Y, riderFootHeight } from '../game/free-flight';
 import { FollowCamera } from './camera';
@@ -130,9 +134,11 @@ class Particles {
     this.points = new THREE.Points(this.geo, new THREE.PointsMaterial({ size: 0.12, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }));
     this.points.frustumCulled = false;
   }
-  emit(n: number, at: THREE.Vector3, color: THREE.Color, speed: number, up: number, life = 0.6): void {
+  /** dir を与えると、その向き（床の上の角度）を中心に spread の幅で散らす。 */
+  emit(n: number, at: THREE.Vector3, color: THREE.Color, speed: number, up: number, life = 0.6, dir?: { x: number; z: number; spread: number }): void {
+    const center = dir ? Math.atan2(dir.z, dir.x) : 0;
     for (let i = 0; i < n && this.list.length < this.cap; i++) {
-      const a = Math.random() * Math.PI * 2;
+      const a = dir ? center + (Math.random() - 0.5) * dir.spread : Math.random() * Math.PI * 2;
       const sp = speed * (0.4 + Math.random() * 0.6);
       this.list.push({ x: at.x, y: at.y, z: at.z, vx: Math.cos(a) * sp, vy: up * (0.5 + Math.random()), vz: Math.sin(a) * sp, life, max: life, r: color.r, g: color.g, b: color.b });
     }
@@ -270,8 +276,24 @@ export class GameView {
   private legPhase = 0;
   private lastPrintS = 0;
   private wagUntil = 0;
-  private lastAirFxMs = -1e9;
   private sun: THREE.DirectionalLight;
+  /** 81種類の空中・着地演出。決める側（fxReader）と描く側（fxEngine）を分ける。 */
+  private fxReader = new FxRunReader();
+  private fxEngine = new FxEngine();
+  private fxSink: ThreeFxSink;
+  private fxSource = new RigFxSource();
+  private fxSelected: FreeTarget = 'common';
+  private fxPaused = false;
+  private fxComboSeen = -1e9;
+  private fxReduced: MediaQueryList | null = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null;
+  /** 半透明の再生（自分の最速）の演出。保存された演出の出来事があるときだけ描く。 */
+  private ghostFx = new FxEngine();
+  private ghostFxSink: ThreeFxSink;
+  private ghostFxSource = new RigFxSource();
+  private ghostFxIndex = 0;
+  private ghostFxLastUs = -1;
+  /** 検査用：直前のフレームで描いた演出の命令の数。 */
+  fxStats = { lines: 0, dots: 0, decals: 0, bursts: 0, ids: [] as string[] };
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -305,6 +327,30 @@ export class GameView {
     this.windLines.visible = false;
     this.windLines.frustumCulled = false;
     this.scene.add(this.windLines);
+    // 着地の粒は既存の600粒の上限を共有し、1回の着地では最大72粒にする。
+    const burst = (n: number, at: THREE.Vector3, color: THREE.Color, speed: number, up: number, life: number, dirX: number, dirZ: number, spread: number) =>
+      this.particles.emit(Math.min(72, n), at, color, speed, up, life, { x: dirX, z: dirZ, spread });
+    this.fxSink = new ThreeFxSink(burst);
+    this.ghostFxSink = new ThreeFxSink(null);
+    this.scene.add(this.fxSink.group, this.ghostFxSink.group);
+  }
+
+  /** 画面で選んでいる回す対象（踏切直後の演出の対象に使う）。 */
+  setFxSelectedTarget(target: FreeTarget): void {
+    this.fxSelected = target;
+  }
+
+  /** 一時停止中は演出の時計を止め、復帰しても止まっていた分をまとめて描かない。 */
+  setFxPaused(paused: boolean): void {
+    this.fxPaused = paused;
+  }
+
+  /** 連携が実際に成立したことを、一度だけ知らせる（画面の「連携」の印に使う）。 */
+  takeFxCombo(): boolean {
+    const at = this.fxEngine.lastComboMs;
+    if (at <= this.fxComboSeen) return false;
+    this.fxComboSeen = at;
+    return true;
   }
 
   resize(w: number, h: number): void {
@@ -328,6 +374,9 @@ export class GameView {
     }
     this.ghostRig = null;
     this.ghost = replay;
+    this.ghostFx.clear();
+    this.ghostFxIndex = 0;
+    this.ghostFxLastUs = -1;
     if (replay && look) {
       this.ghostRig = createRig(look, '#ffffff', '#ffffff', true);
       this.scene.add(this.ghostRig.root);
@@ -343,7 +392,12 @@ export class GameView {
     this.lastPrintS = 0;
     this.legPhase = 0;
     this.wagUntil = 0;
-    this.lastAirFxMs = -1e9;
+    this.fxReader.reset();
+    this.fxEngine.clear();
+    this.ghostFx.clear();
+    this.ghostFxIndex = 0;
+    this.ghostFxLastUs = -1;
+    this.fxComboSeen = -1e9;
     this.impactUntil = 0;
     this.impact.visible = false;
     this.windLines.visible = false;
@@ -718,64 +772,27 @@ export class GameView {
     const dogSpinning = omega ? length(add3(omega.common, omega.dog)) > 0.3 : rots.some((r) => r.channel === 'dog' && renderUs >= r.startUs && renderUs < r.startUs + r.durUs);
     const bodySpinning = omega ? length(add3(omega.common, omega.rider)) > 0.3 : rots.some((r) => r.channel === 'body' && renderUs >= r.startUs && renderUs < r.startUs + r.durUs);
     this.rig.root.updateMatrixWorld(true);
-    if (dogSpinning) this.dogTrail.push(this.rig.paw.getWorldPosition(new THREE.Vector3()));
+    // 自由回転では81種類の軌跡（実際の四足・手・靴などに追従）を使い、従来の2本線は旧ルールだけに残す。
+    const legacyTrails = !omega;
+    if (legacyTrails && dogSpinning) this.dogTrail.push(this.rig.paw.getWorldPosition(new THREE.Vector3()));
     else this.dogTrail.fade();
-    if (bodySpinning) this.shoulderTrail.push(this.rig.shoulder.getWorldPosition(new THREE.Vector3()));
+    if (legacyTrails && bodySpinning) this.shoulderTrail.push(this.rig.shoulder.getWorldPosition(new THREE.Vector3()));
     else this.shoulderTrail.fade();
 
-    // 実際の回転履歴から途中得点を求め、空中の光が技の難しさに応じて強くなる。
-    // 約90msに1回だけ更新する。高得点でも視認性を落とさず、既存の600粒上限を共有する。
-    if (run.freeFlight && (dogSpinning || bodySpinning) && nowMs - this.lastAirFxMs >= 90) {
-      this.lastAirFxMs = nowMs;
-      const flight = run.freeFlight;
-      const scored = scoreFreeMotion(flight.motion.history, Math.max(1, run.simUs - flight.takeoffUs),
-        flight.heading, [...flight.motion.seen.values()]);
-      const fx = chooseTrickFx(scored.points, scored.label);
-      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-      const count = Math.min(22, Math.round((1 + fx.tier * 2) * lightK * (reduced ? 0.3 : 1)));
-      if (count > 0) {
-        const paw = this.rig.paw.getWorldPosition(new THREE.Vector3());
-        const shoulder = this.rig.shoulder.getWorldPosition(new THREE.Vector3());
-        const angle = nowMs * 0.009;
-        const offset = new THREE.Vector3(Math.cos(angle), Math.sin(angle), Math.sin(angle * 0.8)).multiplyScalar(0.2 + fx.tier * 0.07);
-        const position = fx.motion === 'orbit' ? paw.clone().add(offset) :
-          fx.motion === 'helix' ? shoulder.clone().add(offset.multiplyScalar(-1)) :
-          fx.motion === 'cross' ? paw.clone().lerp(shoulder, 0.5).add(offset) :
-          fx.motion === 'comet' ? paw.clone().add(new THREE.Vector3(-0.4, 0.15, 0)) :
-          shoulder.clone().add(new THREE.Vector3(0, 0.25 + fx.tier * 0.12, 0));
-        const color = new THREE.Color(['#9cd3df', '#62e2ff', '#b3a7ff', '#ffc66b', '#ffe99c'][fx.tier - 1]);
-        this.particles.emit(count, position, color, 0.7 + fx.tier * 0.5, 0.6 + fx.tier * 0.2, 0.35 + fx.tier * 0.07);
-      }
-    }
+    // 81種類の演出：走行の時計で段階を決め（描画の速さに左右されない）、実際の身体の計測点から描く。
+    const reduced = this.fxReduced?.matches ?? false;
+    const fxFlags: FxFrameFlags = { reduced, weak: settings.light === 'weak', paused: this.fxPaused, alpha: 1, heading: pose.heading, groundY };
+    for (const { ev, source } of this.fxReader.read(run, this.fxSelected)) this.applyFx(this.fxEngine, ev, source ? this.contactOf(source) : null);
+    this.fxSource.rig = this.rig;
+    this.fxSink.begin();
+    this.fxEngine.frame(dtMs, this.fxSource, this.fxSink, fxFlags);
+    this.fxSink.end();
+    this.fxStats = { ...this.fxSink.stats, ids: this.fxEngine.activeIds() };
 
     const at = new THREE.Vector3(pose.x, pose.y, pose.z);
     const fwd = new THREE.Vector3(Math.cos(pose.heading), 0, Math.sin(pose.heading));
     const sand = new THREE.Color('#d9c38f');
     for (const c of cues) {
-      // 難易度に合わせ、着地の閃光・輪・足跡・星を使い分ける。計算や当たり判定には影響しない。
-      if (c.effect === 'E13' && c.trickTier && c.landingText) {
-        const fx = c.landingText.fx;
-        const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-        const n = Math.round(fx.particleBudget * lightK * (reduced ? 0.16 : 1));
-        const color = new THREE.Color(['#8cdddf', '#60dbea', '#b4a1ff', '#ffd372', '#f9efb2'][fx.tier - 1]);
-        const ground = new THREE.Vector3(pose.x, groundY + 0.10, pose.z);
-        if (fx.burst === 'sparks') this.particles.emit(n, ground, color, 1.5 + fx.tier, 1.0 + fx.tier * 0.35);
-        if (fx.burst === 'rings') {
-          for (let ring = 0; ring < 4; ring++) {
-            const a = ring * Math.PI / 2;
-            this.particles.emit(Math.ceil(n / 4),
-              ground.clone().add(new THREE.Vector3(Math.cos(a) * 0.8, 0.02, Math.sin(a) * 0.8)), color, 1.0 + fx.tier * 0.3, 0.3);
-          }
-        }
-        if (fx.burst === 'paws') {
-          this.particles.emit(n, ground, color, 1.2 + fx.tier * 0.3, 0.7);
-          for (const [x, z] of [[-0.4, -0.25], [0.4, -0.25], [-0.4, 0.25], [0.4, 0.25]]) {
-            this.prints.add(ground.clone().add(new THREE.Vector3(x, -0.03, z)), pose.heading, color, nowMs, 0.65 + fx.tier * 0.15);
-          }
-        }
-        if (fx.burst === 'stars') this.particles.emit(n, ground.clone().add(new THREE.Vector3(0, 0.85, 0)), color,
-          1.0 + fx.tier * 0.25, 1.7 + fx.tier * 0.35, 0.85);
-      }
       switch (c.visual) {
         case 'sandBurst':
         case 'kickMark':
@@ -888,8 +905,11 @@ export class GameView {
       const gp = replayPoseAt(this.ghost, renderUs);
       this.ghostRig.root.visible = !!gp;
       if (gp) this.placeRig(this.ghostRig, gp);
+      this.frameGhostFx(renderUs, gp, dtMs, settings, groundY);
     } else if (this.ghostRig) {
       this.ghostRig.root.visible = false;
+      this.ghostFxSink.begin();
+      this.ghostFxSink.end();
     }
 
     this.particles.update(dt);
@@ -897,6 +917,41 @@ export class GameView {
     this.cam.update(path, ex.s, ex.x, ex.y, dtMs, settings.shake, run.freeFlight?.heading);
     this.sun.intensity = 1.2 + 0.4 * lightK;
     this.renderer.render(this.scene, this.cam.camera);
+  }
+
+  /** 着地の出来事の位置（その瞬間の接地点）を世界座標にする。描画の時点の位置は使わない。 */
+  private contactOf(e: { pathId: string; sMm: number; x: number; y: number }): { contact: { x: number; y: number; z: number }; yaw: number; switchCount: number } | null {
+    const p = this.course?.paths.get(e.pathId);
+    if (!p) return null;
+    const s = Math.max(0, Math.min(p.length, e.sMm / 1000));
+    const [x, z] = worldXZ(p, s, e.x);
+    const d = (e as { data?: Record<string, unknown> }).data;
+    return { contact: { x, y: e.y, z }, yaw: sampleAt(p, s).heading, switchCount: Number(d?.switchCount ?? 0) };
+  }
+
+  private applyFx(engine: FxEngine, ev: FxVisualEvent, at: { contact: { x: number; y: number; z: number }; yaw: number; switchCount: number } | null): void {
+    engine.apply(ev, at ?? {});
+  }
+
+  /** 保存された演出の出来事を、半透明の再生の身体に合わせて描く。古い記録（出来事なし）は演出なし。 */
+  private frameGhostFx(renderUs: number, gp: Pose | null, dtMs: number, settings: Settings, groundY: number): void {
+    const events = this.ghost?.visualEvents;
+    this.ghostFxSink.begin();
+    if (events && events.length && this.ghostRig) {
+      if (renderUs < this.ghostFxLastUs) { this.ghostFx.clear(); this.ghostFxIndex = 0; }
+      this.ghostFxLastUs = renderUs;
+      this.ghostRig.root.updateMatrixWorld(true);
+      while (this.ghostFxIndex < events.length && events[this.ghostFxIndex].tUs <= renderUs) {
+        const ev = events[this.ghostFxIndex++];
+        this.ghostFx.apply(ev, gp ? { contact: { x: gp.x, y: gp.y, z: gp.z }, yaw: gp.heading } : {});
+      }
+      this.ghostFxSource.rig = gp ? this.ghostRig : null;
+      this.ghostFx.frame(dtMs, this.ghostFxSource, this.ghostFxSink, {
+        reduced: this.fxReduced?.matches ?? false, weak: settings.light === 'weak', paused: this.fxPaused, alpha: 0.35,
+        heading: gp?.heading ?? 0, groundY,
+      });
+    }
+    this.ghostFxSink.end();
   }
 
   private placeRig(rig: Rig, pose: Pose): void {
@@ -957,6 +1012,8 @@ export class GameView {
 
   dispose(): void {
     this.clearTrickLabStage();
+    this.fxSink.dispose();
+    this.ghostFxSink.dispose();
     disposeObjects(this.scene);
     this.scene.clear();
     this.renderer.dispose();

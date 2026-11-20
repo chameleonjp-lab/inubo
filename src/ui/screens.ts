@@ -545,7 +545,7 @@ class GameRun {
     this.freePractice = freestyle && identity.mode === 'practice';
     this.recognizer = new GestureRecognizer({}, 1, !freestyle);
     this.freePointer = freestyle ? new FreePointerController(undefined, true, false) : null;
-    this.recorder = new ReplayRecorder(freestyle ? FREE_REPLAY_STEP_MS : 100);
+    this.recorder = new ReplayRecorder(freestyle ? FREE_REPLAY_STEP_MS : 100, () => this.freeTarget);
     this.session = new RunSession(identity, getCourse(identity.courseId), DOGS[identity.dogId],
       identity.mode === 'competition' ? state => this.recorder.sample(state) : undefined);
     this.setInputViewport(window.innerWidth, window.innerHeight);
@@ -856,7 +856,11 @@ class GameRun {
       t,
     );
     this.app.audio.update(this.app.sound.master(t), loops, t);
+    this.view.setFxSelectedTarget(this.freeTarget);
+    this.view.setFxPaused(this.session.paused);
     this.view.frame(sim, renderUs, cues, this.app.settings, t, dtMs);
+    // 連携が実際に成立した瞬間だけ、足元に短く「連携」を出す（ボタンの連打では出ない）。
+    if (this.view.takeFxCombo()) this.center.footMarks.push({ text: '連携', untilMs: t + 700 });
     if (this.hud.freeStatus) {
       const text = sim.freeFlight ? '画面をなぞって回る。反対へ払うと減速' :
         this.freePractice ? '上へ払ってジャンプ。指を離さずそのまま回転できます' : '上へ払ってジャンプ。指を離さずそのまま回転できます';
@@ -990,6 +994,7 @@ class GameRun {
     const cues = demo.advanceTo(demo.elapsedUs + dtMs * 1000 * practiceRate(demo.step)).map(cueForEvent).filter(Boolean) as Cue[];
     const reduced = this.demoReducedMotion?.matches ?? false;
     this.app.audio.update(0, { steps: null, wind: null, grind: null }, t);
+    this.view.setFxPaused(false);
     this.view.frame(demo.state, demo.elapsedUs, reduced ? [] : cues, { ...this.app.settings, shake: false }, t, dtMs);
     if (this.demoStatus && this.demoStatus.textContent !== demo.status) this.demoStatus.textContent = demo.status;
     this.drawDemoTraces(demo, reduced);

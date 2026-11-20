@@ -259,6 +259,8 @@ export interface JumpScore {
   trickBase?: number;
   switchBonus?: number;
   switchCount?: number;
+  /** 演出用：着地までに実際に回った対象（common=両方、dog=犬、rider=人）。採点には使わない。 */
+  scoredTarget?: 'common' | 'dog' | 'rider' | null;
 }
 
 /** ジャンプの技の小計を計算する。複合の 100 点は1回だけ足し、着地の倍率を掛ける。 */

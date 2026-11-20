@@ -334,6 +334,7 @@ function closeAirborneJump(run: SimState, contact: LandingContact, emit: Emit): 
     base: trick.points, points: trick.points, names: trick.points ? [trick.label] : [],
     composite: false, residualDeg: 0, tiltDeg: 0, tenths: 10, trickTier: trick.tier,
     trickBase: trick.basePoints, switchBonus: trick.switchBonus, switchCount: trick.switchCount,
+    scoredTarget: trick.scoredTarget,
   } });
 }
 

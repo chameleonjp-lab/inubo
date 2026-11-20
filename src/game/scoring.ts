@@ -150,6 +150,8 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
     onRail: contact.onRail,
     ...(js.trickTier ? { trickTier: js.trickTier, trickPoints: js.points,
       trickBase: js.trickBase ?? js.points, switchBonus: js.switchBonus ?? 0, switchCount: js.switchCount ?? 0 } : {}),
+    // 演出だけが読む実回転の区分（B=両方、D=犬、H=人）。得点・区間・記録の計算には使わない。
+    ...(js.trickTier && js.scoredTarget ? { fxTarget: js.scoredTarget === 'common' ? 'B' : js.scoredTarget === 'dog' ? 'D' : 'H' } : {}),
   });
   return js;
 }

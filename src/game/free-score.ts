@@ -15,9 +15,11 @@ export interface FreeScore {
   switchCount: number;
   tier: number;
   label: string;
+  /** 技名と同じ判定で成立した実回転の対象（読み取り専用の表示情報。得点には使わない）。 */
+  scoredTarget: 'common' | 'dog' | 'rider' | null;
 }
 
-function directionOf(omega: Vec3, heading: number): number {
+export function directionOf(omega: Vec3, heading: number): number {
   const cos = Math.cos(heading), sin = Math.sin(heading);
   // 踏切時の道を基準に、左右軸・上下軸・進行軸のうち最も強い軸へ割り当てる。
   const local = [-sin * omega[0] + cos * omega[2], omega[1], -cos * omega[0] - sin * omega[2]];
@@ -90,7 +92,7 @@ export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number,
   const qualifiedTotal = (amounts: number[]) => amounts.filter(qualifies).reduce((sum, amount) => sum + amount, 0);
   const dogQualified = qualifiedTotal(dog), riderQualified = qualifiedTotal(rider);
   const measured = Math.max(dogQualified, riderQualified);
-  if (!directions.length || airtimeUs <= 0) return { dogDegrees, riderDegrees, points: 0, basePoints: 0, switchBonus: 0, switchCount: 0, tier: 0, label: '着地' };
+  if (!directions.length || airtimeUs <= 0) return { dogDegrees, riderDegrees, points: 0, basePoints: 0, switchBonus: 0, switchCount: 0, tier: 0, label: '着地', scoredTarget: null };
 
   const ceiling = 2 * FREE_MAX_DEG_PER_SEC * airtimeUs / 1e6;
   const halfTurns = Math.floor((measured + 1e-7) / HALF_TURN);
@@ -105,5 +107,5 @@ export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number,
   const pattern = matchFreeTrick(directions, halfTurns);
   const name = freeTrickName(target, pattern, directions.length === 1);
   return { dogDegrees, riderDegrees, points, basePoints, switchBonus: combo.bonus, switchCount: combo.count, tier,
-    label: displayTrickName(name, halfTurns / 2, tier) };
+    label: displayTrickName(name, halfTurns / 2, tier), scoredTarget: target };
 }

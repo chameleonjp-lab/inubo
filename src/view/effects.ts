@@ -1,4 +1,6 @@
 import { TRICK_LANDING, trickLandingText, type TrickLandingText } from './trick-landing';
+import { FX_TARGETS } from './trick-fx-81';
+import { landingSoundName } from './trick-fx';
 import type { SimEvent } from '../game/types';
 import { DIR8_NAMES } from '../game/tricks';
 
@@ -16,6 +18,9 @@ export interface EffectSpec {
   sound: string[];
 }
 
+/** 81種類の着地L（B/H/D × 10段階）の音。 */
+const FX_LANDING_SOUNDS = FX_TARGETS.flatMap(target => Array.from({ length: 10 }, (_, i) => landingSoundName(target, i + 1)));
+
 export const EFFECTS: EffectSpec[] = [
   { id: 'E01', scene: '犬・コースを選ぶ／決定／戻る', visual: ['tailWag', 'pawCircle', 'markRetract'], sound: ['select', 'decide', 'back'] },
   { id: 'E02', scene: '開始を待つ／発進', visual: ['crouch', 'sandBurst'], sound: ['beat', 'go'] },
@@ -29,7 +34,7 @@ export const EFFECTS: EffectSpec[] = [
   { id: 'E10', scene: '入力が短い／技が未成立', visual: ['traceFade', 'practiceHint'], sound: ['hintSoft'] },
   { id: 'E11', scene: '壁・柵・階段を跳び越す／坂で迂回', visual: ['edgePaw', 'signSway'], sound: ['tap', 'stepsSurface'] },
   { id: 'E12', scene: '手すりに乗る／滑る／離れる', visual: ['railDot', 'railSpark', 'railLineEnd'], sound: ['railOn', 'grindLoop', 'confirm'] },
-  { id: 'E13', scene: '通常着地／ぴたりと着地', visual: ['sandRing', 'fourPaws'], sound: ['landSoft', 'landPerfect', ...TRICK_LANDING.map(stage => stage.sound)] },
+  { id: 'E13', scene: '通常着地／ぴたりと着地', visual: ['sandRing', 'fourPaws'], sound: ['landSoft', 'landPerfect', ...TRICK_LANDING.map(stage => stage.sound), ...FX_LANDING_SOUNDS] },
   { id: 'E14', scene: '着地失敗／姿勢を立て直す', visual: ['stumble', 'underRotatedLabel'], sound: ['landBad', 'recover'] },
   { id: 'E15', scene: '壁・正面・手すり側面への衝突／停止／再発進', visual: ['impactLines', 'stopLabel', 'brace'], sound: ['thud', 'kick'] },
   { id: 'E16', scene: '踏切予告／骨形ゲートの上下', visual: ['lamp', 'gateMove'], sound: ['bell', 'mech'] },
@@ -105,8 +110,14 @@ export function cueForEvent(ev: SimEvent): Cue | null {
       if (stage) {
         const landingText = trickLandingText(names, pts, Number(d.trickPoints ?? pts), d.sectionUsed === true, {
           basePoints: Number(d.trickBase ?? d.trickPoints ?? pts),
-          switchBonus: Number(d.switchBonus ?? 0), switchCount: Number(d.switchCount ?? 0),
+          switchBonus: Number(d.switchBonus ?? 0), switchCount: Number(d.switchCount ?? 0), fxTarget: d.fxTarget,
         });
+        // 実回転の対象が分かる着地は81種類の着地L（床の演出は scene が描く）。分からない記録は従来どおり。
+        if (landingText.fxTarget && landingText.landingLevel > 0) {
+          return cue(ev, 'E13', 'fxLanding', landingSoundName(landingText.fxTarget, landingText.landingLevel), {
+            text: names, priority: 2, trickTier: tier, landingText,
+          });
+        }
         return cue(ev, 'E13', tier >= 4 ? 'fourPaws' : 'sandRing', stage.sound, {
           text: names, priority: 2, trickTier: tier, landingText,
         });
@@ -234,7 +245,7 @@ export class CenterText {
         this.priority = pick.priority;
         this.trickTier = pick.trickTier ?? 0;
         this.landingText = pick.landingText;
-        this.untilMs = nowMs + (TRICK_LANDING[this.trickTier - 1]?.durationMs ?? (pick.priority === 1 ? 1100 : 1300));
+        this.untilMs = nowMs + (pick.landingText?.durationMs ?? TRICK_LANDING[this.trickTier - 1]?.durationMs ?? (pick.priority === 1 ? 1100 : 1300));
       } else {
         this.footMarks.push({ text: pick.text, untilMs: nowMs + 1800 });
       }
