@@ -39,6 +39,7 @@ export function startFreeReview(root: HTMLElement): void {
   let shownResult: FreeResult | null = null;
   let playedResult: FreeResult | null = null;
   let landingShown: ReturnType<typeof trickLandingText> | null = null;
+  let landingPeak = 0;
   // 81種類の演出：競技と同じ時間割で段階を決める。
   const timeline = new FxTimeline();
   const spinReader = new FxSpinReader();
@@ -83,6 +84,7 @@ export function startFreeReview(root: HTMLElement): void {
     const prog = fxProgram(gallery.value);
     galleryId = prog.id;
     galleryReplayUs = 0;
+    landingPeak = 0;
     // 着地L は普通の高さで跳んで早く着地させる（30件を順に確かめやすくする）。
     startJump(prog.kind !== 'L');
     // 対象の身体を実際に回す（演出は身体の計測点に追従するため、回していない身体では軌跡が出ない）。
@@ -273,7 +275,11 @@ export function startFreeReview(root: HTMLElement): void {
       perf.lines = Math.max(perf.lines, scene.fxStats.lines); perf.dots = Math.max(perf.dots, scene.fxStats.dots);
       perf.decals = Math.max(perf.decals, scene.fxStats.decals);
     }
-    root.dataset.fxLines = String(scene.fxStats.lines + scene.fxStats.dots + scene.fxStats.decals);
+    const drawn = scene.fxStats.lines + scene.fxStats.dots + scene.fxStats.decals;
+    root.dataset.fxLines = String(drawn);
+    // 着地L は短いものがあるので、着地のあとに描いた命令の最大数を残す（確認と試験用）。
+    if (landedFor === jumpId && arena.phase === 'done') landingPeak = Math.max(landingPeak, drawn);
+    root.dataset.fxLandingPeak = String(landingPeak);
   }
   const frame = () => {
     sync(); update();

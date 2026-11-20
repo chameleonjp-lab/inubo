@@ -102,7 +102,7 @@ test('81種類の確認：着地L の30件すべてが着地の瞬間に出て�
     await page.getByTestId('fx-gallery').selectOption(id);
     await page.getByTestId('fx-gallery-play').click();
     await expect(review, id).toHaveAttribute('data-fx-ids', new RegExp(`(^| )${id}( |$)`), { timeout: 8_000 });
-    await expect.poll(() => review.getAttribute('data-fx-lines').then(Number), { message: id }).toBeGreaterThan(0);
+    await expect.poll(() => review.getAttribute('data-fx-landing-peak').then(Number), { message: id }).toBeGreaterThan(0);
     await expect(review, id).toHaveAttribute('data-last-sound', `trickLanding${id[0]}${id.slice(3)}`);
   }
   expect(errors).toEqual([]);
