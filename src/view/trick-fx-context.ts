@@ -19,6 +19,8 @@ export interface FxDrawContext {
   readonly contact: Vec | null;
   /** 床の高さ（着地点、なければ足元）。 */
   readonly groundY: number;
+  /** 斜面に沿った床の高さ。 */
+  groundAt(x: number, z: number): number;
   /** 段階が上がった・着地したなどで消えかけている。 */
   readonly fading: boolean;
   /** 空中で連携が実際に成立してからの時間（ms）。成立していなければ null。 */

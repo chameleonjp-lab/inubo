@@ -17,6 +17,28 @@ export type { FxSink } from './trick-fx-pen';
 export interface FxBodySource {
   anchor(key: BodyAnchorKey, out: Vec): boolean;
   quat(body: FxBody, out: Quat): boolean;
+  /** 身体の足元の基準点（世界座標）。着地の計測点を接地点へ合わせるときに使う。無ければ計測点をそのまま使う。 */
+  origin?(out: Vec): boolean;
+}
+
+/**
+ * ゲームが計算した実際の回転（描画専用の読み取り）。角速度は世界座標のラジアン/秒、
+ * accum はこのジャンプでその身体が回った角度の合計（ラジアン）。描画の前後の姿勢差からは求めない。
+ */
+export interface FxBodySpin { omega: Vec; accum: number }
+export interface FxSpinSample { dog: FxBodySpin; rider: FxBodySpin }
+
+/** 着地の出来事に添える情報。contact は接地点、yaw は進行方向、grade は接地面の傾き（前へ1m進むと上がる高さ）。 */
+export interface FxApplyContext {
+  contact?: Vec;
+  yaw?: number;
+  grade?: number;
+  switchCount?: number;
+  /** 出来事から何ms経っているか（再生が遅れて始まったときに、途中から描く）。 */
+  ageMs?: number;
+  /** 着地の計測点を読む身体と、そのときの進行方向（省略時は直前のフレームのもの）。 */
+  source?: FxBodySource;
+  sourceHeading?: number;
 }
 
 export interface FxFrameFlags {
@@ -29,6 +51,8 @@ export interface FxFrameFlags {
   heading: number;
   /** 床の高さ（空中で床を使う部品の目安）。 */
   groundY: number;
+  /** ゲームが計算した実際の回転。あればこちらを優先する（無い記録や操作確認版では姿勢差から推定）。 */
+  spin?: FxSpinSample | null;
 }
 
 const DRAWERS: FxDrawerTable = { ...AIR_DRAWERS, ...LAND_DRAWERS };
@@ -47,6 +71,10 @@ interface Instance {
   yaw: number;
   comboMs: number | null;
   comboLanding: boolean;
+  /** 着地の瞬間に固定した計測点の位置。着地の演出はこれだけを読み、着地後に走る身体を追わない。 */
+  snapshot: Float64Array | null;
+  snapValid: Uint8Array | null;
+  grade: number;
   fired: number;
   memo: Record<string, number>;
 }
@@ -72,6 +100,9 @@ export class FxEngine {
   /** 前のフレームの回転の支点（空中の軌跡を身体と一緒に動かすため）。 */
   private lastPivot = vec();
   private hasPivot = false;
+  /** いま描いている空中のジャンプ。新しいジャンプでは回転の累積・角速度・姿勢差を0から始める。 */
+  private currentJumpId: number | null = null;
+  private lastSource: FxBodySource | null = null;
 
   /** いま出ている（消えかけを除く）演出のID。 */
   activeIds(): string[] {
@@ -87,13 +118,31 @@ export class FxEngine {
     this.prev.dog = this.prev.rider = null;
     this.comboAtMs = -1e9;
     this.hasPivot = false;
+    this.currentJumpId = null;
+    this.resetSpin();
+  }
+
+  /** 回転の累積・角速度・直前の姿勢を初期化する（着地の演出は残す）。 */
+  private resetSpin(): void {
+    for (const body of ['dog', 'rider'] as const) {
+      this.turned[body] = 0;
+      setV(this.omega[body], 0, 0, 0);
+      this.prev[body] = null;
+    }
   }
 
   /** 出来事を受け取る。L の contact は接地点（世界座標）、yaw は進行方向。 */
-  apply(ev: FxVisualEvent, ctx: { contact?: Vec; yaw?: number; switchCount?: number } = {}): void {
+  apply(ev: FxVisualEvent, ctx: FxApplyContext = {}): void {
     const yaw = ctx.yaw ?? this.flags.heading;
     if (ev.kind === 'F' || ev.kind === 'A') {
       if (!ev.id) return;
+      if (this.currentJumpId !== ev.jumpId) {
+        // 新しいジャンプ：前のジャンプの回転を持ち越さない。前の空中演出は短く消し、床の着地演出は寿命まで残す。
+        this.currentJumpId = ev.jumpId;
+        this.resetSpin();
+        this.comboAtMs = -1e9;
+        for (const inst of this.list) if (inst.prog.kind !== 'L' && inst.fadeStartMs === null) this.fade(inst, 200);
+      }
       const current = this.list.find(i => i.prog.kind === ev.kind && i.fadeStartMs === null);
       if (current && current.prog.id === ev.id && current.jumpId === ev.jumpId) return;
       // 段階が上がったら古い演出を約0.2秒、対象を切り替えたら約0.3秒で薄く消す。
@@ -115,6 +164,9 @@ export class FxEngine {
     if (ev.kind !== 'L' || !ev.id) return;
     const inst = this.create(fxProgram(ev.id), ev.jumpId, ctx.contact ?? { x: 0, y: this.flags.groundY, z: 0 }, yaw);
     inst.comboLanding = (ctx.switchCount ?? 0) > 0;
+    inst.grade = Number.isFinite(ctx.grade) ? ctx.grade! : 0;
+    inst.startMs = this.clockMs - Math.max(0, Math.min(inst.prog.lifetimeMs, ctx.ageMs ?? 0));
+    this.freeze(inst, yaw, ctx.source ?? this.lastSource, ctx.sourceHeading ?? this.flags.heading);
     // 空中の軌跡を着地点へ回収する演出のために、直前の線を受け継ぐ。
     airTrail?.hist.forEach((ring, k) => {
       if (!ring || !ring.count) return;
@@ -128,6 +180,7 @@ export class FxEngine {
   /** 1フレーム分を描く。停止中は時計も履歴も進めず、同じ形を描く。 */
   frame(dtMs: number, src: FxBodySource, sink: FxSink, flags: FxFrameFlags): void {
     this.flags = flags;
+    this.lastSource = src;
     const dt = flags.paused ? 0 : Math.max(0, Math.min(100, Number.isFinite(dtMs) ? dtMs : 0));
     this.clockMs += dt;
     this.readBodies(src, dt);
@@ -166,8 +219,38 @@ export class FxEngine {
       }
     }
     return { prog, jumpId, startMs: this.clockMs, fadeStartMs: null, fadeMs: 0, hist, contact: contact ? { ...contact } : null,
-      yaw, comboMs: null, comboLanding: false, fired: 0, memo: {} };
+      yaw, comboMs: null, comboLanding: false, fired: 0, memo: {}, snapshot: null, snapValid: null, grade: 0 };
   }
+  /**
+   * 着地の瞬間の計測点を一度だけ読み、接地点に合わせて固定する（F02）。
+   * 描画の時点の身体がまだ空中や先へ進んでいても、足元の基準点からの位置を接地点へ移して使う。
+   * 読めなかった計測点は固定せず、その部品は描かない（原点などへ推測で置かない）。
+   */
+  private freeze(inst: Instance, yaw: number, src: FxBodySource | null, heading: number): void {
+    const contact = inst.contact!;
+    const snap = new Float64Array(N * 3), ok = new Uint8Array(N);
+    const origin = vec(), p = vec();
+    const hasOrigin = !!src?.origin?.(origin);
+    // 描画の時点の向きと接地の向きの差だけ、足元を中心に回す。
+    const turn = yaw - heading;
+    const c = Math.cos(turn), s = Math.sin(turn);
+    const keys = new Set<AnchorKey>();
+    for (const step of inst.prog.recipe) for (const key of step.at) keys.add(key);
+    for (const key of [...keys, 'riderHead', 'riderWaist', 'dogBack', 'dogBelly'] as AnchorKey[]) {
+      if (key === 'contact' || !src) continue;
+      const k = INDEX.get(key)!;
+      if (!src.anchor(key as BodyAnchorKey, p)) continue;
+      if (hasOrigin) {
+        const dx = p.x - origin.x, dz = p.z - origin.z;
+        setV(p, contact.x + dx * c - dz * s, contact.y + (p.y - origin.y), contact.z + dx * s + dz * c);
+      }
+      snap[k * 3] = p.x; snap[k * 3 + 1] = p.y; snap[k * 3 + 2] = p.z;
+      ok[k] = 1;
+    }
+    inst.snapshot = snap;
+    inst.snapValid = ok;
+  }
+
   private fade(inst: Instance, ms: number): void {
     inst.fadeStartMs = this.clockMs;
     inst.fadeMs = ms;
@@ -180,7 +263,12 @@ export class FxEngine {
       this.hasQuat[body] = src.quat(body, q);
       if (!this.hasQuat[body]) { this.prev[body] = null; continue; }
       const p = this.prev[body];
-      if (p && dt > 0) {
+      const spin = this.flags.spin?.[body];
+      if (spin) {
+        // ゲームが計算した実際の角速度と累積角を使う（1フレームで180度を超えても向きを取り違えない）。
+        copyV(this.omega[body], spin.omega);
+        this.turned[body] = spin.accum;
+      } else if (p && dt > 0) {
         // 差の回転 d = q × p⁻¹
         let dx = p.w * q.x - p.x * q.w - p.y * q.z + p.z * q.y;
         let dy = p.w * q.y - p.y * q.w - p.z * q.x + p.x * q.z;
@@ -260,7 +348,7 @@ export class FxEngine {
   private draw(inst: Instance): void {
     const age = this.clockMs - inst.startMs;
     const fade = inst.fadeStartMs === null ? 1 : 1 - clamp01((this.clockMs - inst.fadeStartMs) / Math.max(1, inst.fadeMs));
-    const intro = inst.prog.kind === 'L' ? 1 : Math.min(1, age / 120);
+    const intro = inst.prog.kind === 'L' ? 1 : Math.min(1, age / 60);
     const alpha = inst.prog.opacityMax * fade * intro * this.flags.alpha * (this.flags.weak ? 0.45 : 1);
     if (alpha <= 0.003) return;
     this.ctx.bind(inst);
@@ -286,6 +374,12 @@ export class FxEngine {
       return true;
     }
     const k = INDEX.get(key)!;
+    if (inst.prog.kind === 'L') {
+      // 着地の演出は、着地の瞬間に固定した位置だけを使う（今の身体を追わない）。
+      if (!inst.snapshot || !inst.snapValid![k]) return false;
+      setV(out, inst.snapshot[k * 3], inst.snapshot[k * 3 + 1], inst.snapshot[k * 3 + 2]);
+      return true;
+    }
     if (this.valid[k]) { setV(out, this.pos[k * 3], this.pos[k * 3 + 1], this.pos[k * 3 + 2]); return true; }
     const ring = inst.hist[k];
     if (ring && ring.count) { ring.read(0, out); return true; }
@@ -325,7 +419,11 @@ class Ctx implements FxDrawContext {
   readonly ringPoints = new Float32Array(48 * 3);
   ringCount = 0;
   constructor(private engine: FxEngine) {}
-  bind(inst: Instance): void { this.inst = inst; this.ringCount = 0; }
+  bind(inst: Instance): void {
+    this.inst = inst;
+    this.ringCount = 0;
+    this.engine.penRef.plane = inst.contact && inst.grade ? { x: inst.contact.x, y: inst.contact.y, z: inst.contact.z, yaw: inst.yaw, grade: inst.grade } : null;
+  }
   get pen(): FxPen { return this.engine.penRef; }
   get clockMs(): number { return this.engine.clockMs; }
   get reduced(): boolean { return this.engine.frameFlags.reduced; }
@@ -333,6 +431,13 @@ class Ctx implements FxDrawContext {
   get yaw(): number { return this.inst.yaw; }
   get contact(): Vec | null { return this.inst.contact; }
   get groundY(): number { return this.inst.contact ? this.inst.contact.y : this.engine.frameFlags.groundY; }
+  /** 接地面の高さ。斜面では前後の位置に合わせて上下させ、浮いたり埋まったりしないようにする。 */
+  groundAt(x: number, z: number): number {
+    const c = this.inst.contact;
+    if (!c) return this.engine.frameFlags.groundY;
+    return c.y + ((x - c.x) * Math.cos(this.inst.yaw) + (z - c.z) * Math.sin(this.inst.yaw)) * this.inst.grade;
+  }
+  get grade(): number { return this.inst.grade; }
   get fading(): boolean { return this.inst.fadeStartMs !== null; }
   get comboAgeMs(): number | null { return this.engine.comboAge(this.inst); }
   get comboLanding(): boolean { return this.inst.comboLanding; }

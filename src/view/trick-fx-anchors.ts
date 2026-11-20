@@ -26,6 +26,14 @@ export class RigFxSource implements FxBodySource {
     return true;
   }
 
+  /** 足元の基準点（模型の根元＝足元の中心）。 */
+  origin(out: Vec): boolean {
+    if (!this.rig) return false;
+    this.rig.root.getWorldPosition(this.v);
+    out.x = this.v.x; out.y = this.v.y; out.z = this.v.z;
+    return true;
+  }
+
   quat(body: FxBody, out: Quat): boolean {
     if (!this.rig || !this.rig.root.visible) return false;
     (body === 'dog' ? this.rig.dog : this.rig.rider).getWorldQuaternion(this.q);
@@ -70,6 +78,13 @@ export class FreePartsFxSource implements FxBodySource {
     const part = this.parts.get(FREE_PART_OF[key] ?? '');
     if (!part) return false;
     out.x = part.p[0]; out.y = part.p[1]; out.z = part.p[2];
+    return true;
+  }
+
+  /** 球の模型の足元（支点の真下の床）。 */
+  origin(out: Vec): boolean {
+    if (!this.pose) return false;
+    out.x = this.pose.pivot[0]; out.y = 0; out.z = this.pose.pivot[2];
     return true;
   }
 

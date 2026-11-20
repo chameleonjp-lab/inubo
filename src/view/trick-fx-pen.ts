@@ -18,6 +18,8 @@ const MIN_ALPHA = 0.003;
 /** 形を線・点・床の印に分解する道具。 */
 export class FxPen {
   sink: FxSink | null = null;
+  /** 着地の床の傾き。床の円を斜面に沿わせる（null は水平）。 */
+  plane: { x: number; y: number; z: number; yaw: number; grade: number } | null = null;
   private p = vec();
   private q = vec();
 
@@ -52,6 +54,8 @@ export class FxPen {
       const t = a0 + (a1 - a0) * i / 28;
       const f = Math.cos(t) * r * stretch, s = Math.sin(t) * r;
       setV(this.q, o.x + cs * f - sn * s, o.y, o.z + sn * f + cs * s);
+      const pl = this.plane;
+      if (pl) this.q.y = o.y + ((this.q.x - o.x) * Math.cos(pl.yaw) + (this.q.z - o.z) * Math.sin(pl.yaw)) * pl.grade;
       if (i > 0) this.line(this.p, this.q, c, alpha);
       setV(this.p, this.q.x, this.q.y, this.q.z);
     }

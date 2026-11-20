@@ -1,0 +1,80 @@
+[
+ {
+  "scene": "通常操作",
+  "frames": 548,
+  "fpsMedian": 60,
+  "p95GapMs": 28.2,
+  "stallsOver100ms": 0,
+  "maxLines": 94,
+  "maxDots": 2,
+  "maxDecals": 0,
+  "inputToFrameMsMedian": 2.2,
+  "viewport": "402x700",
+  "at": "2026-11-20T15:43:15.409Z"
+ },
+ {
+  "scene": "B-F10",
+  "frames": 560,
+  "fpsMedian": 60,
+  "p95GapMs": 24.2,
+  "stallsOver100ms": 1,
+  "maxLines": 244,
+  "maxDots": 1,
+  "maxDecals": 0,
+  "inputToFrameMsMedian": null,
+  "viewport": "402x700",
+  "at": "2026-11-20T15:43:27.858Z"
+ },
+ {
+  "scene": "D-L10",
+  "frames": 579,
+  "fpsMedian": 60,
+  "p95GapMs": 20.3,
+  "stallsOver100ms": 1,
+  "maxLines": 151,
+  "maxDots": 5,
+  "maxDecals": 1,
+  "inputToFrameMsMedian": null,
+  "viewport": "402x700",
+  "at": "2026-11-20T15:43:39.158Z"
+ },
+ {
+  "scene": "通常操作",
+  "frames": 547,
+  "fpsMedian": 60,
+  "p95GapMs": 28.7,
+  "stallsOver100ms": 0,
+  "maxLines": 94,
+  "maxDots": 2,
+  "maxDecals": 0,
+  "inputToFrameMsMedian": 2.3,
+  "viewport": "700x402",
+  "at": "2026-11-20T15:43:50.994Z"
+ },
+ {
+  "scene": "B-F10",
+  "frames": 573,
+  "fpsMedian": 60,
+  "p95GapMs": 20,
+  "stallsOver100ms": 1,
+  "maxLines": 244,
+  "maxDots": 1,
+  "maxDecals": 0,
+  "inputToFrameMsMedian": null,
+  "viewport": "700x402",
+  "at": "2026-11-20T15:44:02.202Z"
+ },
+ {
+  "scene": "D-L10",
+  "frames": 584,
+  "fpsMedian": 60,
+  "p95GapMs": 20.1,
+  "stallsOver100ms": 1,
+  "maxLines": 151,
+  "maxDots": 5,
+  "maxDecals": 1,
+  "inputToFrameMsMedian": null,
+  "viewport": "700x402",
+  "at": "2026-11-20T15:44:14.690Z"
+ }
+]
