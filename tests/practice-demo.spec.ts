@@ -13,6 +13,7 @@ async function playerRun(page: Page) {
 
 test('練習のお手本は1回だけ再生し、プレイヤーの操作や走行を進めない', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('home').waitFor();
   await page.evaluate(() => (window as unknown as {
     __inubo: { app: { startRun: (mode: 'practice') => void } }
   }).__inubo.app.startRun('practice'));
@@ -57,6 +58,7 @@ test('練習のお手本は1回だけ再生し、プレイヤーの操作や走�
 
 test('5番でガイドを1本の指でなぞると複合技が成功して練習を完了する', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('home').waitFor();
   await page.evaluate(() => (window as unknown as {
     __inubo: { app: { startRun: (mode: 'practice') => void } }
   }).__inubo.app.startRun('practice'));

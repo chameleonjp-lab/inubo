@@ -101,6 +101,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
 test('ジャンプの指を保持したまま即回転し、ボタンを押した瞬間に対象を変えられる', async ({ page }) => {
   await page.setViewportSize({ width: 402, height: 700 });
   await page.goto('/?ranking=mock');
+  await page.getByTestId('home').waitFor();
   await page.evaluate(() => (window as unknown as {
     __inubo: { app: { startRun: (mode: 'practice') => void } }
   }).__inubo.app.startRun('practice'));

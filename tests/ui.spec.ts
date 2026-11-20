@@ -192,6 +192,7 @@ test('設定: 音のオン・オフ、音量、揺れ、光の量を別々に変
 
 test('練習広場: 5 つの手順を順に試せ、途中で次へ・本番へ進める。練習は記録を作らない', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('home').waitFor();
   await page.evaluate(() => (window as unknown as {
     __inubo: { app: { startRun: (mode: 'practice') => void } }
   }).__inubo.app.startRun('practice'));
