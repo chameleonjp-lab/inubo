@@ -95,7 +95,7 @@ interface Row { name: string; anchors: readonly AnchorKey[]; recipe: readonly Fx
 // ---------------------------------------------------------------- B：両方（犬は橙、人は青）
 const B_F: Row[] = [
   { name: '同時点灯', anchors: ['dogPawFL', 'riderShoulderL'], recipe: [
-    s('glow', ['dogPawFL', 'riderShoulderL'], 'body', { dur: 600, size: 0.09, p: { rise: 250, fall: 350 } })] },
+    s('glow', ['dogPawFL', 'riderShoulderL'], 'body', { dur: 600, size: 0.13, p: { rise: 250, fall: 350 } })] },
   { name: '二重輪郭', anchors: ['dogBack', 'riderWaist'], recipe: [
     s('outline', ['dogBack'], 'dog', { size: 1, p: { speedFade: 1 } }), s('outline', ['riderWaist'], 'rider', { size: 1, p: { speedFade: 1 } })] },
   { name: '呼応する明かり', anchors: ['dogPawFL', 'riderShoulderL'], recipe: [
@@ -169,11 +169,11 @@ const B_L: Row[] = [
 // ---------------------------------------------------------------- H：人のみ（青）
 const H_F: Row[] = [
   { name: 'ヘルメットの光点', anchors: ['riderHelmet'], recipe: [
-    s('glow', ['riderHelmet'], 'rider', { dur: 300, size: 0.08, p: { rise: 90, fall: 210 } })] },
+    s('glow', ['riderHelmet'], 'rider', { dur: 300, size: 0.12, p: { rise: 40, fall: 240 } })] },
   { name: '肩の細い縁光', anchors: SHOULDERS, recipe: [
     s('rim', SHOULDERS, 'ice', { size: 0.13, p: { speedFade: 1 } })] },
   { name: '手先のきらめき', anchors: HANDS, recipe: [
-    s('glow', HANDS, 'ice', { size: 0.06, p: { alternate: 260, stretch: 250 } })] },
+    s('glow', HANDS, 'rider', { size: 0.07, p: { alternate: 260, stretch: 250 } })] },
   { name: '上体を包む弧', anchors: ['riderWaist', 'riderShoulderL'], recipe: [
     s('arc', ['riderWaist'], 'rider', { size: 0.38, p: { sweep: Math.PI, upper: 1 } })] },
   { name: '体軸の青い線', anchors: ['riderHead', 'riderWaist'], recipe: [
@@ -194,7 +194,8 @@ const H_A: Row[] = [
   { name: '頭の一本線', anchors: ['riderHelmet'], recipe: [
     s('trail', ['riderHelmet'], 'rider', { size: 1, p: { window: 200, style: 0 } })] },
   { name: '肩の二本線', anchors: SHOULDERS, recipe: [
-    s('trail', SHOULDERS, 'ice', { size: 1, p: { window: 320, style: 2, delay: 80 } })] },
+    // 明るい空でも読めるよう、青白ではなく人の青で引く（V04）。
+    s('trail', SHOULDERS, 'rider', { size: 1, p: { window: 320, style: 2, delay: 80 } })] },
   { name: '手首の三日月', anchors: HANDS, recipe: [
     s('crescent', HANDS, 'rider', { size: 0.3, p: { window: 260 } })] },
   { name: '体軸のらせん', anchors: ['riderWaist'], recipe: [
@@ -233,7 +234,7 @@ const H_L: Row[] = [
 // ---------------------------------------------------------------- D：犬のみ（橙・琥珀）
 const D_F: Row[] = [
   { name: '鼻先の光', anchors: ['dogNose'], recipe: [
-    s('glow', ['dogNose'], 'dog', { dur: 250, size: 0.07, p: { rise: 80, fall: 170 } })] },
+    s('glow', ['dogNose'], 'dog', { dur: 250, size: 0.11, p: { rise: 30, fall: 200 } })] },
   { name: '前足の縁光', anchors: FRONT, recipe: [
     s('rim', FRONT, 'dog', { size: 0.1, p: { speedFade: 1, full: 1 } })] },
   { name: 'しっぽの光点', anchors: ['dogTail'], recipe: [
@@ -258,7 +259,7 @@ const D_A: Row[] = [
   { name: 'しっぽの筆線', anchors: ['dogTail'], recipe: [
     s('trail', ['dogTail'], 'dog', { size: 1, p: { window: 200, style: 1 } })] },
   { name: '前足の点線', anchors: FRONT, recipe: [
-    s('trail', FRONT, 'dog', { size: 0.045, p: { window: 420, style: 5 } })] },
+    s('trail', FRONT, 'dog', { size: 0.06, p: { window: 420, style: 5 } })] },
   { name: '鼻先の円弧', anchors: ['dogNose'], recipe: [
     s('arc', ['dogNose'], 'dog', { size: 0.35, p: { sweep: 1.9, follow: 1 } })] },
   { name: '肉球のらせん', anchors: PAWS, recipe: [
@@ -321,7 +322,8 @@ function build(): readonly FxProgram[] {
           trigger: kind === 'L' ? 'land' : kind === 'A' ? 'rotation' : level === 1 ? 'takeoff' : 'level',
           lifetimeMs: kind === 'L' ? Math.min(2000, row.life ?? 1000) : 0,
           // 段階が上がるほど少し強くするが、顔や前方を隠さない上限に収める。
-          opacityMax: Math.min(row.opacity ?? 0.92, 0.72 + 0.02 * level),
+          // 低い段階も明るい背景で読めるよう下限を上げる（V04）。上限0.92は変えない。
+          opacityMax: Math.min(row.opacity ?? 0.92, 0.82 + 0.01 * level),
           sizeMax: row.sizeMax ?? (kind === 'L' ? 1.8 : 1.0),
           params: row.params ?? {},
         });

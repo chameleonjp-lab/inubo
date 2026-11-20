@@ -9,11 +9,12 @@ import type { DecalShape, FxSink } from './trick-fx-pen';
  */
 
 const LINE_CAP = 6000;
-const DOT_SIZES = [0.07, 0.13, 0.24] as const;
+const DOT_SIZES = [0.1, 0.17, 0.28] as const;
 const DOT_CAP = 360;
 const BEAD_CAP = 4000;
 const BEAD_SIZE = 0.11;
 const SHADE_SIZE = 0.17;
+const GLOW_SIZE = 0.17;
 const DECAL_CAP = 48;
 
 export type BurstHandler = (n: number, at: THREE.Vector3, color: THREE.Color, speed: number, up: number, life: number,
@@ -117,6 +118,8 @@ export class ThreeFxSink implements FxSink {
   private decalsSent = [0, 0, 0, 0];
   private dots: DotBucket[];
   private beads: DotBucket;
+  /** 光の点（身体の表面に置くので深度で隠さない）。 */
+  private glow: DotBucket;
   /** 明るい空や地面でも線が見えるよう、光の下に敷く薄い影。 */
   private shade: DotBucket;
   private decals: THREE.InstancedMesh[];
@@ -141,10 +144,16 @@ export class ThreeFxSink implements FxSink {
     });
     this.textures.push(sprite);
     this.dots = DOT_SIZES.map(size => new DotBucket(size, sprite));
+    // 光の点は、足先・肩・鼻先など身体の表面の計測点に置くため、その部位自身に隠れないよう深度で隠さない。
+    // 点は小さく濃さの上限もあるので、顔や技名を覆わない（線・軌跡は従来どおり体の後ろで隠れる）。
+    for (const d of this.dots) { (d.points.material as THREE.PointsMaterial).depthTest = false; d.points.renderOrder = 6; }
     this.beads = new DotBucket(BEAD_SIZE, sprite, BEAD_CAP);
     this.shade = new DotBucket(SHADE_SIZE, sprite, BEAD_CAP);
+    this.glow = new DotBucket(GLOW_SIZE, sprite, BEAD_CAP);
+    (this.glow.points.material as THREE.PointsMaterial).depthTest = false;
+    this.glow.points.renderOrder = 6;
     this.shade.points.renderOrder = 4;
-    for (const d of [...this.dots, this.beads, this.shade]) this.group.add(d.points);
+    for (const d of [...this.dots, this.beads, this.shade, this.glow]) this.group.add(d.points);
     const plane = new THREE.PlaneGeometry(1, 1);
     plane.rotateX(-Math.PI / 2);
     this.decals = ([0, 1, 2, 3] as const).map(shape => {
@@ -167,6 +176,7 @@ export class ThreeFxSink implements FxSink {
     for (const d of this.dots) d.n = 0;
     this.beads.n = 0;
     this.shade.n = 0;
+    this.glow.n = 0;
     this.decalCount.fill(0);
     this.stats = { lines: 0, dots: 0, decals: 0, bursts: 0 };
   }
@@ -180,6 +190,7 @@ export class ThreeFxSink implements FxSink {
     for (const d of this.dots) d.flush();
     this.beads.flush();
     this.shade.flush();
+    this.glow.flush();
     this.decals.forEach((mesh, i) => {
       mesh.count = this.decalCount[i];
       if (this.decalCount[i] || this.decalsSent[i]) {
@@ -214,11 +225,18 @@ export class ThreeFxSink implements FxSink {
   }
 
   dot(x: number, y: number, z: number, size: number, r: number, g: number, b: number, a: number): void {
+    // 光の点は、軌跡と同じ粒の小さな集まり（色の輪＋明るい芯）で描く。大きさは輪の半径で表す。
+    // 足先・肩・鼻先など身体の表面の点なので、その部位自身に隠れないよう前に出して描く（V04）。
     const k = size < 0.1 ? 0 : size < 0.18 ? 1 : 2;
-    // 段の大きさとの差は濃さで補う（大きすぎる光で顔を隠さない）。
-    this.dots[k].add(x, y, z, r, g, b, a * Math.min(1.3, size / DOT_SIZES[k]));
-    // 明るい空や路面でも小さな光点が読めるよう、下に薄い影を敷く（V04）。
-    this.shade.add(x, y, z, r * 0.25, g * 0.25, b * 0.3, a * 0.3);
+    const alpha = Math.min(1, a * 1.25);
+    const radius = Math.min(0.25, size * 0.8);
+    this.glow.add(x, y, z, 0.55 + r * 0.45, 0.55 + g * 0.45, 0.55 + b * 0.45, alpha);
+    for (let i = 0; i < 6; i++) {
+      const ang = i * Math.PI / 3;
+      this.glow.add(x + Math.cos(ang) * radius, y + Math.sin(ang) * radius, z, r, g, b, alpha * 0.85);
+    }
+    this.shade.add(x, y, z, r * 0.25, g * 0.25, b * 0.3, a * 0.2);
+    this.dots[k].n += 0;
     this.stats.dots++;
   }
 
@@ -246,7 +264,7 @@ export class ThreeFxSink implements FxSink {
   dispose(): void {
     this.lines.geometry.dispose();
     (this.lines.material as THREE.Material).dispose();
-    for (const d of [...this.dots, this.beads, this.shade]) { d.points.geometry.dispose(); (d.points.material as THREE.Material).dispose(); }
+    for (const d of [...this.dots, this.beads, this.shade, this.glow]) { d.points.geometry.dispose(); (d.points.material as THREE.Material).dispose(); }
     this.decals[0]?.geometry.dispose();
     for (const m of this.decals) { (m.material as THREE.Material).dispose(); m.dispose(); }
     for (const t of this.textures) t.dispose();

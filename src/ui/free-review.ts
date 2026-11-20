@@ -43,7 +43,7 @@ export function startFreeReview(root: HTMLElement): void {
   const timeline = new FxTimeline();
   const spinReader = new FxSpinReader();
   let jumpId = 0, airUs = 0, landedFor = -1, lastFrameMs = performance.now();
-  let galleryId: FxId | null = null, gallerySeq = 1_000_000;
+  let galleryId: FxId | null = null, gallerySeq = 1_000_000, galleryReplayUs = 0, galleryJump = 1_000_000;
   const reducedQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null;
   const syncSound = () => audio.update(soundOn && !paused ? 0.7 : 0, { steps: null, wind: null, grind: null }, lastWall);
   const sound = h('button', { 'aria-pressed': 'true', onclick: () => {
@@ -82,6 +82,7 @@ export function startFreeReview(root: HTMLElement): void {
     audio.stopTrickLanding(); arena = new FreeArena(scenario); clockUs = 0; resetFx(); clearPointers(); setPause(false);
     const prog = fxProgram(gallery.value);
     galleryId = prog.id;
+    galleryReplayUs = 0;
     // 着地L は普通の高さで跳んで早く着地させる（30件を順に確かめやすくする）。
     startJump(prog.kind !== 'L');
     // 対象の身体を実際に回す（演出は身体の計測点に追従するため、回していない身体では軌跡が出ない）。
@@ -223,6 +224,15 @@ export function startFreeReview(root: HTMLElement): void {
       const prog = fxProgram(galleryId);
       scene.applyFx(prog.kind === 'L' ? { tUs: result.cutoffUs, jumpId, kind: 'L', target: prog.target, level: prog.level, id: prog.id }
         : { tUs: result.cutoffUs, jumpId, kind: 'X', target: null, level: 0, id: null }, arena.motion.pose);
+    }
+    // 一度だけの短い光（F01 など）は、確認しやすいよう空中にいる間0.9秒ごとに出し直す（確認版だけ）。
+    if (galleryId && arena.phase === 'air') {
+      const prog = fxProgram(galleryId);
+      if (prog.kind === 'F' && prog.recipe.every(step => step.dur > 0) && arena.motion.timeUs - galleryReplayUs >= 900_000) {
+        galleryReplayUs = arena.motion.timeUs;
+        scene.fx.clear();
+        scene.applyFx({ tUs: arena.motion.timeUs, jumpId: ++galleryJump, kind: 'F', target: prog.target, level: prog.level, id: prog.id }, arena.motion.pose);
+      }
     }
     root.dataset.fxIds = scene.fx.activeIds().join(' ');
     const stage = result ? TRICK_LANDING[result.tier - 1] : undefined;

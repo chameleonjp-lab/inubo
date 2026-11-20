@@ -348,7 +348,7 @@ export class FxEngine {
   private draw(inst: Instance): void {
     const age = this.clockMs - inst.startMs;
     const fade = inst.fadeStartMs === null ? 1 : 1 - clamp01((this.clockMs - inst.fadeStartMs) / Math.max(1, inst.fadeMs));
-    const intro = inst.prog.kind === 'L' ? 1 : Math.min(1, age / 120);
+    const intro = inst.prog.kind === 'L' ? 1 : Math.min(1, age / 60);
     const alpha = inst.prog.opacityMax * fade * intro * this.flags.alpha * (this.flags.weak ? 0.45 : 1);
     if (alpha <= 0.003) return;
     this.ctx.bind(inst);

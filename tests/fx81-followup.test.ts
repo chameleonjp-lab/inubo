@@ -334,3 +334,39 @@ describe('T08・T09 再生データ', () => {
     expect(JSON.stringify(data.visualEvents).length).toBeLessThan(2_000);
   });
 });
+
+describe('T14・T15 長時間・混入', () => {
+  test('ジャンプと着地を200回くり返しても、演出と使い回しの入れ物が増え続けない', () => {
+    const engine = new FxEngine();
+    const b = body();
+    const rec = recorder();
+    for (let j = 1; j <= 200; j++) {
+      engine.apply({ tUs: j * 1e6, jumpId: j, kind: 'F', target: 'B', level: 10, id: 'B-F10' });
+      engine.apply({ tUs: j * 1e6, jumpId: j, kind: 'A', target: 'B', level: 7, id: 'B-A07' });
+      for (let i = 0; i < 20; i++) { b.s.angle += 0.3; engine.frame(16, b.src, rec.sink, FLAGS); }
+      engine.apply({ tUs: j * 1e6 + 5e5, jumpId: j, kind: 'L', target: 'B', level: 10, id: 'B-L10' }, { contact: { x: 0, y: 0, z: 0 }, yaw: 0 });
+      for (let i = 0; i < 10; i++) engine.frame(16, b.src, rec.sink, FLAGS);
+      rec.lines.length = rec.dots.length = rec.decals.length = 0;
+    }
+    // 0.48秒ごとに跳ぶので、寿命2秒の着地Lは最大5件ほど重なる。数は一定の範囲に収まり、増え続けない。
+    expect(engine.instanceCount).toBeLessThanOrEqual(8);
+    for (let i = 0; i < 200; i++) engine.frame(16, b.src, rec.sink, FLAGS);
+    expect(engine.instanceCount).toBe(0);
+    expect((engine as unknown as { pool: unknown[] }).pool.length).toBeLessThan(40);
+  });
+
+  test('旧100方式の参照が無く、確認用の道具は確認版だけに入る', async () => {
+    const { readFileSync, readdirSync, statSync } = await import('node:fs');
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap(name => {
+      const path = `${dir}/${name}`;
+      return statSync(path).isDirectory() ? walk(path) : [path];
+    });
+    const src = walk(new URL('../src', import.meta.url).pathname).filter(p => /\.(ts|css)$/.test(p));
+    for (const path of src) expect(readFileSync(path, 'utf8'), path).not.toMatch(/TRICK_FX_100|chooseTrickFx|trickFxTier|data-fx-motion/);
+    // 確認版の道具（着地音の試聴・計測・背景）は free-review だけにあり、本番の画面（screens）からは読み込まない。
+    const screens = readFileSync(new URL('../src/ui/screens.ts', import.meta.url), 'utf8');
+    expect(screens).not.toMatch(/free-review|perf-run|fx-sound/);
+    const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+    expect(main).toMatch(/MODE === 'review'/);
+  });
+});
