@@ -590,7 +590,7 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
       baseTargetX: run.targetX,
       consumed: false,
       candidates: [],
-      ...(f.freeTarget ? { freeTarget: f.freeTarget } : {}),
+      ...(tag === 'ground' && f.freeTarget ? { freeTarget: f.freeTarget } : {}),
     };
     run.strokes[f.strokeId] = rec;
     if (tag === 'air' && run.jump) {

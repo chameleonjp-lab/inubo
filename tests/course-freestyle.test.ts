@@ -34,7 +34,7 @@ test('踏切の指を離さずすぐ回る。続いて新しい指でも回せ�
   expect(qDistance(during, flight.motion.pose.dog.q)).toBeGreaterThan(0.08);
   expect(flight.motion.omega.common[1]).toBeGreaterThan(0);
 
-  advanceRun(run, 470_000, [down(2, 410_000), turn(2, 425_000, 3, [0, -0.7, 0]), turn(2, 440_000, 4, [0.26, 0, 0.28])]);
+  advanceRun(run, 470_000, [down(2, 410_000), turn(2, 425_000, 3, [0, -5, 0]), turn(2, 440_000, 4, [0.26, 0, 0.28])]);
   expect(flight.motion.omega.common[1]).toBeLessThan(0);
   expect(Math.abs(flight.motion.omega.common[0]) + Math.abs(flight.motion.omega.common[2])).toBeGreaterThan(1.1);
   expect(eventsOf(run, 'trickStart')).toEqual([]);

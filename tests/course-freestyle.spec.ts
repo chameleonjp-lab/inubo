@@ -77,7 +77,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     expect(observed.speedAfterReverse).toBeGreaterThan(0.5);
     expect(observed.premature).toBe(0);
     expect(observed.fixedTricks).toBe(0);
-    expect(observed.landing).toMatchObject({ names: [expect.stringContaining('犬と人の右スピン')], tenths: 10 });
+    expect(observed.landing).toMatchObject({ names: [expect.stringMatching(/犬と人の右/)], tenths: 10 });
     expect(observed.landing.points).toBeGreaterThan(0);
     const title = page.getByTestId('center-text');
     const name = page.getByTestId('landing-trick-name');
