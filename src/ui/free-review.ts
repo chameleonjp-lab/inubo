@@ -128,7 +128,9 @@ export function startFreeReview(root: HTMLElement): void {
     status.dataset.trickTier = String(result?.tier ?? 0);
     if (result && stage) {
       if (shownResult !== result) {
-        showTrickLanding(status, trickLandingText(`着地｜${result.label}`, result.points, result.points));
+        showTrickLanding(status, trickLandingText(`着地｜${result.label}`, result.points, result.points, false, {
+          basePoints: result.basePoints, switchBonus: result.switchBonus, switchCount: result.switchCount,
+        }));
         shownResult = result;
       }
       if (!paused && playedResult !== result) {

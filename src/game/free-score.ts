@@ -105,5 +105,5 @@ export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number,
   const pattern = matchFreeTrick(directions, halfTurns);
   const name = freeTrickName(target, pattern, directions.length === 1);
   return { dogDegrees, riderDegrees, points, basePoints, switchBonus: combo.bonus, switchCount: combo.count, tier,
-    label: displayTrickName(name, halfTurns / 2, tier) + (combo.bonus ? `｜切替${combo.count}連携 ＋${combo.bonus}点` : '') };
+    label: displayTrickName(name, halfTurns / 2, tier) };
 }

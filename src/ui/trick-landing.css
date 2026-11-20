@@ -70,3 +70,38 @@
   [data-trick-tier='4'] .trick-landing-card::after { animation: none; display: none; }
   .center-text:has(.trick-landing-card) { transition: none; transform: none; }
 }
+
+
+/* 5段階の強さ・5系統の空中軌跡・4系統の着地を重ねて100通りを構成する。
+   画像100枚は持たず、形と色と動きだけを組み合わせる。 */
+.trick-landing-card { isolation: isolate; overflow: hidden; min-width: min(235px, 82vw); }
+.trick-landing-card > :not(.trick-fx-flight):not(.trick-fx-impact) { position: relative; z-index: 2; }
+.trick-landing-card[data-fx-tier='1'] { --fx-size: .7; --fx-ink: #91dfe9; --fx-duration: 900ms; }
+.trick-landing-card[data-fx-tier='2'] { --fx-size: .85; --fx-ink: #59daf5; --fx-duration: 800ms; }
+.trick-landing-card[data-fx-tier='3'] { --fx-size: 1; --fx-ink: #c5b6ff; --fx-duration: 680ms; }
+.trick-landing-card[data-fx-tier='4'] { --fx-size: 1.2; --fx-ink: #ffd167; --fx-duration: 580ms; }
+.trick-landing-card[data-fx-tier='5'] { --fx-size: 1.4; --fx-ink: #ffedab; --fx-duration: 500ms; }
+.trick-fx-flight, .trick-fx-impact { pointer-events: none; position: absolute; z-index: 1; display: block; left: 50%; top: 50%; opacity: .7; }
+.trick-fx-flight { width: 45%; height: 110%; border: 2px solid var(--fx-ink); opacity: .55; transform: translate(-50%, -50%); }
+[data-fx-motion='orbit'] .trick-fx-flight { border-radius: 50%; width: 70%; transform: translate(-50%, -50%) rotate(-28deg); }
+[data-fx-motion='helix'] .trick-fx-flight { border-radius: 50%; width: 80%; height: 85%; border-style: dashed; transform: translate(-50%, -50%) rotate(28deg); }
+[data-fx-motion='cross'] .trick-fx-flight { border: none; width: 95%; height: 110%; background: linear-gradient(27deg,transparent 48%,var(--fx-ink) 49%,var(--fx-ink) 51%,transparent 52%),linear-gradient(-27deg,transparent 48%,var(--fx-ink) 49%,var(--fx-ink) 51%,transparent 52%); }
+[data-fx-motion='comet'] .trick-fx-flight { border: none; width: 96%; height: 8px; border-radius: 30px; background: linear-gradient(90deg,transparent,var(--fx-ink),transparent); transform: translate(-50%, -50%) rotate(-14deg); }
+[data-fx-motion='crown'] .trick-fx-flight { border: none; width: 86%; height: 83%; clip-path: polygon(0 100%, 8% 15%, 24% 55%, 50% 0, 76% 55%, 92% 15%, 100% 100%); background: linear-gradient(0deg,transparent,var(--fx-ink)); opacity: .25; }
+.trick-fx-impact { width: 40px; height: 40px; transform: translate(-50%,-50%); }
+[data-fx-burst='sparks'] .trick-fx-impact { width: 10px; height: 10px; border-radius: 50%; background: var(--fx-ink); box-shadow: 22px 0 var(--fx-ink),-22px 0 var(--fx-ink),0 22px var(--fx-ink),0 -22px var(--fx-ink),15px 15px var(--fx-ink),-15px -15px var(--fx-ink); }
+[data-fx-burst='rings'] .trick-fx-impact { border-radius: 50%; border: 3px solid var(--fx-ink); box-shadow: 0 0 0 14px color-mix(in srgb,var(--fx-ink) 40%,transparent); }
+[data-fx-burst='paws'] .trick-fx-impact { border-radius: 50%; width: 25px; height: 21px; background: var(--fx-ink); box-shadow: -15px -25px 0 -7px var(--fx-ink),0 -34px 0 -7px var(--fx-ink),15px -25px 0 -7px var(--fx-ink); }
+[data-fx-burst='stars'] .trick-fx-impact { clip-path: polygon(50% 0,61% 36%,98% 35%,68% 58%,79% 95%,50% 73%,21% 95%,32% 58%,2% 35%,39% 36%); background: var(--fx-ink); }
+.trick-landing-combo { font-size: clamp(12px,3vw,15px); padding: 3px 9px; border-radius: 999px; color: #172936; background: #fff1a7; font-weight: 850; text-shadow: none; }
+[data-fx-tier='4'] .trick-landing-card, [data-fx-tier='5'] .trick-landing-card { border: 1px solid var(--fx-ink); }
+@media (prefers-reduced-motion: no-preference) {
+ .trick-fx-flight { animation: trick-fx-orbit var(--fx-duration) ease-out both; }
+ .trick-fx-impact { animation: trick-fx-burst var(--fx-duration) ease-out both; }
+ [data-fx-tier='4'] .trick-landing-card, [data-fx-tier='5'] .trick-landing-card { animation: trick-fx-glow 900ms ease-out both; }
+}
+[data-paused='true'] .trick-fx-flight, [data-paused='true'] .trick-fx-impact, [data-paused='true'] .trick-landing-card { animation-play-state: paused; }
+@keyframes trick-fx-orbit { from { opacity: .8; filter: brightness(1.5); } to { opacity: .18; filter: brightness(1); } }
+@keyframes trick-fx-burst { from { opacity: .9; scale: .35; } to { opacity: 0; scale: calc(1.8 * var(--fx-size)); } }
+@keyframes trick-fx-glow { from { filter: brightness(1.35); } to { filter: brightness(1); } }
+@media (prefers-reduced-motion: reduce) { .trick-fx-flight,.trick-fx-impact { animation: none; opacity: .18; } }

@@ -67,7 +67,7 @@ describe('V14 演出', () => {
     const center = new CenterText();
     center.push([land, rail], 1000);
     expect(center.current(2950)).toBe(name);
-    expect(center.landingText).toEqual({ name, score: '＋1,000', full: true });
+    expect(center.landingText).toMatchObject({ name, score: '＋1,000', full: true });
     expect(center.trickTier).toBe(5);
     expect(center.current(3000)).toBeNull();
   });
@@ -85,7 +85,7 @@ describe('V14 演出', () => {
     expect(scheduler.onCues([land], 16)).toEqual([]);
     const center = new CenterText();
     center.push([land], 0);
-    expect(center.landingText).toEqual({ name: '技名', score: '＋' + points, full: false });
+    expect(center.landingText).toMatchObject({ name: '技名', score: '＋' + points, full: false });
     center.setPaused(true, 100);
     expect(center.current(duration + 100)).toBe('技名');
     center.setPaused(false, duration + 100);
@@ -98,7 +98,7 @@ describe('V14 演出', () => {
       names: ['技名'], points: 0, trickPoints: 1000, trickTier: 5, sectionUsed: true,
     }))!;
     expect(land.sound).toBe('trickLandingFinale');
-    expect(land.landingText).toEqual({ name: '技名', score: '区間採点済み', full: true });
+    expect(land.landingText).toMatchObject({ name: '技名', score: '区間採点済み', full: true });
     const muted = new SoundScheduler({ ...DEFAULT_SETTINGS, soundOn: false });
     expect(muted.onCues([land], 0)).toEqual([]);
   });
