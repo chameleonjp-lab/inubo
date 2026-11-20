@@ -67,7 +67,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
         landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
       };
     });
-    expect(observed.version).toBe('rules-freestyle-1');
+    expect(observed.version).toBe('rules-freestyle-2');
     expect(observed.ranked).toBe(false);
     expect(observed.held).toBe(true);
     expect(observed.heldTurn).toBeGreaterThan(0.2);

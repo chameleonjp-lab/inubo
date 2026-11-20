@@ -21,7 +21,7 @@ export function startFreeReview(root: HTMLElement): void {
   const targets = h('div', { class: 'free-targets', role: 'group', 'aria-label': '回す対象' });
   let target: FreeTarget = 'common', arena = new FreeArena(), scenario: FreeScenario = 'flat';
   let paused = false, half = true, clockUs = 0, lastWall = performance.now(), clockAnchor = lastWall;
-  const pointer = new FreePointerController({ right: [0.8320502943, 0, -0.5547001962], up: [0, 1, 0], toward: [0.5547001962, 0, 0.8320502943] }, true);
+  const pointer = new FreePointerController({ right: [0.8320502943, 0, -0.5547001962], up: [0, 1, 0], toward: [0.5547001962, 0, 0.8320502943] }, true, false);
   const trails = new Map<number, SVGPolylineElement | null>();
   const clearPointers = () => { pointer.clear(); trails.clear(); svg.replaceChildren(); };
   const tickClock = (now: number) => {
@@ -42,9 +42,13 @@ export function startFreeReview(root: HTMLElement): void {
     syncSound();
   } }, '音あり');
   for (const [value, text] of [['common', '一緒'], ['dog', '犬'], ['rider', '人']] as const) {
-    const b = h('button', { type: 'button', 'aria-pressed': value === target ? 'true' : 'false', 'data-testid': `target-${value}`, onclick: () => {
-      target = value; for (const c of targets.children) c.setAttribute('aria-pressed', c === b ? 'true' : 'false');
-    } }, text); targets.append(b);
+    const selectTarget = () => {
+      if (target === value) return;
+      target = value;
+      pointer.retargetAll(value);
+      for (const c of targets.children) c.setAttribute('aria-pressed', c === b ? 'true' : 'false');
+    };
+    const b = h('button', { type: 'button', 'aria-pressed': value === target ? 'true' : 'false', 'data-testid': `target-${value}`, onpointerdown: selectTarget, onclick: selectTarget }, text); targets.append(b);
   }
   const jump = h('button', { class: 'free-primary', 'data-testid': 'free-jump', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(); update(); } }, 'ジャンプ');
   const high = h('button', { 'data-testid': 'free-high', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(true); update(); } }, '高く跳ぶ');
