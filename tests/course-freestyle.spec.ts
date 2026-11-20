@@ -11,7 +11,10 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     page.on('pageerror', error => errors.push(error.message));
     await page.goto('/?ranking=mock');
     await page.getByTestId('name').fill('自由操作の確認');
-    await page.getByTestId(entry).click();
+    if (entry === 'practice') await page.evaluate(() => (window as unknown as {
+      __inubo: { app: { startRun: (mode: 'practice') => void } }
+    }).__inubo.app.startRun('practice'));
+    else await page.getByTestId('start').click();
     await expect(page.getByTestId('free-run-controls')).toBeVisible();
     await expect(page.getByTestId('run-target-dog')).toBeInViewport();
     const observed = await page.evaluate(async () => {
@@ -98,7 +101,10 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
 test('ジャンプの指を保持したまま即回転し、ボタンを押した瞬間に対象を変えられる', async ({ page }) => {
   await page.setViewportSize({ width: 402, height: 700 });
   await page.goto('/?ranking=mock');
-  await page.getByTestId('practice').click();
+  await page.getByTestId('home').waitFor();
+  await page.evaluate(() => (window as unknown as {
+    __inubo: { app: { startRun: (mode: 'practice') => void } }
+  }).__inubo.app.startRun('practice'));
   const observed = await page.evaluate(async () => {
     const { session } = (window as unknown as { __inubo: { app: { game: TestGame } } }).__inubo.app.game;
     const sim = session.sim;

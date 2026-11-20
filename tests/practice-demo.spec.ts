@@ -13,7 +13,10 @@ async function playerRun(page: Page) {
 
 test('練習のお手本は1回だけ再生し、プレイヤーの操作や走行を進めない', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('practice').click();
+  await page.getByTestId('home').waitFor();
+  await page.evaluate(() => (window as unknown as {
+    __inubo: { app: { startRun: (mode: 'practice') => void } }
+  }).__inubo.app.startRun('practice'));
   await page.getByTestId('legacy-practice').click();
   const demo = page.getByTestId('practice-demo');
   const status = page.getByTestId('practice-demo-status');
@@ -55,7 +58,10 @@ test('練習のお手本は1回だけ再生し、プレイヤーの操作や走�
 
 test('5番でガイドを1本の指でなぞると複合技が成功して練習を完了する', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('practice').click();
+  await page.getByTestId('home').waitFor();
+  await page.evaluate(() => (window as unknown as {
+    __inubo: { app: { startRun: (mode: 'practice') => void } }
+  }).__inubo.app.startRun('practice'));
   await page.getByTestId('legacy-practice').click();
   for (let i = 0; i < 4; i++) await page.getByTestId('practice-next').click();
   await expect(page.getByTestId('practice-title')).toHaveText('5. 複合技（円＋直線）');

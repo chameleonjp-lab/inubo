@@ -190,31 +190,6 @@ h2 {
   }
 }
 
-.swatches {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0;
-}
-
-.sw-label {
-  width: 80px;
-  font-size: 14px;
-}
-
-.sw {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 1px #9aa4ae;
-  cursor: pointer;
-}
-
-.sw.selected {
-  box-shadow: 0 0 0 3px var(--accent);
-}
-
 .name-block {
   margin-top: 12px;
   display: grid;
@@ -249,20 +224,6 @@ h2 {
 .note {
   color: var(--muted);
   font-size: 13px;
-}
-
-table.stamps {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 8px 0 16px;
-}
-
-table.stamps th,
-table.stamps td {
-  border: 1px solid var(--line);
-  padding: 8px 4px;
-  text-align: center;
-  font-size: 14px;
 }
 
 /* ---------- 走行画面 ---------- */

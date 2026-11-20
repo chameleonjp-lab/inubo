@@ -22,12 +22,17 @@ async function gameState(page: Page) {
 async function finishAutoRun(page: Page, route = 'safe', dog = 'shiba') {
   await page.goto(`/?autoplay=${route}&speed=12`);
   await page.click(`[data-testid="dog-${dog}"]`);
-  await page.getByTestId(route === 'trick' ? 'ranked-start' : 'start').click();
+  if (route === 'trick') {
+    // 過去の走行仕様は回帰テスト用に保持。ホームの入口は削除済み。
+    await page.evaluate(() => (window as unknown as {
+      __inubo: { app: { startRun: (mode: 'competition', version: string) => void } }
+    }).__inubo.app.startRun('competition', 'rules-1'));
+  } else await page.getByTestId('start').click();
   await page.waitForSelector('[data-testid="results"]', { timeout: 90_000 });
   await page.waitForTimeout(900);
 }
 
-test('ホーム: 3犬種と服装を選び、旧版の選択履歴があっても公園へ直接入る', async ({ page }) => {
+test('ホーム: 3犬種を選べて、不要になった5項目はなく、旧版の設定履歴があっても公園へ入る', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('inubo-test:inubo:v1:profile', JSON.stringify({
     participantId: 'legacy-player', lastCourse: 'riverside',
   })));
@@ -37,7 +42,12 @@ test('ホーム: 3犬種と服装を選び、旧版の選択履歴があって�
   for (const d of ['shiba', 'corgi', 'whippet']) await expect(page.locator(`[data-testid="dog-${d}"]`)).toBeEnabled();
   await page.click('[data-testid="dog-corgi"]');
   await expect(page.locator('[data-testid="dog-corgi"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.swatches').first()).toBeVisible();
+  await expect(page.locator('.swatches')).toHaveCount(0);
+  await expect(page.getByTestId('practice')).toHaveCount(0);
+  await expect(page.getByTestId('ranked-start')).toHaveCount(0);
+  await expect(page.getByTestId('free-review-link')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'スタンプ帳' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '乗り手' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Xでシェア' })).toBeVisible();
   const start = page.getByTestId('start');
   await expect(start).toBeInViewport({ ratio: 1 });
@@ -78,14 +88,17 @@ test('完走 → 結果: 総合点を大きく、その下にタイム・タイ�
   expect(st!.simUs).toBeLessThan(2_000_000);
 });
 
-test('端末内の記録: 完走するとホームに最高点と最速（犬種つき）が出て、スタンプ帳に印が付く。再読込後も残る', async ({ page }) => {
+test('端末内の記録: 完走するとホームに最高点と最速が出て、非表示のスタンプ情報も再読込後に残る', async ({ page }) => {
   await finishAutoRun(page, 'safe', 'corgi');
   await page.click('[data-testid="home"]');
   await page.reload();
   await expect(page.getByTestId('home-records')).toContainText('最高');
   await expect(page.getByTestId('home-records')).toContainText('コーギー');
-  await page.getByRole('button', { name: 'スタンプ帳' }).click();
-  await expect(page.locator('table.stamps')).toContainText('🐾');
+  const stamp = await page.evaluate(() => (window as unknown as {
+    __inubo: { app: { records: { stamps: () => Record<string, Record<string, boolean>> } } }
+  }).__inubo.app.records.stamps());
+  expect(stamp.corgi.park).toBe(true);
+  await expect(page.getByRole('button', { name: 'スタンプ帳' })).toHaveCount(0);
   const keys = await page.evaluate(() => Object.keys(localStorage));
   expect(keys.some((key) => key.startsWith('inubo-test:inubo:v1:bestTime:'))).toBe(true);
   expect(keys.filter((key) => key.startsWith('inubo:v1:'))).toEqual([]);
@@ -179,7 +192,10 @@ test('設定: 音のオン・オフ、音量、揺れ、光の量を別々に変
 
 test('練習広場: 5 つの手順を順に試せ、途中で次へ・本番へ進める。練習は記録を作らない', async ({ page }) => {
   await page.goto('/');
-  await page.click('[data-testid="practice"]');
+  await page.getByTestId('home').waitFor();
+  await page.evaluate(() => (window as unknown as {
+    __inubo: { app: { startRun: (mode: 'practice') => void } }
+  }).__inubo.app.startRun('practice'));
   await page.getByTestId('legacy-practice').click();
   await expect(page.locator('[data-testid="practice-title"]')).toHaveText('1. 左右に動く');
   await page.click('[data-testid="practice-next"]');
@@ -221,8 +237,11 @@ test('画面の向きを変えると一時停止する', async ({ page }) => {
 test('V17・V18（試験用の接続先）: 名前を入れて走ると、結果の順位に開始時の名前で 1 件だけ出る', async ({ page }) => {
   await page.goto('/?ranking=mock&autoplay=safe&speed=12');
   await page.fill('[data-testid="name"]', 'テスト<犬>&');
-  await expect(page.locator('#ranking-name-note')).toContainText('名前と記録が公開');
-  await page.getByTestId('ranked-start').click();
+  await expect(page.locator('#ranking-name-note')).toContainText('公開ランキングに送信されません');
+  // 旧ルールの公開ランキング試験は、利用者に見えない検査用入口から継続する。
+  await page.evaluate(() => (window as unknown as {
+    __inubo: { app: { startRun: (mode: 'competition', version: string) => void } }
+  }).__inubo.app.startRun('competition', 'rules-1'));
   await page.waitForSelector('[data-testid="results"]', { timeout: 90_000 });
   await page.getByRole('button', { name: 'ランキング（総合）' }).click();
   await expect(page.locator('[data-testid="board"] [data-state="ready"] li')).toHaveCount(1);

@@ -14,7 +14,7 @@ import { foodActive } from '../game/items';
 import { maxSpeed } from '../game/motion';
 import { GestureRecognizer } from '../input/gestures';
 import { FreePointerController } from '../input/free-pointer';
-import { COURSE_DEFS, RACE_COURSES, getCourse } from '../content/courses/index';
+import { COURSE_DEFS, getCourse } from '../content/courses/index';
 import { DOGS, DOG_ORDER } from '../content/dogs';
 import { GameView } from '../view/scene';
 import { CenterText, UI_CUES, cueForEvent, type Cue } from '../view/effects';
@@ -27,13 +27,10 @@ import type { CourseId, DogId } from '../content/types';
 import type { GestureFact, RunIdentity, RunResult, SimEvent } from '../game/types';
 
 /**
- * 画面の流れ: ホーム（選択）→ 秒読み → 走行 → 結果。一時停止・再開と、練習広場・遊び方・設定・スタンプ帳。
+ * 画面の流れ: ホーム（犬の選択）→ 秒読み → 走行 → 結果。一時停止・再開と、遊び方・設定。
  */
 
-const CLOTHES = ['#e4572e', '#2e86ab', '#f2c14e', '#6a4c93', '#3bb273'];
-const HELMETS = ['#2e86ab', '#e4572e', '#ffffff', '#222222', '#f2c14e'];
 const PARK_ID = 'park';
-const reviewPath: string = import.meta.env.VITE_REVIEW_URL ?? '';
 
 function nowMs(): number {
   return performance.now();
@@ -181,9 +178,9 @@ export class App {
     this.game = null;
     this.root.classList.remove('in-game');
     const parkRecords = { courseId: PARK_ID, courseVersion: COURSE_DEFS[PARK_ID]!.version } as const;
+    // 旧版の記録は残すが、ホームでは現在の自由操作のみを見せる。
     const records = [
       [FREE_RULES_VERSION, '自由操作の記録'],
-      [RULES_VERSION, '従来ルールの記録'],
     ].flatMap(([rulesVersion, label]) => {
       const key = { ...parkRecords, rulesVersion };
       const best = this.records.bestScore(key);
@@ -213,13 +210,6 @@ export class App {
         h('span', { class: 'card-sub' }, `速さ ${DOGS[id].speedIndex}・小回り ${DOGS[id].handlingIndex}`),
       ),
     );
-    const swatches = (list: string[], cur: string, set: (c: string) => void, label: string) =>
-      h(
-        'div',
-        { class: 'swatches', role: 'group', 'aria-label': label },
-        h('span', { class: 'sw-label' }, label),
-        list.map((c) => h('button', { class: `sw${c === cur ? ' selected' : ''}`, style: `background:${c}`, 'aria-label': `${label} ${c}`, onclick: () => (set(c), this.saveProfile(), this.showHome()) })),
-      );
     const hasRanking = this.rankingFor(PARK_ID);
     const shareFallback = h('div', { class: 'share-fallback hidden', 'data-testid': 'home-share-fallback', 'aria-live': 'polite' });
     const nameBlock = hasRanking
@@ -235,7 +225,7 @@ export class App {
             });
             return inp;
           })(),
-          h('p', { id: 'ranking-name-note' }, '名前を入れて「従来ルールで走る」を押すと、名前と記録が公開されます。'),
+          h('p', { id: 'ranking-name-note' }, '名前は端末に保存されます。現在の自由操作の記録は公開ランキングに送信されません。'),
         )
       : null;
     this.setScreen(
@@ -249,22 +239,14 @@ export class App {
           'div',
           { class: 'actions' },
           h('button', { class: 'btn primary big', 'data-testid': 'start', onclick: () => (this.uiSound('decide'), this.startRun('competition')) }, 'スタート'),
-          h('button', { class: 'btn', 'data-testid': 'practice', onclick: () => (this.uiSound('decide'), this.startRun('practice')) }, '練習広場'),
         ),
-        h('h2', {}, '乗り手'),
-        swatches(CLOTHES, this.profile.clothes, (c) => (this.profile.clothes = c), '服'),
-        swatches(HELMETS, this.profile.helmet, (c) => (this.profile.helmet = c), 'ヘルメット'),
         nameBlock,
         h(
           'div',
           { class: 'actions small-row' },
-          h('button', { class: 'btn small', 'data-testid': 'ranked-start', onclick: () => (this.uiSound('decide'), this.startRun('competition', RULES_VERSION)) }, '従来ルールで走る'),
           h('button', { class: 'btn small', onclick: () => this.showHowTo() }, '遊び方'),
           h('button', { class: 'btn small', 'data-testid': 'settings', onclick: () => this.showSettings() }, '設定'),
-          h('button', { class: 'btn small', onclick: () => this.showStamps() }, 'スタンプ帳'),
           hasRanking ? h('button', { class: 'btn small', onclick: () => this.showRanking() }, 'ランキング') : null,
-          /^\.\/review\/[a-f0-9]{40}\/[0-9]+-[0-9]+\/$/.test(reviewPath)
-            ? h('a', { class: 'btn small', href: reviewPath, 'data-testid': 'free-review-link' }, '自由操作の試験場') : null,
           h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(officialUrl()), shareFallback) }, 'Xでシェア'),
         ),
         shareFallback,
@@ -288,12 +270,11 @@ export class App {
         h('ul', {}, [
           h('li', {}, '地面で左右に払う: 払った幅の分だけ横へ動きます。'),
           h('li', {}, '上へ払う: 1回跳びます。踏切台からは高く跳べます。'),
-          h('li', {}, '跳んだら一度指を離し、空中で画面をなぞります。なぞる間に回転し、指を離した後も勢いが続きます。'),
-          h('li', {}, '反対へ払うと勢いを弱められます。「一緒」「犬だけ」「人だけ」で回す対象を選びましょう。'),
+          h('li', {}, '上へ払って跳んだら、指を離さずそのまま画面をなぞって回転できます。指を離した後も勢いが続きます。'),
+          h('li', {}, '反対へ払うと勢いを弱められます。「両方」「犬だけ」「人だけ」は回転中でも即座に切り替えられます。'),
           h('li', {}, '手すりには上から乗ると滑り、前へ払うと跳び降ります。正面や側面に当たると止まります。'),
         ]),
         h('p', {}, '着地までの回転数と方向で技の名前と点が決まります。同じ区間で点になるのは、最初に決めた技のジャンプ1回です。3区間続けて成功すると100点を加えます。タイム点と技点はそれぞれ最大5,000点です。'),
-        h('details', {}, h('summary', {}, '従来ルールの操作'), h('p', {}, '空中で円を閉じると犬が回り、線を引いて離すと人と犬が一緒に回ります。円を描いてから線を引くと複合技になります。')),
         h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
       ),
     );
@@ -336,34 +317,6 @@ export class App {
         h('label', { class: 'setting' }, '光の量', light),
         toggle('自分の最速の走りを半透明で表示する', () => this.settings.ghost, (v) => (this.settings.ghost = v), 'ghost'),
         h('p', { class: 'note' }, '設定は成績に影響しません。消音・弱い演出でも、成功と失敗は文字と形で見分けられます。'),
-        h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
-      ),
-    );
-  }
-
-  showStamps(): void {
-    const stamps = this.records.stamps();
-    const ch = this.records.challenges();
-    this.setScreen(
-      h(
-        'section',
-        { class: 'screen text-screen' },
-        h('h2', {}, 'スタンプ帳'),
-        h(
-          'table',
-          { class: 'stamps' },
-          h('tr', {}, h('th', {}, ''), RACE_COURSES.map((c) => h('th', {}, COURSE_DEFS[c]!.name))),
-          DOG_ORDER.map((d) => h('tr', {}, h('th', {}, DOGS[d].name), RACE_COURSES.map((c) => h('td', {}, stamps[d]?.[c] ? '🐾' : '・')))),
-        ),
-        h('h3', {}, '寄り道課題'),
-        h(
-          'ul',
-          {},
-          RACE_COURSES.map((c) => {
-            const def = COURSE_DEFS[c]!;
-            return h('li', {}, `${def.name}: ${def.challenge?.label ?? '―'} ${ch[`${c}|${def.version}`] ? '🐾 達成' : ''}`);
-          }),
-        ),
         h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
       ),
     );
