@@ -178,3 +178,92 @@ src/view/trick-fx-controller.ts（新規）はrunId＋jumpIdごとに takeoff→
 **アンカー群の明示:** 複数点は各アンカーのgetWorldPositionで別々に取得する。正本の細かなタイミング・向き・消え方は上表に加えて必ず実装する。Bの二色は犬橙・人青、Hは人青、Dは犬橙。強いストロボ・全面白化・コースを隠す演出は禁止。
 
 
+
+## 5. 身体の計測点・着地点（P2）
+
+### 5-1. 競技モデル（src/view/models.ts）
+現行Rigはpaw（犬の中心にある一つのObject3D）、nose、shoulder、legs、riderArms、riderLegs、ears、tail等を持つ。**pawを四足先端として使うのは禁止**。見えない計測用Object3Dを次の親の子として追加する。物理的な接触、脚や犬種の形、アニメーションに一切変更しない。
+
+| 計測名 | 親と位置の指定 |
+|---|---|
+| dogPawFL/FR/BL/BR | legs[0..3]のfootメッシュ中心に各1点。生成ループの順（前左、前右、後左、後右）をそのまま明文化。 |
+| dogEarL/R | 現行ears[0..1]の先端。犬種ごとの耳の形状／高さに追従。 |
+| dogTail | tailメッシュに子を付け、巻き尾・短尾・棒状尾でそれぞれ実末端を取得。根元のcenterを流用しない。 |
+| dogNose | 現行noseを使用。dogBack/Bellyは胴のローカル中心の上／下に不可視点。 |
+| riderHead/Helmet | riderの頭／ヘルメット上端に固定した子Object3D。 |
+| riderShoulderL/R | riderArms[0..1]の上端。riderHandL/Rは各arm内のhand実メッシュ位置。 |
+| riderWaist/ShoeL/ShoeR | rider体幹の腰・各riderLeg内のshoe中心。 |
+| pivot/contact | 自由飛行の回転支点／着地イベントの接地点。 |
+
+GameView.placeRigとanimateRigの後、rig.root.updateMatrixWorld(true)を**1回**行い、共有一時Vector3へgetWorldPosition()を集める。ルート姿勢とローカルクォータニオンを二度掛けしない。犬種shiba/corgi/whippetと、前後左右・上空／着地で座標テスト。新アンカーは描画に使うが、衝突の物理部位配列に加えない。
+
+新設src/view/trick-fx-anchors.tsへAnchorProvider（アンカー名→世界座標／前フレーム座標）を定義し、競技Rig用と操作確認版用を分ける。src/view/free-scene.tsの操作確認版ではsrc/game/free-geometry.tsのfreePartsが返すdog-nose、dog-ear-a/b、dog-tail、paw-0..3、head、helmet、arm-0/1-2、shoe-0/1、hipを適切なAnchorKeyへ対応付ける。**freePartsの衝突用半径や座標は変更しない**。
+
+### 5-2. 着地イベントを使った位置固定
+src/game/run.tsのcloseAirborneJumpでfreeFlightがnullになる前に既存scoreFreeMotionのscoredTarget・base・bonusを確定し、src/game/tricks.tsのJumpScoreへ任意の表示フィールドを追加する。src/game/scoring.tsがemit('land')するとき、data.jumpId、trickPoints、trickBase、switchBonus、switchCountとともにfxTarget（B/H/Dまたはnone）を付ける。既存のScoredJump.pointsやaward、区間の重複除外は変えない。src/view/effects.tsのCueは元のSimEventが持つpathId、sMm、x、y、atUsを必要最小限で転送する。
+
+着地点＝イベントのpathId・sMm/1000（m）・x・y・atUsから求めたワールド位置。実フレームのrun.sやrun.yを後から使わない。地面ならsupportHeightを用い、onRailがある時はレールの上面から波紋を生む。Lの紋章・肉球印は床から浮かせず、犬・人の身長に依存した誤差を出さない。連続するland通知もrunId＋jumpIdで1回だけ演出する。
+
+## 6. 演出の実行器・描画性能（P3）
+
+新設src/view/trick-fx-controller.tsで1ジャンプごとの状態（target・F/A level・発火済みID・残像・最後のサンプル時刻）を管理する。src/view/trick-fx-renderer.tsは読み取ったFxProgramとAnchorProviderから描画コマンドを作る。ゲームからはGameView.frameへ読み取り専用のFxSelectionを渡し、**表示器からrun.score／freeFlight.motion／ゲーム入力へ書き戻さない**。
+
+- Fは輪・帯・点光・残像と段階固有の時系列の強調。Aは前フレームからの実位置のつながり、向きと回転速度に沿う線。Lは着地の瞬間だけ床の輪・波紋・足印・放射粒・文字を出す。
+- FとAが段階アップした時は旧レベルを約200msで薄くして、新IDを開始。ボタンで対象を変えた後は**次に受理した回転操作**から新対象へ切り替え、以前の線は200〜400msで減衰。入力操作の反応時間は増やさない。
+- 同時に生かすのはF 1件、A 1件（切替時の旧残像は短く例外）、接地L 1件。各ID専用にgeometry/materialを毎回newしない。幾何・色・透明度・線幅・時間変化をプールから組み立て、毎フレーム大量のVector3を作らない。
+- 既存Particlesの上限600を共有。新Lの粒は1回最大72。空中追加は90msあたり最大22、軌跡は1本につき最大40点、同一アンカーの残像は最大2。UI文字は描画粒ではなく既存DOMレイヤーで表示する。
+- 光の最大不透明度・横幅を控え、顔、前方の障害物、ゲート、上部の時計・点数、下部の「両方／犬だけ／人だけ」ボタンを塞がない。全白フラッシュや高速ストロボ、操作入力を止めるための強制スローは禁止。
+- 光の設定がweakの時は数と不透明度を下げる。prefers-reduced-motionの時はThree.js、DOM、球モデルすべてで残像と粒の移動を静止した短い形へ置換する（得点には影響させない）。matchMediaの結果はキャッシュし、変化イベントを監視・解放する。消音時は視覚でも段階が分かる。
+- pause、hidden、orientationChange、run終了、retry、retire、WebGL context lossで生成・再生成・タイマーを適切に止める。停止中の経過実時間を蓄積して大量生成しない。再挑戦で旧runIdのエフェクトを消し、不要なGPUバッファをdisposeする。
+- 約90msの固定走行時計を選択基準にし、段階が同じならレンダリングは毎フレーム既存コマンドを更新するだけ。履歴の毎フレーム全走査を避け、処理済みspanの末尾位置／計算結果をキャッシュする。new THREE.Vector3・getWorldPositionの呼び出しは必要な部位だけに限定する。
+- 目標はiPhone 17 Pro Safariで通常60fps付近を保つこと。実機のP95フレーム間隔33ms以内を測定目安にし、処理落ちがあれば粒数・形状分割数・サンプル点数を減らす。**81件の種類・起点・意味を削ることは禁止**。数値達成の可否は実測で報告し、未実測を「成功」と書かない。
+
+## 7. 技名・着地文字・10段階音（P4）
+
+### 7-1. DOMとテキスト
+src/view/trick-landing.tsのTrickLandingTextはname／score／full／switchBonus／switchCountを維持し、optional fxTarget・emphasisId・trailId・landingId・landingLevelを追加する。既存の技名・点数・満点条件（**基礎回転点1000のときのみ**）を変えない。切替ボーナスの行は別に表示。区間が採点済みのときは「区間採点済み」であり、「＋0点」の擬似加点を出さない。
+
+src/view/effects.tsのCenterText.trickTierは当面の5段階互換として保ち、10段階は別のlandingLevelへ渡す。古いdata-trick-tierと新しいdata-fx-*を混同しない。src/ui/trick-landing.ts/.cssにdata-fx-target／data-fx-f／data-fx-a／data-fx-lを新設し、既存のdata-testid（landing-trick-name、landing-trick-score、landing-combo）を維持する。画面中央の表示優先順位（衝突・停止＞着地・技＞アイテム）は保つ。
+
+L01〜L10の表示上限時間（ms）：1000、1100、1200、1350、1500、1600、1700、1800、1900、2000。最長の技名と連携行を402×700／700×402で表示できるよう折返し、文字サイズ、上下safe-areaを先に調整する。長文のために操作面を覆う時間を延長しない。pause時は残り時間を保持する。
+
+### 7-2. 音
+src/audio/sound.tsのシンセ合成で10段階の着地音の違いを作る。下記は区別するための音型で、外部音源の追加は不要。既存のトーン定義を再利用してよいが、同じ段階で音が区別できない状態は禁止。
+
+| L段階 | 音の設計 |
+|---|---|
+| 01 | 低い単音を短く1回 |
+| 02 | 明るい単音＋短い余韻 |
+| 03 | 2音が順に上がる |
+| 04 | 低音と高音の二音が同時 |
+| 05 | 3音の短い上昇 |
+| 06 | 中低音から高音への3音 |
+| 07 | 4音の上昇＋柔らかい和音 |
+| 08 | 低音の拍と高音の和音を交互 |
+| 09 | 5〜6音の連続上昇＋長めの余韻 |
+| 10 | 最大7音の和音フィナーレ。急な大音量にはしない |
+
+さらにBは橙・青の掛け合いをイメージした2音の応答、Hはやや高めの軽い音、Dは低めの柔らかい音として音程・音色を分ける。10段階×3対象の音型は**新たな楽曲ではなく短い効果音**。SoundSchedulerの音量・soundOn・70ms重複抑制、AudioEngine.stopTrickLandingによる前の着地音の停止を継続する。1着地1開始、同時最大7音、背景・一時停止・再挑戦では停止。レビュー版から本番通信を発生させない。
+
+## 8. リプレイ互換（P5）
+
+src/view/replay.tsの旧再生は12値／26値の姿勢フレームだけを持ち、当時の回転入力の切替や確定81IDを保存していない。**旧データから新演出IDを憶測で合成しない**。データがなければ従来の半透明ゴースト姿勢のみ表示する。
+
+新しい走行を保存する場合に限り、ReplayDataへ任意visualEventsを追加する。要素は {tUs, jumpId, kind, target, level, id} とし、固定したsimulation時刻で**段階が変わった瞬間・対象が変わった瞬間・着地した瞬間だけ**記録する。毎フレームの描画座標は保存しない。配列の既存frames・stepMs・motionVersion・runId・保存キーは一切変更しない。Records.bestTimeReplayが旧データを引き続き読めることをテストする。
+
+新visualEventsの再生時は、実行時と同一の81レジストリとモデル別アンカーを使い、同じtUs／IDのF/A/Lを表示する。保存されていない古い録画はFXなしで正確に再生する。30/60/120fpsおよび描画間引き条件でも、同じ入力の視覚イベント列（ID・時刻）が完全一致することを検証する。ログ量は段階変更のみに抑え、端末保存の肥大化を防ぐ。
+
+## 9. Claudeの実装順・担当ファイル（P0〜P7）
+
+| 工程 | 作業 | 合格して次へ進む条件 |
+|---|---|---|
+| P0 | src/view/trick-fx-81.tsとtrick-fx.tsの81レジストリ・分類・10/7/10閾値・display難度を実装 | ID全81・閾値境界・score不変の単体テスト合格 |
+| P1 | 上記81行の個別recipeをすべて作り、開始／動き／終了まで実装 | 81プレビューに全件表示され、単純な色替えの重複がない |
+| P2 | models.tsとfree-scene.tsの計測点、trick-fx-anchors.ts、landの位置・分類情報を連携 | 3犬種・四足・手首・靴・尾・レール接地の座標検証成功 |
+| P3 | scene.ts、trick-fx-renderer.ts、trick-fx-controller.tsで空中と着地を置換 | 途中最高段階の誤判定なし、対象切替・中断・再試行合格 |
+| P4 | effects.ts／trick-landing.ts／CSS／sound.tsの10段階表示と音を対応 | 長技名・連携点・採点済み・B/H/D音の確認成功 |
+| P5 | replay.tsへ任意visualEventsと既存の読取互換を追加 | 旧12/26値の再生と新ID同期の回帰試験成功 |
+| P6 | 旧TRICK_FX_100と旧テストの実行参照を置換。スクリーンショットと負荷試験 | 旧100形式の実行参照0、見た目81件確認 |
+| P7 | PR本文に証拠と未確認事項を整理し、競合・失敗を解消する | 全CI合格・レビュー可能PR提出（マージしない） |
+
+主な変更候補：src/view/trick-fx.ts、trick-fx-81.ts（新規）、trick-fx-controller.ts（新規）、trick-fx-renderer.ts（新規）、trick-fx-anchors.ts（新規）、models.ts、scene.ts、free-scene.ts、effects.ts、trick-landing.ts、replay.ts、src/ui/trick-landing.ts／.css、free-review.ts、screens.ts、src/audio/sound.ts。表示情報の受け渡しに限りsrc/game/free-score.ts、run.ts、scoring.ts、tricks.tsを追加修正可。コース地形・当たり判定・ranking・Supabase・storage keys・rulesVersionは変更禁止。
