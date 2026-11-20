@@ -254,6 +254,11 @@ export class AudioEngine {
     }
   }
 
+  /** 音の装置の状態（確認版で表示する）。まだ作っていなければ 'none'。 */
+  get state(): string {
+    return this.ctx?.state ?? 'none';
+  }
+
   stopTrickLanding(): void {
     for (const osc of this.trickLandingNotes) osc.stop();
     this.trickLandingNotes.clear();

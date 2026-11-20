@@ -2,7 +2,7 @@ import './free-review.css';
 import { h } from './dom';
 import { FreeArena, type FreeResult, type FreeScenario } from '../game/free-arena';
 import { fxTargetOf, landingSoundName } from '../view/trick-fx';
-import { FX_TARGETS } from '../view/trick-fx-81';
+import { mountReviewTools } from './review-tools';
 import { TRICK_FX_81, fxProgram, isFxId, type FxId, type FxTarget } from '../view/trick-fx-81';
 import { FxTimeline, predictedAirUs, type FxVisualEvent } from '../view/trick-fx-timeline';
 import { FxSpinReader } from '../view/trick-fx-sim';
@@ -52,6 +52,7 @@ export function startFreeReview(root: HTMLElement): void {
     sound.setAttribute('aria-pressed', String(soundOn));
     sound.textContent = soundOn ? '音あり' : '消音';
     if (soundOn) audio.unlock();
+    else tools.stopSounds('消音');
     syncSound();
   } }, '音あり');
   for (const [value, text] of [['common', '両方'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
@@ -71,16 +72,20 @@ export function startFreeReview(root: HTMLElement): void {
   const jump = h('button', { class: 'free-primary', 'data-testid': 'free-jump', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); galleryId = null; startJump(false); update(); } }, 'ジャンプ');
   const high = h('button', { 'data-testid': 'free-high', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); galleryId = null; startJump(true); update(); } }, '高く跳ぶ');
   const pause = h('button', { 'data-testid': 'free-pause', onclick: () => { if (paused && soundOn) audio.unlock(); sync(); setPause(!paused); } }, '一時停止');
-  const setPause = (v: boolean) => { paused = v; if (v) { stopSoundQueue(); audio.stopTrickLanding(); } clearPointers(); lastWall = performance.now(); syncSound(); update(); };
+  const setPause = (v: boolean) => { paused = v; if (v) tools.stopSounds('一時停止'); clearPointers(); lastWall = performance.now(); syncSound(); update(); };
   const resetFx = () => { timeline.reset(); scene?.fx.clear(); landedFor = -1; };
-  const retry = h('button', { 'data-testid': 'free-retry', onclick: () => { audio.stopTrickLanding(); arena = new FreeArena(scenario); clockUs = 0; resetFx(); galleryId = null; clearPointers(); setPause(false); } }, 'やり直す');
+  const retry = h('button', { 'data-testid': 'free-retry', onclick: () => { tools.stopSounds('やり直し'); arena = new FreeArena(scenario); clockUs = 0; resetFx(); galleryId = null; clearPointers(); setPause(false); } }, 'やり直す');
   // 開発・確認用：81種類を1件ずつ選んで再生する（確認版だけに入り、本番の画面には出ない）。
   const gallery = h('select', { 'aria-label': '演出を1件ずつ確認', 'data-testid': 'fx-gallery' },
     ...TRICK_FX_81.map(prog => h('option', { value: prog.id }, `${prog.id} ${prog.name}`)));
   const galleryTargetOf = (target: FxTarget): FreeTarget => target === 'B' ? 'common' : target === 'D' ? 'dog' : 'rider';
-  const playGallery = h('button', { 'data-testid': 'fx-gallery-play', onclick: () => {
-    if (!isFxId(gallery.value)) return;
-    audio.stopTrickLanding(); arena = new FreeArena(scenario); clockUs = 0; resetFx(); clearPointers(); setPause(false);
+  let frozen = false;
+  const startGallery = (): number => {
+    const t0 = performance.now();
+    if (!isFxId(gallery.value)) return 0;
+    frozen = false;
+    tools.stopSounds('演出の選び直し');
+    arena = new FreeArena(scenario); clockUs = 0; resetFx(); clearPointers(); setPause(false);
     const prog = fxProgram(gallery.value);
     galleryId = prog.id;
     galleryReplayUs = 0;
@@ -95,50 +100,15 @@ export function startFreeReview(root: HTMLElement): void {
     show({ tUs: 0, jumpId, kind, target: prog.target, level: fxProgram(id).level, id });
     if (prog.kind === 'F') show({ tUs: 0, jumpId, kind: 'C', target: prog.target, level: 1, id: null });
     update();
-  } }, '演出を見る');
-  // 確認用：着地音30種類（B/H/D × L01〜L10）を1つずつ、または順に鳴らして聞き比べる。
-  const soundNames = FX_TARGETS.flatMap(t => Array.from({ length: 10 }, (_, i) => landingSoundName(t, i + 1)));
-  const soundPick = h('select', { 'aria-label': '着地音を1つずつ確認', 'data-testid': 'fx-sound' },
-    ...soundNames.map(name => h('option', { value: name }, name.replace('trickLanding', '着地音 '))));
-  let soundQueue: number[] = [];
-  const playSound = (name: string) => {
-    audio.unlock(); syncSound();
-    root.dataset.lastSound = name;
-    if (soundOn && !paused) audio.play({ name, gain: 0.7, pitch: 1, reverse: false });
+    return performance.now() - t0;
   };
-  const stopSoundQueue = () => { for (const id of soundQueue) clearTimeout(id); soundQueue = []; };
-  const soundPlay = h('button', { 'data-testid': 'fx-sound-play', onclick: () => { stopSoundQueue(); playSound(soundPick.value); } }, '音を鳴らす');
-  const soundAll = h('button', { 'data-testid': 'fx-sound-all', onclick: () => {
-    stopSoundQueue();
-    soundQueue = soundNames.map((name, i) => window.setTimeout(() => { soundPick.value = name; playSound(name); }, i * 1_400));
-  } }, '30種を順に');
-  // 確認用：光の見え方を背景ごとに確かめる。
+  const playGallery = h('button', { 'data-testid': 'fx-gallery-play', onclick: () => { const ms = startGallery(); tools.mark(`再生:${gallery.value}`, ms); } }, '演出を見る');
+  // 確認用：演出だけを隠して見比べる。
   const fxHide = h('input', { type: 'checkbox', 'data-testid': 'fx-hide', 'aria-label': '演出を隠して見比べる', onchange: () => { scene.setFxVisible(!fxHide.checked); update(); } }) as HTMLInputElement;
-  const backdrop = h('select', { 'aria-label': '確認する背景', 'data-testid': 'fx-backdrop', onchange: () => scene.setBackdrop(backdrop.value as 'sky') },
-    ...([['sky', '明るい空'], ['bright-road', '明るい路面'], ['dark-road', '暗い路面']] as const).map(([value, label]) => h('option', { value }, label)));
-  // 確認用：描画の速さと反応の計測（10秒）。iPhone の Safari でも同じ画面で測れる。
-  const perfOut = h('output', { class: 'free-perf', 'data-testid': 'perf-result' }, '');
-  let perf: { until: number; gaps: number[]; last: number; lines: number; dots: number; decals: number; latency: number[] } | null = null;
-  let inputAt: number | null = null;
-  const perfRun = h('button', { 'data-testid': 'perf-run', onclick: () => {
-    perf = { until: performance.now() + 10_000, gaps: [], last: performance.now(), lines: 0, dots: 0, decals: 0, latency: [] };
-    perfOut.textContent = '計測中（10秒）…';
-  } }, '10秒計測');
-  const finishPerf = () => {
-    if (!perf) return;
-    const gaps = perf.gaps.slice().sort((a, b) => a - b);
-    const at = (q: number) => gaps.length ? gaps[Math.min(gaps.length - 1, Math.floor(q * gaps.length))] : 0;
-    const lat = perf.latency.slice().sort((a, b) => a - b);
-    const result = {
-      frames: gaps.length, fpsMedian: at(0.5) ? Math.round(1000 / at(0.5)) : 0, p95GapMs: Math.round(at(0.95) * 10) / 10,
-      stallsOver100ms: gaps.filter(g => g >= 100).length, maxLines: perf.lines, maxDots: perf.dots, maxDecals: perf.decals,
-      inputToFrameMsMedian: lat.length ? Math.round(lat[Math.floor(lat.length / 2)] * 10) / 10 : null,
-      userAgent: navigator.userAgent, viewport: `${innerWidth}x${innerHeight}`, at: new Date().toISOString(),
-    };
-    perfOut.textContent = JSON.stringify(result);
-    root.dataset.perf = JSON.stringify(result);
-    perf = null;
-  };
+  const tools = mountReviewTools({
+    root, scene: () => scene, audio, soundOn: () => soundOn, paused: () => paused, syncSound, gallery: gallery as HTMLSelectElement,
+    playGallery: startGallery, setFrozen: v => { frozen = v; }, setHalfSpeed: v => { if (half !== v) slow.click(); },
+  });
   const slow = h('button', { 'aria-pressed': 'true', 'data-testid': 'free-slow', onclick: () => { sync(); half = !half; slow.setAttribute('aria-pressed', String(half)); slow.textContent = half ? '速さ ½' : '速さ 1'; } }, '速さ ½');
   const select = h('select', { 'aria-label': '確認する場所', onchange: () => {
     scenario = select.value as FreeScenario; scene.setScenario(scenario); retry.click();
@@ -149,9 +119,8 @@ export function startFreeReview(root: HTMLElement): void {
     h('p', { class: 'free-note' }, '確認版の点は、本番の記録・ランキングに反映しません。'),
     h('div', { class: 'free-work' }, h('div', { class: 'free-viewport' }, stage, h('div', { class: 'free-hud' }, status, h('div', { class: 'free-readings' }, meter, score))), h('section', { class: 'free-control', 'aria-label': '自由操作' }, targets, pad)),
     h('div', { class: 'free-actions' }, jump, high, pause, retry, slow, select, sound),
-    h('div', { class: 'free-actions free-gallery', 'data-testid': 'fx-gallery-row' }, gallery, playGallery, backdrop, h('label', {}, fxHide, '演出を隠す')),
-    h('div', { class: 'free-actions free-gallery', 'data-testid': 'fx-sound-row' }, soundPick, soundPlay, soundAll),
-    h('div', { class: 'free-actions free-gallery', 'data-testid': 'perf-row' }, perfRun, perfOut), details);
+    h('div', { class: 'free-actions free-gallery', 'data-testid': 'fx-gallery-row' }, gallery, playGallery, h('label', {}, fxHide, '演出を隠す')),
+    tools.element, details);
   let scene: FreeScene;
   try { scene = new FreeScene(canvas); scene.setScenario(scenario); }
   catch { status.textContent = '描画を開始できません。ページを再読み込みしてください。'; jump.disabled = high.disabled = true; return; }
@@ -172,7 +141,6 @@ export function startFreeReview(root: HTMLElement): void {
       if (line) line.setAttribute('points', `${line.getAttribute('points')} ${x},${y}`);
       return pointer.move(e.pointerId, x, y, atUs);
     });
-    if (inputs.length && inputAt === null) inputAt = performance.now();
     arena.advance(Math.round(clockUs), inputs); update();
   };
   const release = (e: PointerEvent) => {
@@ -198,9 +166,11 @@ export function startFreeReview(root: HTMLElement): void {
     surface.addEventListener('lostpointercapture', release);
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) { sync(); setPause(true); } });
+  // ページを離れるとき（iPhone のアプリ切替など）も、音の予約を消して止める。
+  window.addEventListener('pagehide', () => { tools.stopSounds('ページを離れた'); sync(); setPause(true); });
   window.addEventListener('blur', () => { sync(); setPause(true); });
   window.addEventListener('resize', () => { sync(); resize(); if (arena.phase !== 'ready') setPause(true); });
-  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); sync(); setPause(true); status.textContent = '描画が中断しました。やり直すにはページを再読み込みしてください。'; });
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); tools.stopSounds('描画の中断'); sync(); setPause(true); status.textContent = '描画が中断しました。やり直すにはページを再読み込みしてください。'; });
   function update(): void {
     root.dataset.phase = arena.phase; root.dataset.paused = String(paused); root.dataset.timeUs = String(arena.motion.timeUs);
     root.dataset.cutoffUs = String(arena.cutoffUs ?? '');
@@ -269,12 +239,9 @@ export function startFreeReview(root: HTMLElement): void {
     const now = performance.now();
     // 回転の向き・速さは、計算した実際の角速度と累積角から描く（描画の前後の姿勢差からは求めない）。
     const spin = arena.phase === 'air' ? spinReader.read(arena.motion, String(jumpId), arena.motion.timeUs) : null;
-    scene.draw(arena.motion.pose, { paused, reduced: reducedQuery?.matches ?? false, dtMs: (now - lastFrameMs) * (half ? 0.5 : 1), spin });
+    // 固定比較の絵を見ている間は、通常の描画で上書きしない。
+    if (!frozen) scene.draw(arena.motion.pose, { paused, reduced: reducedQuery?.matches ?? false, dtMs: (now - lastFrameMs) * (half ? 0.5 : 1), spin });
     lastFrameMs = now;
-    if (perf) {
-      perf.lines = Math.max(perf.lines, scene.fxStats.lines); perf.dots = Math.max(perf.dots, scene.fxStats.dots);
-      perf.decals = Math.max(perf.decals, scene.fxStats.decals);
-    }
     const drawn = scene.fxStats.lines + scene.fxStats.dots + scene.fxStats.decals;
     root.dataset.fxLines = String(drawn);
     // 着地L は短いものがあるので、着地のあとに描いた命令の最大数を残す（確認と試験用）。
@@ -283,12 +250,7 @@ export function startFreeReview(root: HTMLElement): void {
   }
   const frame = () => {
     sync(); update();
-    const now = performance.now();
-    if (perf) {
-      perf.gaps.push(now - perf.last); perf.last = now;
-      if (inputAt !== null) { perf.latency.push(now - inputAt); inputAt = null; }
-      if (now >= perf.until) finishPerf();
-    } else inputAt = null;
+    tools.onFrame(performance.now());
     requestAnimationFrame(frame);
   }; frame();
 }
