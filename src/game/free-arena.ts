@@ -80,7 +80,7 @@ export class FreeArena {
     }, reachesFloor);
     if (!this.motion.halted) return;
     this.cutoffUs = this.motion.timeUs;
-    const trick = scoreFreeMotion(this.motion.history, this.cutoffUs, 0);
+    const trick = scoreFreeMotion(this.motion.history, this.cutoffUs, 0, [...this.motion.seen.values()]);
     if (surface === 'floor') {
       // 支持面へ戻ったら、表示だけ標準の姿勢に戻す。採点には接地前の実回転を使う。
       const { pivot } = this.motion.pose;

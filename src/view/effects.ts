@@ -103,7 +103,10 @@ export function cueForEvent(ev: SimEvent): Cue | null {
       const tier = typeof d.trickTier === 'number' ? d.trickTier : 0;
       const stage = TRICK_LANDING[tier - 1];
       if (stage) {
-        const landingText = trickLandingText(names, pts, Number(d.trickPoints ?? pts), d.sectionUsed === true);
+        const landingText = trickLandingText(names, pts, Number(d.trickPoints ?? pts), d.sectionUsed === true, {
+          basePoints: Number(d.trickBase ?? d.trickPoints ?? pts),
+          switchBonus: Number(d.switchBonus ?? 0), switchCount: Number(d.switchCount ?? 0),
+        });
         return cue(ev, 'E13', tier >= 4 ? 'fourPaws' : 'sandRing', stage.sound, {
           text: names, priority: 2, trickTier: tier, landingText,
         });

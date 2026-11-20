@@ -21,6 +21,8 @@ import { extrapolate } from '../game/run';
 import { maxSpeed } from '../game/motion';
 import { foodActive, poopActive } from '../game/items';
 import { length, quatAxisAngle, quatRotate } from '../game/math';
+import { scoreFreeMotion } from '../game/free-score';
+import { chooseTrickFx } from './trick-fx';
 import { add3 } from '../game/free-math';
 import { BOARD_PIVOT_Y, DOG_PIVOT_Y, DOG_SCALE, RIDER_HIP_Y, riderFootHeight } from '../game/free-flight';
 import { FollowCamera } from './camera';
@@ -268,6 +270,7 @@ export class GameView {
   private legPhase = 0;
   private lastPrintS = 0;
   private wagUntil = 0;
+  private lastAirFxMs = -1e9;
   private sun: THREE.DirectionalLight;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -340,6 +343,7 @@ export class GameView {
     this.lastPrintS = 0;
     this.legPhase = 0;
     this.wagUntil = 0;
+    this.lastAirFxMs = -1e9;
     this.impactUntil = 0;
     this.impact.visible = false;
     this.windLines.visible = false;
@@ -719,10 +723,59 @@ export class GameView {
     if (bodySpinning) this.shoulderTrail.push(this.rig.shoulder.getWorldPosition(new THREE.Vector3()));
     else this.shoulderTrail.fade();
 
+    // 実際の回転履歴から途中得点を求め、空中の光が技の難しさに応じて強くなる。
+    // 約90msに1回だけ更新する。高得点でも視認性を落とさず、既存の600粒上限を共有する。
+    if (run.freeFlight && (dogSpinning || bodySpinning) && nowMs - this.lastAirFxMs >= 90) {
+      this.lastAirFxMs = nowMs;
+      const flight = run.freeFlight;
+      const scored = scoreFreeMotion(flight.motion.history, Math.max(1, run.simUs - flight.takeoffUs),
+        flight.heading, [...flight.motion.seen.values()]);
+      const fx = chooseTrickFx(scored.points, scored.label);
+      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      const count = Math.min(22, Math.round((1 + fx.tier * 2) * lightK * (reduced ? 0.3 : 1)));
+      if (count > 0) {
+        const paw = this.rig.paw.getWorldPosition(new THREE.Vector3());
+        const shoulder = this.rig.shoulder.getWorldPosition(new THREE.Vector3());
+        const angle = nowMs * 0.009;
+        const offset = new THREE.Vector3(Math.cos(angle), Math.sin(angle), Math.sin(angle * 0.8)).multiplyScalar(0.2 + fx.tier * 0.07);
+        const position = fx.motion === 'orbit' ? paw.clone().add(offset) :
+          fx.motion === 'helix' ? shoulder.clone().add(offset.multiplyScalar(-1)) :
+          fx.motion === 'cross' ? paw.clone().lerp(shoulder, 0.5).add(offset) :
+          fx.motion === 'comet' ? paw.clone().add(new THREE.Vector3(-0.4, 0.15, 0)) :
+          shoulder.clone().add(new THREE.Vector3(0, 0.25 + fx.tier * 0.12, 0));
+        const color = new THREE.Color(['#9cd3df', '#62e2ff', '#b3a7ff', '#ffc66b', '#ffe99c'][fx.tier - 1]);
+        this.particles.emit(count, position, color, 0.7 + fx.tier * 0.5, 0.6 + fx.tier * 0.2, 0.35 + fx.tier * 0.07);
+      }
+    }
+
     const at = new THREE.Vector3(pose.x, pose.y, pose.z);
     const fwd = new THREE.Vector3(Math.cos(pose.heading), 0, Math.sin(pose.heading));
     const sand = new THREE.Color('#d9c38f');
     for (const c of cues) {
+      // 難易度に合わせ、着地の閃光・輪・足跡・星を使い分ける。計算や当たり判定には影響しない。
+      if (c.effect === 'E13' && c.trickTier && c.landingText) {
+        const fx = c.landingText.fx;
+        const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+        const n = Math.round(fx.particleBudget * lightK * (reduced ? 0.16 : 1));
+        const color = new THREE.Color(['#8cdddf', '#60dbea', '#b4a1ff', '#ffd372', '#f9efb2'][fx.tier - 1]);
+        const ground = new THREE.Vector3(pose.x, groundY + 0.10, pose.z);
+        if (fx.burst === 'sparks') this.particles.emit(n, ground, color, 1.5 + fx.tier, 1.0 + fx.tier * 0.35);
+        if (fx.burst === 'rings') {
+          for (let ring = 0; ring < 4; ring++) {
+            const a = ring * Math.PI / 2;
+            this.particles.emit(Math.ceil(n / 4),
+              ground.clone().add(new THREE.Vector3(Math.cos(a) * 0.8, 0.02, Math.sin(a) * 0.8)), color, 1.0 + fx.tier * 0.3, 0.3);
+          }
+        }
+        if (fx.burst === 'paws') {
+          this.particles.emit(n, ground, color, 1.2 + fx.tier * 0.3, 0.7);
+          for (const [x, z] of [[-0.4, -0.25], [0.4, -0.25], [-0.4, 0.25], [0.4, 0.25]]) {
+            this.prints.add(ground.clone().add(new THREE.Vector3(x, -0.03, z)), pose.heading, color, nowMs, 0.65 + fx.tier * 0.15);
+          }
+        }
+        if (fx.burst === 'stars') this.particles.emit(n, ground.clone().add(new THREE.Vector3(0, 0.85, 0)), color,
+          1.0 + fx.tier * 0.25, 1.7 + fx.tier * 0.35, 0.85);
+      }
       switch (c.visual) {
         case 'sandBurst':
         case 'kickMark':

@@ -1,7 +1,7 @@
 import { DEG, length, type Vec3 } from './math';
 import { add3 } from './free-math';
 import { DIRECTION_NAMES, freeTrickName, matchFreeTrick } from './free-trick-catalog';
-import { FREE_MAX_DEG_PER_SEC, rotationTime, type FreeSpan } from './free-motion';
+import { FREE_DECAY, FREE_MAX_DEG_PER_SEC, rotationTime, type FreeMotionInput, type FreeSpan, type FreeTarget } from './free-motion';
 
 const HALF_TURN = 180;
 const TIER_MINIMUMS = [1, 200, 400, 650, 850] as const;
@@ -10,6 +10,9 @@ export interface FreeScore {
   dogDegrees: number;
   riderDegrees: number;
   points: number;
+  basePoints: number;
+  switchBonus: number;
+  switchCount: number;
   tier: number;
   label: string;
 }
@@ -34,8 +37,42 @@ function displayTrickName(name: string, turns: number, tier: number): string {
   }
 }
 
+/** 切替前後の実回転と十分なスワイプ量がある場合だけ、切替を連携として数える。 */
+export function scoreTargetSwitches(history: readonly FreeSpan[], inputs: readonly FreeMotionInput[]): { count: number; bonus: number } {
+  const sorted = inputs.filter(input => length(input.rotation) > 1e-7).slice().sort((a, b) => a.atUs - b.atUs || a.seq - b.seq);
+  const phases: { target: FreeTarget; startUs: number; drag: number }[] = [];
+  for (const input of sorted) {
+    const last = phases[phases.length - 1];
+    if (!last || last.target !== input.target) phases.push({ target: input.target, startUs: input.atUs, drag: 0 });
+    phases[phases.length - 1].drag += length(input.rotation);
+  }
+  const lastMotionUs = history[history.length - 1]?.endUs ?? 0;
+  const eligible = phases.map((phase, i) => {
+    const untilUs = Math.min(lastMotionUs, phases[i + 1]?.startUs ?? lastMotionUs);
+    if (phase.drag < 0.15 || untilUs - phase.startUs < 35_000) return false;
+    let degrees = 0;
+    for (const span of history) {
+      const a = Math.max(span.startUs, phase.startUs), b = Math.min(span.endUs, untilUs);
+      if (b <= a) continue;
+      const decayed = Math.exp(-FREE_DECAY * (a - span.startUs) / 1e6);
+      degrees += length(span.from.omega[phase.target]) * decayed * rotationTime(b - a) / DEG;
+    }
+    return degrees >= 45;
+  });
+  let count = 0;
+  const targets = new Set<FreeTarget>();
+  for (let i = 1; i < phases.length; i++) {
+    if (!eligible[i - 1] || !eligible[i]) continue;
+    count++;
+    targets.add(phases[i - 1].target);
+    targets.add(phases[i].target);
+  }
+  const capped = Math.min(4, count);
+  return { count: capped, bonus: [0, 180, 400, 650, 900][capped] + (targets.size === 3 ? 150 : 0) };
+}
+
 /** 着地までに犬・人が実際に回った向きと量を積算する。姿勢の最終角度には依存しない。 */
-export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number, heading: number): FreeScore {
+export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number, heading: number, inputs: readonly FreeMotionInput[] = []): FreeScore {
   const dog = Array<number>(DIRECTION_NAMES.length).fill(0);
   const rider = Array<number>(DIRECTION_NAMES.length).fill(0);
   for (const { startUs, endUs, from } of history) {
@@ -53,17 +90,20 @@ export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number,
   const qualifiedTotal = (amounts: number[]) => amounts.filter(qualifies).reduce((sum, amount) => sum + amount, 0);
   const dogQualified = qualifiedTotal(dog), riderQualified = qualifiedTotal(rider);
   const measured = Math.max(dogQualified, riderQualified);
-  if (!directions.length || airtimeUs <= 0) return { dogDegrees, riderDegrees, points: 0, tier: 0, label: '着地' };
+  if (!directions.length || airtimeUs <= 0) return { dogDegrees, riderDegrees, points: 0, basePoints: 0, switchBonus: 0, switchCount: 0, tier: 0, label: '着地' };
 
   const ceiling = 2 * FREE_MAX_DEG_PER_SEC * airtimeUs / 1e6;
   const halfTurns = Math.floor((measured + 1e-7) / HALF_TURN);
   const scoredDegrees = halfTurns * HALF_TURN;
   const nearLimit = ceiling - measured <= HALF_TURN + 1e-7;
   const variety = 1 + 0.08 * Math.min(directions.length - 1, 2);
-  const points = nearLimit ? 1_000 : Math.min(999, Math.max(1, Math.floor(980 * scoredDegrees * variety / ceiling)));
+  const basePoints = nearLimit ? 1_000 : Math.min(999, Math.max(1, Math.floor(980 * scoredDegrees * variety / ceiling)));
+  const combo = scoreTargetSwitches(history, inputs);
+  const points = basePoints + combo.bonus;
   const tier = TIER_MINIMUMS.filter(minimum => points >= minimum).length;
   const target = dogQualified > 0 && riderQualified > 0 ? 'common' : dogQualified > 0 ? 'dog' : 'rider';
   const pattern = matchFreeTrick(directions, halfTurns);
   const name = freeTrickName(target, pattern, directions.length === 1);
-  return { dogDegrees, riderDegrees, points, tier, label: displayTrickName(name, halfTurns / 2, tier) };
+  return { dogDegrees, riderDegrees, points, basePoints, switchBonus: combo.bonus, switchCount: combo.count, tier,
+    label: displayTrickName(name, halfTurns / 2, tier) };
 }

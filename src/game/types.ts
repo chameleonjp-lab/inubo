@@ -27,7 +27,7 @@ export interface RunIdentity {
 /** 指の操作から作る入力。時刻は走行時計の整数マイクロ秒。 */
 export type GestureFact =
   | { kind: 'down'; atUs: number; strokeId: number; freeTarget?: FreeTarget }
-  | { kind: 'freeRotate'; atUs: number; strokeId: number; seq: number; rotation: Vec3 }
+  | { kind: 'freeRotate'; atUs: number; strokeId: number; seq: number; rotation: Vec3; target?: FreeTarget }
   | { kind: 'steer'; atUs: number; strokeId: number; dx: number }
   | { kind: 'forward'; atUs: number; strokeId: number }
   | { kind: 'circle'; atUs: number; strokeId: number; vertical: boolean; clockwise: boolean; aspect: number }

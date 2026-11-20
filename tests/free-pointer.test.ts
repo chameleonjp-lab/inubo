@@ -53,3 +53,20 @@ test('球の外周を跨ぐ直線も、端末のイベント数で0.5度以上�
   };
   expect(qDistance(run(1), run(16)) / DEG).toBeLessThan(0.5);
 });
+
+
+test('指を置いたまま切替後のスワイプは新しい対象へ向かう', () => {
+  const pointer = new FreePointerController(undefined, true, false);
+  pointer.setSurface(402, 700);
+  expect(pointer.down(77, 180, 330, 'common')).toBe(true);
+  pointer.move(77, 220, 330, 100_000);
+  pointer.retargetAll('dog');
+  const dog = pointer.move(77, 250, 330, 200_000);
+  expect(dog.length).toBeGreaterThan(0);
+  expect(dog.every(input => input.target === 'dog')).toBe(true);
+  pointer.retargetAll('rider');
+  const rider = pointer.move(77, 250, 280, 300_000);
+  expect(rider.length).toBeGreaterThan(0);
+  expect(rider.every(input => input.target === 'rider')).toBe(true);
+  expect(pointer.activeCount).toBe(1);
+});

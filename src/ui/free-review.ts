@@ -1,6 +1,8 @@
 import './free-review.css';
 import { h } from './dom';
 import { FreeArena, type FreeResult, type FreeScenario } from '../game/free-arena';
+import { scoreFreeMotion } from '../game/free-score';
+import { chooseTrickFx, type TrickFxVariant } from '../view/trick-fx';
 import { FREE_RULES_VERSION, type FreeTarget } from '../game/free-motion';
 import { length } from '../game/math';
 import { FreePointerController } from '../input/free-pointer';
@@ -21,7 +23,7 @@ export function startFreeReview(root: HTMLElement): void {
   const targets = h('div', { class: 'free-targets', role: 'group', 'aria-label': '回す対象' });
   let target: FreeTarget = 'common', arena = new FreeArena(), scenario: FreeScenario = 'flat';
   let paused = false, half = true, clockUs = 0, lastWall = performance.now(), clockAnchor = lastWall;
-  const pointer = new FreePointerController({ right: [0.8320502943, 0, -0.5547001962], up: [0, 1, 0], toward: [0.5547001962, 0, 0.8320502943] }, true);
+  const pointer = new FreePointerController({ right: [0.8320502943, 0, -0.5547001962], up: [0, 1, 0], toward: [0.5547001962, 0, 0.8320502943] }, true, false);
   const trails = new Map<number, SVGPolylineElement | null>();
   const clearPointers = () => { pointer.clear(); trails.clear(); svg.replaceChildren(); };
   const tickClock = (now: number) => {
@@ -33,6 +35,8 @@ export function startFreeReview(root: HTMLElement): void {
   let soundOn = true;
   let shownResult: FreeResult | null = null;
   let playedResult: FreeResult | null = null;
+  let lastFxClock = -100_000;
+  let currentFx: TrickFxVariant | null = null;
   const syncSound = () => audio.update(soundOn && !paused ? 0.7 : 0, { steps: null, wind: null, grind: null }, lastWall);
   const sound = h('button', { 'aria-pressed': 'true', onclick: () => {
     soundOn = !soundOn;
@@ -41,16 +45,20 @@ export function startFreeReview(root: HTMLElement): void {
     if (soundOn) audio.unlock();
     syncSound();
   } }, '音あり');
-  for (const [value, text] of [['common', '一緒'], ['dog', '犬'], ['rider', '人']] as const) {
-    const b = h('button', { type: 'button', 'aria-pressed': value === target ? 'true' : 'false', 'data-testid': `target-${value}`, onclick: () => {
-      target = value; for (const c of targets.children) c.setAttribute('aria-pressed', c === b ? 'true' : 'false');
-    } }, text); targets.append(b);
+  for (const [value, text] of [['common', '両方'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
+    const selectTarget = () => {
+      if (target === value) return;
+      target = value;
+      pointer.retargetAll(value);
+      for (const c of targets.children) c.setAttribute('aria-pressed', c === b ? 'true' : 'false');
+    };
+    const b = h('button', { type: 'button', 'aria-pressed': value === target ? 'true' : 'false', 'data-testid': `target-${value}`, onpointerdown: selectTarget, onclick: selectTarget }, text); targets.append(b);
   }
-  const jump = h('button', { class: 'free-primary', 'data-testid': 'free-jump', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(); update(); } }, 'ジャンプ');
-  const high = h('button', { 'data-testid': 'free-high', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(true); update(); } }, '高く跳ぶ');
+  const jump = h('button', { class: 'free-primary', 'data-testid': 'free-jump', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(); lastFxClock = -100_000; currentFx = null; update(); } }, 'ジャンプ');
+  const high = h('button', { 'data-testid': 'free-high', onclick: () => { if (soundOn) audio.unlock(); syncSound(); sync(); clearPointers(); arena.jump(true); lastFxClock = -100_000; currentFx = null; update(); } }, '高く跳ぶ');
   const pause = h('button', { 'data-testid': 'free-pause', onclick: () => { if (paused && soundOn) audio.unlock(); sync(); setPause(!paused); } }, '一時停止');
   const setPause = (v: boolean) => { paused = v; clearPointers(); lastWall = performance.now(); syncSound(); update(); };
-  const retry = h('button', { 'data-testid': 'free-retry', onclick: () => { audio.stopTrickLanding(); arena = new FreeArena(scenario); clockUs = 0; clearPointers(); setPause(false); } }, 'やり直す');
+  const retry = h('button', { 'data-testid': 'free-retry', onclick: () => { audio.stopTrickLanding(); arena = new FreeArena(scenario); clockUs = 0; lastFxClock = -100_000; currentFx = null; clearPointers(); setPause(false); } }, 'やり直す');
   const slow = h('button', { 'aria-pressed': 'true', 'data-testid': 'free-slow', onclick: () => { sync(); half = !half; slow.setAttribute('aria-pressed', String(half)); slow.textContent = half ? '速さ ½' : '速さ 1'; } }, '速さ ½');
   const select = h('select', { 'aria-label': '確認する場所', onchange: () => {
     scenario = select.value as FreeScenario; scene.setScenario(scenario); retry.click();
@@ -124,7 +132,9 @@ export function startFreeReview(root: HTMLElement): void {
     status.dataset.trickTier = String(result?.tier ?? 0);
     if (result && stage) {
       if (shownResult !== result) {
-        showTrickLanding(status, trickLandingText(`着地｜${result.label}`, result.points, result.points));
+        showTrickLanding(status, trickLandingText(`着地｜${result.label}`, result.points, result.points, false, {
+          basePoints: result.basePoints, switchBonus: result.switchBonus, switchCount: result.switchCount,
+        }));
         shownResult = result;
       }
       if (!paused && playedResult !== result) {
@@ -139,7 +149,14 @@ export function startFreeReview(root: HTMLElement): void {
     pause.textContent = paused ? '再開' : '一時停止';
     jump.disabled = high.disabled = paused || arena.phase === 'air' || arena.phase === 'done';
     pad.dataset.active = String(!paused && arena.phase === 'air');
-    scene.draw(arena.motion.pose);
+    if (arena.phase !== 'air') currentFx = null;
+    else if (arena.motion.timeUs - lastFxClock >= 90_000) {
+      lastFxClock = arena.motion.timeUs;
+      const free = scoreFreeMotion(arena.motion.history, Math.max(1, arena.motion.timeUs), 0, [...arena.motion.seen.values()]);
+      currentFx = arena.motion.history.length && free.dogDegrees + free.riderDegrees >= 3
+        ? chooseTrickFx(free.points, free.label) : null;
+    }
+    scene.draw(arena.motion.pose, paused || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? null : currentFx);
   }
   const frame = () => { sync(); update(); requestAnimationFrame(frame); }; frame();
 }

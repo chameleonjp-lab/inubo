@@ -1,6 +1,6 @@
 import { quatAxisAngle, quatMul, type Quat, type Vec3 } from '../game/math';
 import { courseFlightPose } from '../game/free-flight';
-import { FREE_RULES_VERSION, type FreeBody } from '../game/free-motion';
+import { isFreestyleVersion, type FreeBody } from '../game/free-motion';
 import { bodyQuat, dogQuat } from '../game/tricks';
 import { sampleAt, worldXZ } from '../game/track';
 import type { CourseId, DogId } from '../content/types';
@@ -73,7 +73,7 @@ export class ReplayRecorder {
       courseId: run.id.courseId,
       courseVersion: run.id.courseVersion,
       rulesVersion: run.id.rulesVersion,
-      ...(run.id.rulesVersion === FREE_RULES_VERSION ? { motionVersion: 'freestyle-1' as const } : {}),
+      ...(isFreestyleVersion(run.id.rulesVersion) ? { motionVersion: 'freestyle-1' as const } : {}),
       stepMs: this.stepMs,
       frames: this.frames.slice(),
     };

@@ -6,7 +6,7 @@ import { TrickLabScreen } from './trick-lab';
 import { formatTime, homeShareText, officialUrl, resultShareText, shareOnX, shareableResult } from './share';
 import { RunSession } from '../game/run';
 import { RULES_VERSION } from '../game/rules';
-import { FREE_RULES_VERSION, type FreeTarget } from '../game/free-motion';
+import { FREE_RULES_VERSION, isFreestyleVersion, type FreeTarget } from '../game/free-motion';
 import { Autopilot } from '../game/autopilot';
 import { trickScore } from '../game/scoring';
 import { sampleAt, uAtS } from '../game/track';
@@ -588,7 +588,7 @@ class GameRun {
     readonly identity: RunIdentity,
     private view: GameView,
   ) {
-    const freestyle = identity.rulesVersion === FREE_RULES_VERSION;
+    const freestyle = isFreestyleVersion(identity.rulesVersion);
     this.freePractice = freestyle && identity.mode === 'practice';
     this.recognizer = new GestureRecognizer({}, 1, !freestyle);
     this.freePointer = freestyle ? new FreePointerController(undefined, true, false) : null;
@@ -665,11 +665,14 @@ class GameRun {
 
   private freeControls(): HTMLElement {
     const targets = h('div', { class: 'free-run-targets', role: 'group', 'aria-label': '空中で回す対象' });
-    for (const [target, label] of [['common', '一緒'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
-      const button = h('button', { type: 'button', 'aria-pressed': String(target === this.freeTarget), 'data-testid': `run-target-${target}`, onclick: () => {
+    for (const [target, label] of [['common', '両方'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
+      const select = () => {
+        if (this.freeTarget === target) return;
         this.freeTarget = target;
+        this.freePointer?.retargetAll(target);
         for (const child of targets.children) child.setAttribute('aria-pressed', String(child === button));
-      } }, label);
+      };
+      const button = h('button', { type: 'button', 'aria-pressed': String(target === this.freeTarget), 'data-testid': `run-target-${target}`, onpointerdown: select, onclick: select }, label);
       targets.append(button);
     }
     this.hud.freeStatus = h('p', { class: 'free-run-hint' });
@@ -732,7 +735,7 @@ class GameRun {
       for (const input of inputs) {
         for (const axis of [0, 1, 2] as const) rotation[axis] += input.rotation[axis];
       }
-      this.submit([{ kind: 'freeRotate', atUs, strokeId: stroke.id, seq: inputs[inputs.length - 1].seq, rotation }]);
+      this.submit([{ kind: 'freeRotate', atUs, strokeId: stroke.id, seq: inputs[inputs.length - 1].seq, rotation, target: inputs[inputs.length - 1].target }]);
     };
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -903,7 +906,7 @@ class GameRun {
     this.view.frame(sim, renderUs, cues, this.app.settings, t, dtMs);
     if (this.hud.freeStatus) {
       const text = sim.freeFlight ? '画面をなぞって回る。反対へ払うと減速' :
-        this.freePractice ? '上へ払ってジャンプ。指を離して置き直すと回転できます' : '上へ払ってジャンプ';
+        this.freePractice ? '上へ払ってジャンプ。指を離さずそのまま回転できます' : '上へ払ってジャンプ。指を離さずそのまま回転できます';
       if (this.hud.freeStatus.textContent !== text) this.hud.freeStatus.textContent = text;
     }
     this.updateHud(renderUs, t);

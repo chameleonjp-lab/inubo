@@ -16,6 +16,10 @@ export class FreePointerController {
     private readonly lockTargets = true,
   ) {}
   get activeCount(): number { return this.fingers.size; }
+  /** 指を離さず操作対象を変更する。切替そのものは回転指令を発生させない。 */
+  retargetAll(target: FreeTarget): void {
+    for (const finger of this.fingers.values()) finger.target = target;
+  }
   setSurface(width: number, height: number): void {
     const w = Math.max(1, width), h = Math.max(1, height);
     if (!this.centerOnTouch && (w !== this.width || h !== this.height)) this.clear();

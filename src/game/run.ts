@@ -27,7 +27,7 @@ import { blocksAt, findContacts, insideExpanded, orderContacts, sMmOf, type Cont
 import { breakStreak, createScore, exitSection, finishRun, settleLanding, type LandingContact } from './scoring';
 import { advanceCourseFlight, applyCourseRotation, launchCourseFlight, type CourseAirHit } from './free-flight';
 import { scoreFreeMotion } from './free-score';
-import { FREE_RULES_VERSION } from './free-motion';
+import { FREE_RULES_VERSION, isFreestyleVersion } from './free-motion';
 import { leaveRail, loseRail, mountRail } from './rails';
 import { resolveTricks, type TrickResolution } from './tricks';
 import {
@@ -305,7 +305,7 @@ function onKicker(run: SimState): boolean {
 }
 
 function takeoff(run: SimState, t: number, kind: JumpRec['kind'], vy: number, emit: Emit, fromRail: string | null = null, viaSwipe = false): void {
-  if (run.id.rulesVersion === FREE_RULES_VERSION) {
+  if (isFreestyleVersion(run.id.rulesVersion)) {
     const heading = sampleAt(currentPath(run), run.s).heading;
     run.freeFlight = launchCourseFlight(run.dog.look, heading, run.basePitch, t);
   }
@@ -328,10 +328,12 @@ function closeAirborneJump(run: SimState, contact: LandingContact, emit: Emit): 
     settleLanding(run, contact, emit);
     return;
   }
-  const trick = scoreFreeMotion(flight.motion.history, contact.atUs - flight.takeoffUs, flight.heading);
+  const trick = scoreFreeMotion(flight.motion.history, contact.atUs - flight.takeoffUs, flight.heading,
+    run.id.rulesVersion === FREE_RULES_VERSION ? [...flight.motion.seen.values()] : []);
   settleLanding(run, contact, emit, { jump, score: {
     base: trick.points, points: trick.points, names: trick.points ? [trick.label] : [],
     composite: false, residualDeg: 0, tiltDeg: 0, tenths: 10, trickTier: trick.tier,
+    trickBase: trick.basePoints, switchBonus: trick.switchBonus, switchCount: trick.switchCount,
   } });
 }
 
@@ -588,6 +590,7 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
       baseTargetX: run.targetX,
       consumed: false,
       candidates: [],
+      ...(tag === 'ground' && f.freeTarget ? { freeTarget: f.freeTarget } : {}),
     };
     run.strokes[f.strokeId] = rec;
     if (tag === 'air' && run.jump) {
@@ -612,8 +615,23 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
   if (!rec) return;
   switch (f.kind) {
     case 'freeRotate':
-      if (run.freeFlight && run.jump?.jumpId === rec.jumpId && rec.freeTarget && rec.upUs === null) {
-        applyCourseRotation(run.freeFlight, atUs, f.seq, rec.freeTarget, f.rotation);
+      if (run.freeFlight && run.jump && rec.upUs === null && rec.tag !== 'ignored' && atUs >= run.freeFlight.takeoffUs) {
+        const selected = f.target ?? rec.freeTarget ?? 'common';
+        const occupied = run.jump.strokes.some(id => {
+          if (id === f.strokeId) return false;
+          const other = run.strokes[id];
+          return other.upUs === null && (other.freeTarget === selected || other.freeTarget === 'common' || selected === 'common');
+        });
+        if (!occupied) {
+          // 踏切を起こした指や、踏切台の直前から置いていた指も即座に空中操作へ引き継ぐ。
+          if (rec.jumpId !== run.jump.jumpId) {
+            rec.tag = 'air';
+            rec.jumpId = run.jump.jumpId;
+            run.jump.strokes.push(f.strokeId);
+          }
+          rec.freeTarget = selected;
+          applyCourseRotation(run.freeFlight, atUs, f.seq, selected, f.rotation);
+        }
       }
       break;
     case 'steer':

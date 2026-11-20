@@ -12,16 +12,16 @@ import { eventsOf, identity, jumpFacts, newRun, runTo, testCourse } from './help
 const free = { rulesVersion: FREE_RULES_VERSION };
 const jumpAt = 200_000;
 const down = (strokeId: number, atUs: number, freeTarget: FreeTarget = 'common'): GestureFact => ({ kind: 'down', atUs, strokeId, freeTarget });
-const turn = (strokeId: number, atUs: number, seq: number, rotation: Vec3): GestureFact => ({ kind: 'freeRotate', atUs, strokeId, seq, rotation });
+const turn = (strokeId: number, atUs: number, seq: number, rotation: Vec3, target?: FreeTarget): GestureFact => ({ kind: 'freeRotate', atUs, strokeId, seq, rotation, target });
 const up = (strokeId: number, atUs: number, cancelled = false): GestureFact => ({ kind: 'up', atUs, strokeId, cancelled });
 
-test('踏切の指を使い切り、新しい指の途中から回る。離しても続き、同じ指で曲げたり逆へ返せる', () => {
+test('踏切の指を離さずすぐ回る。続いて新しい指でも回せて慣性と逆回転を維持する', () => {
   const run = newRun(testCourse(), 'shiba', free);
   const launch = jumpFacts(jumpAt);
   const takeoffFinger = launch[0].strokeId;
   advanceRun(run, 240_000, launch.slice(0, 2).concat(turn(takeoffFinger, 205_000, 1, [0, 3, 0])));
   const flight = run.freeFlight!;
-  expect(flight.motion.omega.common).toEqual([0, 0, 0]);
+  expect(flight.motion.omega.common[1]).toBeGreaterThan(0);
   expect(run.jump?.resolution.rotations).toEqual([]);
   const initial = flight.motion.pose.dog.q;
   advanceRun(run, 310_000, [up(takeoffFinger, 242_000), down(1, 250_000), turn(1, 265_000, 2, [0.15, 0.46, 0.05])]);
@@ -34,7 +34,7 @@ test('踏切の指を使い切り、新しい指の途中から回る。離し�
   expect(qDistance(during, flight.motion.pose.dog.q)).toBeGreaterThan(0.08);
   expect(flight.motion.omega.common[1]).toBeGreaterThan(0);
 
-  advanceRun(run, 470_000, [down(2, 410_000), turn(2, 425_000, 3, [0, -0.7, 0]), turn(2, 440_000, 4, [0.26, 0, 0.28])]);
+  advanceRun(run, 470_000, [down(2, 410_000), turn(2, 425_000, 3, [0, -5, 0]), turn(2, 440_000, 4, [0.26, 0, 0.28])]);
   expect(flight.motion.omega.common[1]).toBeLessThan(0);
   expect(Math.abs(flight.motion.omega.common[0]) + Math.abs(flight.motion.omega.common[2])).toBeGreaterThan(1.1);
   expect(eventsOf(run, 'trickStart')).toEqual([]);
@@ -190,4 +190,19 @@ test('一時停止は入力待ちを捨て、空中姿勢と勢いを保存す�
   session.update(930_000);
   expect(session.sim.freeFlight!.motion.omega.common[1]).toBeGreaterThan(omega);
   expect(qDistance(poseOf(session.sim).free!.dog.q, before)).toBeGreaterThan(0.03);
+});
+
+
+test('空中で指を保持したまま一緒→犬→人に即時切替できる', () => {
+  const run = newRun(testCourse(), 'shiba', free);
+  const finger = 981;
+  advanceRun(run, 260_000, [down(finger, jumpAt), { kind: 'forward', atUs: jumpAt, strokeId: finger },
+    turn(finger, jumpAt + 1_000, 1, [0, 0.7, 0], 'common'),
+    turn(finger, jumpAt + 30_000, 2, [0, 0.7, 0], 'dog'),
+    turn(finger, jumpAt + 45_000, 3, [0, 0.7, 0], 'rider')]);
+  const motion = run.freeFlight!.motion;
+  expect(motion.omega.common[1]).toBeGreaterThan(0);
+  expect(motion.omega.dog[1]).toBeGreaterThan(0);
+  expect(motion.omega.rider[1]).toBeGreaterThan(0);
+  expect(run.strokes[finger]).toMatchObject({ tag: 'air', freeTarget: 'rider', jumpId: run.jump?.jumpId });
 });

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { freeParts } from '../game/free-geometry';
 import { freeBoxes, type FreeScenario } from '../game/free-arena';
 import type { FreePose } from '../game/free-motion';
+import type { TrickFxVariant } from './trick-fx';
 
 export class FreeScene {
   private renderer: THREE.WebGLRenderer;
@@ -11,6 +12,9 @@ export class FreeScene {
   private geometry = new THREE.SphereGeometry(1, 12, 8);
   private materials = new Map<string, THREE.MeshStandardMaterial>();
   private obstacles: THREE.Mesh[] = [];
+  private readonly flightSparks: THREE.Mesh[] = [];
+  private readonly flightLight = new THREE.MeshBasicMaterial({ color: '#f5eec1', transparent: true, opacity: 0.8, depthWrite: false });
+  private readonly flightGeometry = new THREE.SphereGeometry(0.065, 6, 4);
   constructor(readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -20,6 +24,10 @@ export class FreeScene {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), this.material('#a5bcad'));
     floor.rotation.x = -Math.PI / 2; floor.position.set(20, -0.002, 0); this.scene.add(floor);
     const grid = new THREE.GridHelper(100, 100, '#729b8d', '#94afa1'); grid.position.set(20, 0, 0); this.scene.add(grid);
+    for (let i = 0; i < 8; i++) {
+      const spark = new THREE.Mesh(this.flightGeometry, this.flightLight);
+      spark.visible = false; this.flightSparks.push(spark); this.scene.add(spark);
+    }
   }
   private material(color: string): THREE.MeshStandardMaterial {
     if (!this.materials.has(color)) this.materials.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.75 }));
@@ -33,7 +41,7 @@ export class FreeScene {
       m.position.set(...b.min.map((v, i) => (v + b.max[i]) / 2) as [number, number, number]); this.scene.add(m); return m;
     });
   }
-  draw(pose: FreePose): void {
+  draw(pose: FreePose, fx: TrickFxVariant | null = null): void {
     const rect = this.canvas.getBoundingClientRect();
     const w = Math.round(rect.width), h = Math.round(rect.height);
     if (!w || !h) return;
@@ -45,7 +53,20 @@ export class FreeScene {
       if (!mesh) { mesh = new THREE.Mesh(this.geometry, this.material(part.color)); this.parts.set(part.id, mesh); this.scene.add(mesh); }
       mesh.position.set(...part.p); mesh.scale.setScalar(part.radius);
     }
-    // 水平の視点を保ち、パッドの右向き入力が水平回転になるようにする。
+    // 操作確認版も同じ5系統の空中軌跡を軽量な8粒で表現する。
+    this.flightLight.color.set(fx ? ['#9cd3df', '#62e2ff', '#b3a7ff', '#ffc66b', '#ffe99c'][fx.tier - 1] : '#f5eec1');
+    const phase = performance.now() / 240;
+    this.flightSparks.forEach((spark, i) => {
+      spark.visible = !!fx;
+      if (!fx) return;
+      const a = phase + Math.PI * 2 * i / this.flightSparks.length;
+      const r = 0.5 + fx.tier * 0.1;
+      const y = fx.motion === 'helix' ? i * 0.14 : fx.motion === 'crown' ? Math.abs(Math.sin(a)) * 1.2 : Math.sin(a) * 0.35;
+      const x = fx.motion === 'cross' ? Math.sin(a) * r : fx.motion === 'comet' ? -i * 0.22 : Math.cos(a) * r;
+      const z = fx.motion === 'cross' ? Math.cos(a * 2) * r : fx.motion === 'comet' ? i * 0.05 : Math.sin(a) * r;
+      spark.position.set(pose.pivot[0] + x, pose.pivot[1] + 0.9 + y, pose.pivot[2] + z);
+    });
+    // 水平の視点を保ち、パッドの右向き入力が水平回転になるようにする.
     const focus = new THREE.Vector3(pose.pivot[0], 1.25 + Math.max(0, pose.dog.p[1] - 0.5) * 0.7, 0);
     this.camera.position.copy(focus).add(new THREE.Vector3(4.5, 0, 6.75)); this.camera.lookAt(focus);
     this.renderer.render(this.scene, this.camera);
