@@ -417,8 +417,6 @@ export class App {
       participantId: opt ? this.profile.participantId : null,
       outfit: { clothes: this.profile.clothes, helmet: this.profile.helmet },
     };
-    this.ranking.beginRun(identity);
-    void this.ranking.flush();
     const view = this.ensureView();
     view.setCourse(course);
     view.setRider(DOGS[this.dogId].look, this.profile.clothes, this.profile.helmet);
@@ -430,6 +428,9 @@ export class App {
     this.game = new GameRun(this, identity, view);
     this.setScreen(this.game.el);
     this.game.start();
+    this.ranking.beginRun(identity);
+    if (this.rankingFor(courseId, rulesVersion)) this.ranking.beginGuestRun(identity);
+    void this.ranking.flush();
   }
 
   // ---------------------------------------------------------------- 技の練習

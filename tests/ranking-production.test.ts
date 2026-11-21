@@ -77,6 +77,14 @@ describe('公開順位の通信', () => {
     });
   });
 
+  test('名前なしの開始には今回の走行番号だけを送る', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json('duplicate'));
+    vi.stubGlobal('fetch', fetch);
+    await expect(configure()!.postGuestStart!(identity.runId)).resolves.toBe('duplicate');
+    expect(fetch.mock.calls[0][0]).toBe(`${endpoint}/rest/v1/rpc/start_inubo_guest_play_v1`);
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ p_run_id: identity.runId });
+  });
+
   test('サーバー上で走行時間が足りない応答は再送待ちとして渡す', async () => {
     vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json('tooEarly')));
     await expect(configure()!.postFinish(finish)).resolves.toBe('tooEarly');

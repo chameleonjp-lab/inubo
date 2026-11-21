@@ -56,6 +56,7 @@ export interface BoardRow {
 }
 
 export interface Transport {
+  postGuestStart?(runId: string): Promise<SendStatus>;
   postStart(s: StartSnapshot): Promise<SendStatus>;
   postFinish(f: FinishPayload): Promise<SendStatus>;
   getBoard(q: BoardQuery): Promise<BoardRow[]>;
@@ -70,6 +71,7 @@ interface OutboxEntry {
 }
 
 const OUTBOX_KEY = 'inubo:v1:rankingOutbox';
+const GUEST_STARTS_KEY = 'inubo:v1:guestStarts';
 export const BOARD_LIMIT = 30;
 
 export type BoardState =
@@ -112,7 +114,33 @@ export class RankingClient {
 
   /** 送信待ち（まだ受領されていない）件数。 */
   pendingCount(): number {
-    return Object.values(this.readOutbox()).filter((e) => !e.conflict && (!e.startAcked || (e.finish && !e.finishAcked))).length;
+    const named = Object.values(this.readOutbox()).filter((e) => !e.conflict && (!e.startAcked || (e.finish && !e.finishAcked))).length;
+    return named + (this.transport?.postGuestStart ? this.readGuestStarts().length : 0);
+  }
+
+  private readGuestStarts(): string[] {
+    try {
+      const saved: unknown = JSON.parse(this.store.getItem(GUEST_STARTS_KEY) ?? '[]');
+      return Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string' &&
+        /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id)) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private writeGuestStarts(ids: string[]): void {
+    try {
+      this.store.setItem(GUEST_STARTS_KEY, JSON.stringify(ids));
+    } catch {
+      /* 集計を保存できなくても走行は続ける。 */
+    }
+  }
+
+  /** 公開名がない本番競技では、走行ごとに変わる番号だけを集計用に記録する。 */
+  beginGuestRun(id: RunIdentity): void {
+    if (!this.enabled || !this.transport?.postGuestStart || id.mode !== 'competition' || id.rankingOptIn) return;
+    const ids = this.readGuestStarts();
+    if (!ids.includes(id.runId)) this.writeGuestStarts([...ids, id.runId].slice(-100));
   }
 
   outboxSize(): number {
@@ -210,6 +238,22 @@ export class RankingClient {
         }
       } catch {
         failed++;
+      }
+    }
+    if (transport.postGuestStart) {
+      for (const runId of this.readGuestStarts()) {
+        try {
+          const status = await transport.postGuestStart(runId);
+          sent++;
+          if (status === 'accepted' || status === 'duplicate' || status === 'rejected' || status === 'conflict') {
+            this.writeGuestStarts(this.readGuestStarts().filter(id => id !== runId));
+          } else {
+            break;
+          }
+        } catch {
+          failed++;
+          break;
+        }
       }
     }
     return { sent, failed };
