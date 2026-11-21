@@ -34,38 +34,111 @@ export function showTrickLanding(element: HTMLElement, landing: TrickLandingText
   ));
 }
 
-const TRICK_NAME_LANE_COUNT = 5;
+const MAX_TRICK_NAMES = 5;
+const SCROLL_PX_PER_MS = 0.185;
+const TRICK_NAME_GAP = 14;
 
-/** 連続した技名を上から順に流し、満席なら先頭の段から入れ替える。 */
+interface FlyingTrick {
+  lane: HTMLElement;
+  label: HTMLElement;
+  animation: Animation;
+  from: number;
+}
+
+function scrollKeyframes(from: number, width: number): Keyframe[] {
+  return [{ transform: `translateX(${from}px)` }, { transform: `translateX(${-width}px)` }];
+}
+
+function scrollDuration(from: number, width: number): number {
+  return Math.max(1, (from + width) / SCROLL_PX_PER_MS);
+}
+
+/** 先行する文字の末尾が入ってから、同じ段に次の技名を流す。 */
 export class TrickNameFlow {
-  private readonly lanes = Array.from({ length: TRICK_NAME_LANE_COUNT }, (_, i) =>
+  private readonly lanes = Array.from({ length: MAX_TRICK_NAMES }, (_, i) =>
     h('div', { class: 'trick-name-lane', 'data-lane': i + 1 }));
   readonly element = h('div', { class: 'trick-name-flow', 'data-testid': 'trick-name-flow', role: 'log', 'aria-label': '決めた技' }, this.lanes);
-  private next = 0;
+  private active: FlyingTrick[] = [];
+  private width = 0;
+  private paused = false;
 
   push(landing: TrickLandingText, tier: number): void {
     if (!landing.name.trim()) return;
-    if (this.lanes.every(lane => !lane.firstChild)) this.next = 0;
-    const lane = this.lanes[this.next];
-    this.next = (this.next + 1) % this.lanes.length;
+    const flow = this.element.getBoundingClientRect();
+    if (flow.width <= 0) return;
+    this.width = flow.width;
+    // 5件を超えたら、最も早く表示した技名の枠を明ける。
+    if (this.active.length === MAX_TRICK_NAMES) this.remove(this.active[0]);
+
+    let from = flow.width;
+    const lane = this.lanes.find(row => {
+      const previous = row.lastElementChild;
+      if (!previous) return true;
+      const trailingEdge = previous.getBoundingClientRect().right - flow.left;
+      if (trailingEdge > flow.width) return false;
+      from = Math.max(from, trailingEdge + TRICK_NAME_GAP);
+      return true;
+    })!;
+
     const level = Math.max(1, landing.landingLevel || tier * 2);
     const weight = 630 + level * 37;
     const saturation = 30 + level * 7;
-    const duration = 5.8 + Math.min(1.8, landing.name.length * 0.034);
     const label = h('div', {
       class: 'flying-trick',
       'data-testid': 'landing-trick-name',
       'data-target': landing.fxTarget ?? undefined,
       'data-level': level,
-      style: `--flow-level:${level};--flow-weight:${weight};--flow-saturation:${saturation}%;--flow-time:${duration}s`,
+      style: `--flow-level:${level};--flow-weight:${weight};--flow-saturation:${saturation}%`,
     }, h('span', {}, landing.name));
-    label.addEventListener('animationend', event => {
-      if (event.target === label) label.remove();
-    });
-    lane.replaceChildren(label);
+    lane.append(label);
+    const width = label.getBoundingClientRect().width;
+    const animation = label.animate(scrollKeyframes(from, width), { duration: scrollDuration(from, width), fill: 'both' });
+    const entry = { lane, label, animation, from };
+    this.active.push(entry);
+    if (this.paused) animation.pause();
+    animation.onfinish = () => this.remove(entry);
+  }
+
+  private remove(entry: FlyingTrick): void {
+    entry.animation.onfinish = null;
+    entry.animation.cancel();
+    entry.label.remove();
+    this.active = this.active.filter(item => item !== entry);
+  }
+
+  /** 端末を回しても、同じ段の文字の間隔と流れる速さを保つ。 */
+  resize(): void {
+    if (!this.active.length) return;
+    const width = this.element.getBoundingClientRect().width;
+    if (width <= 0) return;
+    const shift = width - this.width;
+    this.width = width;
+    const trailingEdges = new Map<HTMLElement, number>();
+    for (const entry of this.active) {
+      const { animation, label, lane } = entry;
+      const x = entry.from - Number(animation.currentTime ?? 0) * SCROLL_PX_PER_MS + shift;
+      const from = Math.max(x, trailingEdges.get(lane) ?? -Infinity);
+      const labelWidth = label.getBoundingClientRect().width;
+      trailingEdges.set(lane, from + labelWidth + TRICK_NAME_GAP);
+      entry.from = from;
+      const effect = animation.effect as KeyframeEffect;
+      effect.setKeyframes(scrollKeyframes(from, labelWidth));
+      effect.updateTiming({ duration: scrollDuration(from, labelWidth) });
+      animation.currentTime = 0;
+    }
+  }
+
+  clear(): void {
+    for (const entry of this.active) this.remove(entry);
   }
 
   setPaused(paused: boolean): void {
-    if (this.element.dataset.paused !== String(paused)) this.element.dataset.paused = String(paused);
+    if (this.paused === paused) return;
+    this.paused = paused;
+    this.element.dataset.paused = String(paused);
+    for (const { animation } of this.active) {
+      if (paused) animation.pause();
+      else animation.play();
+    }
   }
 }

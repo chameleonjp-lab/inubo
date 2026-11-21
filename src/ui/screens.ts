@@ -634,6 +634,7 @@ class GameRun {
   }
 
   setInputViewport(width: number, height: number): void {
+    this.trickNames?.resize();
     this.recognizer.setViewport(width, height);
     this.freePointer?.setSurface(width, height);
   }
@@ -673,6 +674,7 @@ class GameRun {
   destroy(): void {
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
+    this.trickNames?.clear();
     this.app.audio.stopTrickLanding();
     this.stopPracticeDemo(false);
     this.freePointer?.clear();

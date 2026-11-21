@@ -259,3 +259,72 @@ test('技名は上半分の5段を右から左へ流れ、6個目で1段目を�
   expect(observed.laterX).toBeLessThan(observed.startX);
   await expect(page.getByTestId('hud-trick')).toHaveText('技 6,300');
 });
+
+
+test('動きを減らす設定でも長い技名を表示し、前の技名が入り切った段に後続を並べる', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.getByTestId('start').click();
+  const names = ['犬の左スピン', '人の右スピン', '限界突破・天翔ける疾風の連続技・犬と人のシンクロ切り返し・9.5回転の大連舞', '後続の技'];
+  const cues = names.map((name, i) => cueForEvent({
+    runId: 'following-test', seq: i, kind: 'land', atUs: i, pathId: 'start', sMm: 3000, x: 0, y: 0,
+    data: { names: [name], points: 1650, trickPoints: 1650, trickBase: 1000, trickTier: 5, fxTarget: 'B' },
+  } satisfies SimEvent)!);
+  const result = await page.evaluate((events) => {
+    const { game } = (window as unknown as {
+      __inubo: { app: { game: { handleCues: (cues: typeof events) => void } } }
+    }).__inubo.app;
+    const flow = document.querySelector<HTMLElement>('[data-testid="trick-name-flow"]')!;
+    const edge = flow.getBoundingClientRect().right;
+    const labels = () => [...flow.querySelectorAll<HTMLElement>('.flying-trick')];
+    const lane = (label: HTMLElement) => label.parentElement!.dataset.lane;
+    const show = (i: number) => game.handleCues([events[i]]);
+    const freeze = (label: HTMLElement) => {
+      const an = label.getAnimations()[0];
+      an.pause();
+      an.currentTime = 0;
+      return an;
+    };
+    const placeEndAt = (label: HTMLElement, an: Animation, right: number) => {
+      const start = label.getBoundingClientRect().right;
+      const duration = Number(an.effect!.getComputedTiming().duration);
+      const elapsed = (start - right) / start * duration;
+      an.currentTime = elapsed;
+      return elapsed;
+    };
+
+    show(0);
+    const [first] = labels();
+    const firstAnim = freeze(first);
+    const startedAtRight = first.getBoundingClientRect().left >= edge - 1;
+    const firstAt = placeEndAt(first, firstAnim, edge - 20);
+    show(1);
+    const [, second] = labels();
+    const secondAnim = freeze(second);
+    const startGap = second.getBoundingClientRect().left - first.getBoundingClientRect().right;
+    const elapsed = placeEndAt(second, secondAnim, edge - 20);
+    firstAnim.currentTime = firstAt + elapsed;
+    const nextGap = second.getBoundingClientRect().left - first.getBoundingClientRect().right;
+    show(2);
+    const [, , long] = labels();
+    const longAnim = freeze(long);
+    const longWiderThanScreen = long.getBoundingClientRect().width > flow.clientWidth;
+    show(3);
+    const [, , , fourth] = labels();
+    placeEndAt(long, longAnim, edge - 20);
+    const lastCharacter = document.createRange();
+    const title = long.querySelector('span')!.firstChild as Text;
+    lastCharacter.setStart(title, title.length - 1);
+    lastCharacter.setEnd(title, title.length);
+    const lastRight = lastCharacter.getBoundingClientRect().right;
+    return {
+      startedAtRight, startGap, nextGap, longWiderThanScreen,
+      lastCharacterOnScreen: lastRight > 0 && lastRight <= edge,
+      lanes: [first, second, long, fourth].map(lane),
+    };
+  }, cues);
+  expect(result.startedAtRight && result.longWiderThanScreen && result.lastCharacterOnScreen).toBe(true);
+  expect(result.lanes).toEqual(['1', '1', '1', '2']);
+  expect(result.startGap).toBeGreaterThanOrEqual(13);
+  expect(result.nextGap).toBeCloseTo(result.startGap, 0);
+});

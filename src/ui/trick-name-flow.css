@@ -34,32 +34,8 @@
     0 3px .05em var(--effect-ink),
     0 0 calc(.12em + var(--flow-level) * .8px) var(--flow-tone),
     0 0 calc(.22em + var(--flow-level) * 1.2px) var(--flow-tone);
-  animation: trick-name-flow var(--flow-time) linear both;
 }
 
 .flying-trick[data-target='H'] { --flow-tone: var(--effect-partner); }
 .flying-trick[data-target='D'] { --flow-tone: var(--effect-light); }
 .flying-trick > span { display: inline-block; transform: skewX(-8deg); }
-
-.trick-name-flow[data-paused='true'] .flying-trick { animation-play-state: paused; }
-
-@keyframes trick-name-flow {
-  from { transform: translateX(100vw); }
-  to { transform: translateX(-100%); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .flying-trick {
-    left: calc(var(--safe-left) + 8px);
-    right: calc(var(--safe-right) + 8px);
-    width: auto;
-    text-align: center;
-    overflow: hidden;
-    animation-name: trick-name-stay;
-  }
-  .flying-trick > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  @keyframes trick-name-stay {
-    0%, 85% { opacity: 1; }
-    100% { opacity: 0; }
-  }
-}
