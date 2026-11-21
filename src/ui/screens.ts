@@ -721,6 +721,7 @@ class GameRun {
     cancelAnimationFrame(this.raf);
     this.trickNames?.clear();
     this.app.audio.stopTrickLanding();
+    this.app.audio.stopRaceMusic();
     this.stopPracticeDemo(false);
     this.freePointer?.clear();
     this.freeStrokes.clear();
@@ -845,6 +846,7 @@ class GameRun {
     this.center.setPaused(true, nowMs());
     this.trickNames?.setPaused(true);
     this.app.audio.stopTrickLanding();
+    this.app.audio.stopRaceMusic(false);
     this.freePointer?.clear();
     this.freeStrokes.clear();
     this.submit(this.recognizer.suspend(this.session.sim.simUs, nowMs()));
@@ -948,7 +950,7 @@ class GameRun {
       { mode: sim.mode, speed: sim.forwardSpeed, maxSpeed: maxSpeed(sim), downhill: sim.slopeSign < 0, paused: this.session.paused, finished: sim.finished },
       t,
     );
-    this.app.audio.update(this.app.sound.master(t), loops, t);
+    this.app.audio.update(this.app.sound.master(t), loops, t, this.session.phase === 'running' && !this.session.paused && !sim.finished);
     this.view.setFxSelectedTarget(this.freeTarget);
     this.view.setFxPaused(this.session.paused);
     this.view.frame(sim, renderUs, cues, this.app.settings, t, dtMs);

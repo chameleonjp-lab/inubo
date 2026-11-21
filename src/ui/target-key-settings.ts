@@ -4,7 +4,13 @@ import type { Settings } from '../storage/records';
 import { h } from './dom';
 import { t } from './i18n';
 
-export function renderTargetKeySettings(settings: Settings, save: () => void): HTMLElement {
+export function renderTargetKeySettings(settings: Settings, save: () => void): HTMLElement | null {
+  const { userAgent, maxTouchPoints } = navigator;
+  // マウスが接続されていてもスマホ・タブレットの設定には出さない。
+  const mobile = /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(userAgent);
+  const ipadInDesktopMode = /Macintosh/.test(userAgent) && maxTouchPoints > 1;
+  if (mobile || ipadInDesktopMode || !matchMedia('(any-pointer: fine) and (any-hover: hover)').matches) return null;
+
   const buttons = new Map<FreeTarget, HTMLButtonElement>();
   let listening: FreeTarget | null = null;
   const refresh = () => {
