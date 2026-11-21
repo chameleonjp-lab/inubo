@@ -1,3 +1,4 @@
+import { dogEffectStyle } from '../content/dog-effects';
 import './result-celebration.css';
 import { resultCelebration } from './result-celebration';
 import { h, fmtInt } from './dom';
@@ -69,7 +70,7 @@ export function renderResults(r: RunResult, courseName: string, saved: SaveOutco
 
   return h(
     'section',
-    { class: 'screen results', 'data-testid': 'results' },
+    { class: 'screen results', 'data-testid': 'results', style: dogEffectStyle(r.dogId) },
     h('p', { class: 'res-course' }, `${courseName}｜${DOGS[r.dogId].name}`),
     h('div', { class: 'result-celebration', 'data-result-stage': celebration.stage, 'data-result-band': celebration.band, 'data-testid': 'result-celebration' },
       h('div', { class: 'result-ornaments', 'aria-hidden': 'true' }, ornaments),

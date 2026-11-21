@@ -159,8 +159,8 @@ h2 {
 }
 
 .card.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(240, 138, 36, 0.25);
+  border-color: var(--effect-main, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--effect-main, var(--accent)) 25%, transparent);
 }
 
 .card-title {
@@ -289,7 +289,7 @@ canvas.trails {
   display: block;
   height: 100%;
   width: 0;
-  background: var(--accent);
+  background: var(--effect-main);
 }
 
 .pause-btn {
@@ -308,7 +308,7 @@ canvas.trails {
   margin-top: 4px;
   font-size: 14px;
   letter-spacing: 3px;
-  color: #b45d0c;
+  color: var(--effect-shade, #b45d0c);
 }
 
 .boost {
@@ -328,9 +328,9 @@ canvas.trails {
   text-align: center;
   font-size: 26px;
   font-weight: 900;
-  color: #ffffff;
-  -webkit-text-stroke: 1px rgba(0, 0, 0, 0.45);
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  color: var(--effect-glint);
+  -webkit-text-stroke: 1px color-mix(in srgb, var(--effect-ink) 45%, transparent);
+  text-shadow: 0 2px 6px color-mix(in srgb, var(--effect-ink) 45%, transparent);
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.12s, transform 0.12s;
@@ -371,7 +371,8 @@ canvas.trails {
 .foot-marks span {
   font-size: 12px;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--effect-glint) 85%, transparent);
+  color: var(--effect-ink);
   border-radius: 10px;
   padding: 2px 8px;
 }
@@ -384,8 +385,8 @@ canvas.trails {
   text-align: center;
   font-size: 64px;
   font-weight: 900;
-  color: #ffffff;
-  -webkit-text-stroke: 2px rgba(0, 0, 0, 0.4);
+  color: var(--effect-glint);
+  -webkit-text-stroke: 2px color-mix(in srgb, var(--effect-shade) 40%, transparent);
   opacity: 0;
 }
 
@@ -424,7 +425,7 @@ canvas.trails {
 .fade {
   position: absolute;
   inset: 0;
-  background: #ffffff;
+  background: var(--effect-glint);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s;
@@ -541,13 +542,13 @@ canvas.trails {
 }
 
 .steps .dot.done {
-  background: var(--good);
-  color: #ffffff;
-  border-color: var(--good);
+  background: var(--effect-shade, var(--good));
+  color: var(--effect-glint, #ffffff);
+  border-color: var(--effect-shade, var(--good));
 }
 
 .steps .dot.cur {
-  border-color: var(--accent);
+  border-color: var(--effect-main, var(--accent));
 }
 
 .row-btns {
@@ -592,7 +593,7 @@ canvas.trails {
   margin-left: 6px;
   font-size: 14px;
   font-weight: 800;
-  color: #b45d0c;
+  color: var(--effect-shade, #b45d0c);
   animation: stampIn 0.5s ease-out;
 }
 
@@ -666,8 +667,8 @@ ol.sections {
 }
 
 .sec-scored {
-  background: #e6f6ee;
-  border-color: var(--good);
+  background: var(--effect-glint, #e6f6ee);
+  border-color: var(--effect-shade, var(--good));
 }
 
 .sec-missed {
@@ -703,7 +704,7 @@ ol.sections {
 
 .stamp-new {
   font-weight: 800;
-  color: #b45d0c;
+  color: var(--effect-shade, #b45d0c);
 }
 
 .warn {
@@ -913,7 +914,7 @@ ol.sections {
 }
 
 .trick-lab .lab-result h3[data-outcome='success'] {
-  color: var(--good);
+  color: var(--effect-shade);
 }
 
 .trick-lab .lab-result h3[data-outcome='fail'] {
@@ -964,17 +965,17 @@ ol.sections {
 }
 
 .trick-lab .lab-btn.grab.holding {
-  background: #2266ff;
-  border-color: #123a99;
-  color: #ffffff;
+  background: var(--effect-shade);
+  border-color: var(--effect-ink);
+  color: var(--effect-glint);
 }
 
 .trick-lab .lab-btn.grab[aria-busy='true'] {
-  background: #dde6ff;
+  background: var(--effect-light);
 }
 
 .trick-lab .lab-btn.demo-next {
-  outline: 4px solid #ffb000;
+  outline: 4px solid var(--effect-main);
   outline-offset: 1px;
 }
 
@@ -1039,7 +1040,7 @@ ol.sections {
 .result-techniques h3 { font-size: 1rem; }
 .result-techniques ol { padding: 0; list-style: none; }
 .result-techniques li { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #19374638; text-align: left; }
-.result-techniques strong { flex: none; color: #9c4100; }
+.result-techniques strong { flex: none; color: var(--effect-shade); }
 
 .trick-impact {
   position: absolute;

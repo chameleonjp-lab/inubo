@@ -1,5 +1,5 @@
 import type { AnchorKey, FxOp, FxStep } from './trick-fx-81';
-import type { PointRing, Quat, Rgb, Vec } from './trick-fx-math';
+import type { FxTone, PointRing, Quat, Rgb, Vec } from './trick-fx-math';
 import type { FxPen } from './trick-fx-pen';
 
 export type FxBody = 'dog' | 'rider';
@@ -39,6 +39,7 @@ export interface FxDrawContext {
   angle(body: FxBody): number;
   quat(body: FxBody): Quat | null;
   center(body: FxBody, out: Vec): boolean;
+  tone(tone: FxTone): Rgb;
   color(step: FxStep, key: AnchorKey | null): Rgb;
   /** 部品ごとに一度だけ true（粒を一度だけ出すため）。 */
   once(stepIndex: number): boolean;

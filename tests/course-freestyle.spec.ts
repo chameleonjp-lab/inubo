@@ -1,3 +1,5 @@
+import { DOG_EFFECT_COLORS } from '../src/content/dog-effects';
+import { DOG_ORDER } from '../src/content/dogs';
 import { expect, test } from '@playwright/test';
 import type { RunSession } from '../src/game/run';
 import { FREE_RULES_VERSION } from '../src/game/free-motion';
@@ -157,4 +159,42 @@ test('ジャンプの指を保持したまま即回転し、ボタンを押し�
   expect(observed).toMatchObject({ common: true, dogPressed: 'true', riderPressed: 'true',
     sameFinger: true, rules: FREE_RULES_VERSION });
   expect(observed.rider.some(v => Math.abs(v) > 0.2)).toBe(true);
+});
+
+test('犬種を変更すると着地の文字と画面全体の光の色が切り替わる', async ({ page }) => {
+  for (const dogId of DOG_ORDER) {
+    await page.goto('/');
+    await page.getByTestId(`dog-${dogId}`).click();
+    await page.getByTestId('start').click();
+    const { main, partner } = DOG_EFFECT_COLORS[dogId];
+    const rgb = (hex: string) => hex.slice(1).match(/../g)!.map(s => parseInt(s, 16));
+    const mainRgb = rgb(main), partnerRgb = rgb(partner);
+    const landingColor = await page.evaluate(async (first) => {
+      const { session } = (window as unknown as { __inubo: { app: { game: TestGame } } }).__inubo.app.game;
+      session.begin();
+      const atUs = session.sim.simUs + 20_000;
+      session.submit(session.runId, [
+        { kind: 'down', strokeId: 121, atUs },
+        { kind: 'forward', strokeId: 121, atUs: atUs + 1 },
+        { kind: 'freeRotate', strokeId: 121, atUs: atUs + 20_000, seq: 1, target: 'common', rotation: [0, 1.6, 0] },
+        { kind: 'up', strokeId: 121, atUs: atUs + 40_000, cancelled: false },
+      ]);
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="trick-impact"]')!;
+      const context = canvas.getContext('2d')!;
+      const deadline = performance.now() + 9_000;
+      while (performance.now() < deadline) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        if (canvas.dataset.phase !== 'landing') continue;
+        const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] > 90 && first.every((channel, j) => Math.abs(data[i + j] - channel) < 5)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }, mainRgb);
+    expect(landingColor, dogId).toBe(true);
+    await expect(page.getByTestId('landing-trick-score')).toHaveCSS('color', `rgb(${partnerRgb.join(', ')})`);
+  }
 });

@@ -1,3 +1,4 @@
+import { dogEffectStyle } from '../content/dog-effects';
 import { h } from './dom';
 import { LAB_GROUP_NAMES, TRICK_LAB_LESSONS, labDemo, type LabButtonId, type LabLesson, type LabSetupField } from '../content/trick-lab';
 import {
@@ -181,7 +182,7 @@ export class TrickLabScreen {
 
     this.el = h(
       'section',
-      { class: 'screen trick-lab', 'data-testid': 'trick-lab' },
+      { class: 'screen trick-lab', 'data-testid': 'trick-lab', style: dogEffectStyle(this.host.dogId) },
       this.surface,
       h(
         'div',
@@ -232,7 +233,7 @@ export class TrickLabScreen {
     this.swipe = null;
     // 停止中の準備を、新しい試行の最初の入力として送る。
     this.send({ type: 'setup', setup: { ...this.setup } });
-    this.host.view.setTrickLabStage(this.fixtureId, labEdge(this.fixtureId, this.edgeSide()), this.host.look, this.host.clothes, this.host.helmet);
+    this.host.view.setTrickLabStage(this.fixtureId, labEdge(this.fixtureId, this.edgeSide()), this.host.look, this.host.clothes, this.host.helmet, this.host.dogId);
     this.renderSetup();
     this.syncButtons();
   }

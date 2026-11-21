@@ -1,7 +1,7 @@
 import { anchorBody, type AnchorKey, type FxStep } from './trick-fx-81';
 import type { FxDrawContext, FxDrawerTable } from './trick-fx-context';
 import {
-  FX_RGB, addScaled, clamp01, copyV, crossV, distV, envelope, lenV, lerpV, normV, planeBasis, rotateV, setV, subV, vec, type Vec,
+  addScaled, clamp01, copyV, crossV, distV, envelope, lenV, lerpV, normV, planeBasis, rotateV, setV, subV, vec, type Vec,
 } from './trick-fx-math';
 
 // 使い回しの入れ物（描画は1本の流れで行うので共有してよい）。
@@ -140,12 +140,12 @@ export const AIR_DRAWERS: FxDrawerTable = {
       for (let k = 0; k < lines; k++) {
         const off = (k - (lines - 1) / 2) * step.size * 0.5;
         addScaled(S, A, D, -reach); S.y += off; addScaled(T, B, D, reach); T.y += off;
-        ctx.pen.line(S, T, FX_RGB.dog, alpha * 0.8);
+        ctx.pen.line(S, T, ctx.tone('dog'), alpha * 0.8);
         addScaled(S, A, D, reach); S.y += off; addScaled(T, B, D, -reach); T.y += off;
-        ctx.pen.line(S, T, FX_RGB.rider, alpha * 0.8);
+        ctx.pen.line(S, T, ctx.tone('rider'), alpha * 0.8);
       }
       lerpV(S, A, B, 0.5);
-      ctx.pen.dot(S, 0.09, FX_RGB.white, alpha * 0.8);
+      ctx.pen.dot(S, 0.09, ctx.tone('white'), alpha * 0.8);
       return;
     }
     if (p.around) {
@@ -165,7 +165,7 @@ export const AIR_DRAWERS: FxDrawerTable = {
       const s = ctx.reduced ? 0 : (ctx.clockMs % 900) / 900 * TAU;
       setV(T, C.x + U.x * Math.cos(s) * ry + W.x * Math.sin(s) * rz, C.y + U.y * Math.cos(s) * ry + W.y * Math.sin(s) * rz,
         C.z + U.z * Math.cos(s) * ry + W.z * Math.sin(s) * rz);
-      ctx.pen.dot(T, 0.06, FX_RGB.amber, alpha);
+      ctx.pen.dot(T, 0.06, ctx.tone('amber'), alpha);
       return;
     }
     const body = anchorBody(step.at[0]);
@@ -211,9 +211,9 @@ export const AIR_DRAWERS: FxDrawerTable = {
     setV(U, Math.cos(ctx.yaw), 0, Math.sin(ctx.yaw));
     setV(W, 0, 1, 0);
     addScaled(T, S, U, -0.1);
-    ctx.pen.arc(T, U, W, 0.12, 0.12, 0, TAU, 16, FX_RGB.dog, alpha * k);
+    ctx.pen.arc(T, U, W, 0.12, 0.12, 0, TAU, 16, ctx.tone('dog'), alpha * k);
     addScaled(T, S, U, 0.1);
-    ctx.pen.arc(T, U, W, 0.12, 0.12, 0, TAU, 16, FX_RGB.rider, alpha * k);
+    ctx.pen.arc(T, U, W, 0.12, 0.12, 0, TAU, 16, ctx.tone('rider'), alpha * k);
   },
 
   /** 少し前の姿勢を薄く残す残像。動いた部位だけ。paw は肉球形、frozen は着地後に空中の姿を短く残す。 */
@@ -330,7 +330,7 @@ export const AIR_DRAWERS: FxDrawerTable = {
       if (ctx.reduced) windowMs *= 0.3;
       if (p.speedLength && body) windowMs *= Math.max(0.3, Math.min(1, ctx.speed(body) / 6));
       let c = ctx.color(step, key);
-      if (p.frontBack && key.includes('PawB')) c = FX_RGB.amber;
+      if (p.frontBack && key.includes('PawB')) c = ctx.tone('amber');
       ctx.pen.trail(ring, ctx.clockMs - (p.delay ?? 0) * i, windowMs, c, alpha, p.style ?? 0, step.size);
     });
   },
@@ -489,7 +489,7 @@ export const AIR_DRAWERS: FxDrawerTable = {
       if (!ctx.reduced && n > 2) {
         const head = Math.floor((1 - (ctx.clockMs % 700) / 700) * (n - 1));
         ring.read(head, T);
-        ctx.pen.dot(T, 0.06, FX_RGB.white, alpha * 0.7);
+        ctx.pen.dot(T, 0.06, ctx.tone('white'), alpha * 0.7);
       }
     });
   },
@@ -530,7 +530,7 @@ export const AIR_DRAWERS: FxDrawerTable = {
       const l1 = lenV(S), l2 = lenV(T);
       if (l1 < 0.02 || l2 < 0.02) continue;
       const turn = Math.acos(Math.max(-1, Math.min(1, (S.x * T.x + S.y * T.y + S.z * T.z) / (l1 * l2))));
-      if (turn > (p.corner ?? 0.7)) ctx.pen.dot(B, 0.05, FX_RGB.white, alpha * 0.8);
+      if (turn > (p.corner ?? 0.7)) ctx.pen.dot(B, 0.05, ctx.tone('white'), alpha * 0.8);
     }
     ring.read(0, A); ring.read(2, B);
     subV(C, A, B);
@@ -616,7 +616,7 @@ function markRing(ctx: FxDrawContext, o: Vec, u: Vec, w: Vec, r: number, pair: n
       o.z + (u.z * Math.cos(a) + w.z * Math.sin(a)) * r);
     for (let j = 0; j < ctx.ringCount; j++) {
       setV(T, pts[j * 3], pts[j * 3 + 1], pts[j * 3 + 2]);
-      if (distV(S, T) < 0.12) { ctx.pen.dot(S, 0.08, FX_RGB.white, alpha); break; }
+      if (distV(S, T) < 0.12) { ctx.pen.dot(S, 0.08, ctx.tone('white'), alpha); break; }
     }
   }
 }

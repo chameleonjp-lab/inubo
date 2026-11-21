@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { DOG_EFFECT_COLORS, type DogEffectColors } from '../src/content/dog-effects';
 import { advanceRun } from '../src/game/run';
 import { advanceFreeMotion, createFreeMotion, FREE_RULES_VERSION, type FreeMotionInput, type FreeTarget } from '../src/game/free-motion';
 import { scoreFreeMotion } from '../src/game/free-score';
@@ -71,8 +72,9 @@ function recorder() {
 const FLAGS: FxFrameFlags = { reduced: false, weak: false, paused: false, alpha: 1, heading: 0, groundY: 0 };
 
 /** 1件の演出を実際に動かし、描いた命令を集める。着地は直前に空中の軌跡を出しておく。 */
-function render(prog: FxProgram, flags: Partial<FxFrameFlags> = {}, spin = { dog: 0.15, rider: 0.15 }, frames = 30): Cmd[] {
+function render(prog: FxProgram, flags: Partial<FxFrameFlags> = {}, spin = { dog: 0.15, rider: 0.15 }, frames = 30, colors?: DogEffectColors): Cmd[] {
   const engine = new FxEngine();
+  if (colors) engine.setColors(colors);
   const body = spinningBody(spin);
   const warm = recorder();
   const f = { ...FLAGS, ...flags };
@@ -90,6 +92,26 @@ function render(prog: FxProgram, flags: Partial<FxFrameFlags> = {}, spin = { dog
   for (let i = 0; i < frames; i++) { body.step(); engine.frame(16, body.src, out.sink, f); }
   return out.cmds;
 }
+
+test('81種類すべてで犬種の色だけが変わり、描く位置・形・透明度・粒の数は同じ', () => {
+  const colorIndex: Record<Cmd['kind'], number> = { line: 6, dot: 4, decal: 6, burst: 4 };
+  for (const prog of TRICK_FX_81) {
+    const [shiba, corgi, whippet] = Object.values(DOG_EFFECT_COLORS).map(colors =>
+      render(prog, {}, { dog: 0.15, rider: 0.15 }, 36, colors));
+    expect(shiba.length, prog.id).toBeGreaterThan(0);
+    const geometry = (commands: Cmd[]) => commands.map(({ kind, v }) => {
+      const first = colorIndex[kind];
+      return [kind, ...v.slice(0, first), ...v.slice(first + 3)];
+    });
+    const sameGeometry = (commands: Cmd[]) => JSON.stringify(geometry(commands)) === JSON.stringify(geometry(shiba));
+    expect(sameGeometry(corgi) && sameGeometry(whippet), prog.id).toBe(true);
+    const palette = (commands: Cmd[]) => new Set(commands.map(({ kind, v }) =>
+      v.slice(colorIndex[kind], colorIndex[kind] + 3).join(',')));
+    const shibaColors = palette(shiba), corgiColors = palette(corgi), whippetColors = palette(whippet);
+    expect([...shibaColors].every(color => !corgiColors.has(color) && !whippetColors.has(color)), prog.id).toBe(true);
+    expect([...corgiColors].every(color => !whippetColors.has(color)), prog.id).toBe(true);
+  }
+});
 
 // ---------------------------------------------------------------- 81件の定義
 

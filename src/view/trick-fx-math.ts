@@ -94,10 +94,21 @@ export class PointRing {
 
 export type Rgb = readonly [number, number, number];
 /** 犬は橙、人は青。琥珀は犬の上位段階、青白は人の上位段階、白は交点の強調。 */
-export const FX_RGB: Readonly<Record<'dog' | 'rider' | 'amber' | 'ice' | 'white', Rgb>> = {
+export type FxTone = 'dog' | 'rider' | 'amber' | 'ice' | 'white';
+export type FxPalette = Readonly<Record<FxTone, Rgb>>;
+export const FX_RGB: FxPalette = {
   dog: [1, 0.58, 0.2],
   rider: [0.3, 0.62, 1],
   amber: [1, 0.74, 0.22],
   ice: [0.72, 0.88, 1],
   white: [1, 1, 0.94],
 };
+
+/** 画面の色を、Three.js に渡す線形RGBへ変換する。 */
+export function hexToLinearRgb(hex: string): Rgb {
+  const channel = (start: number) => {
+    const value = Number.parseInt(hex.slice(start, start + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return [channel(1), channel(3), channel(5)];
+}

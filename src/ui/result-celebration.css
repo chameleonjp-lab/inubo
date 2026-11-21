@@ -1,8 +1,8 @@
 .result-celebration {
-  --result-ink: #1d392f;
-  --result-accent: #6a967b;
-  --result-light: #dcece1;
-  --result-fill: #edf5ec;
+  --result-ink: var(--effect-ink);
+  --result-accent: color-mix(in srgb, var(--effect-shade) 62%, var(--effect-glint));
+  --result-light: color-mix(in srgb, var(--effect-dust) 42%, white);
+  --result-fill: color-mix(in srgb, var(--effect-glint) 55%, white);
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -15,20 +15,29 @@
   background: linear-gradient(155deg, var(--result-fill), var(--result-light));
 }
 .result-celebration[data-result-band="2"] {
-  --result-ink: #174854; --result-accent: #4091a5; --result-light: #c5ebec; --result-fill: #edf9fd;
+  --result-accent: color-mix(in srgb, var(--effect-shade) 68%, var(--effect-light));
+  --result-light: color-mix(in srgb, var(--effect-light) 58%, white);
 }
 .result-celebration[data-result-band="3"] {
-  --result-ink: #22446f; --result-accent: #507ecc; --result-light: #c5ddff; --result-fill: #f1f7ff;
+  --result-accent: color-mix(in srgb, var(--effect-shade) 62%, var(--effect-partner));
+  --result-light: color-mix(in srgb, var(--effect-light) 76%, white);
 }
 .result-celebration[data-result-band="4"] {
-  --result-ink: #4d2c6e; --result-accent: #9270c9; --result-light: #e6cffd; --result-fill: #faf0ff;
+  --result-accent: var(--effect-shade);
+  --result-light: color-mix(in srgb, var(--effect-partner) 35%, var(--effect-glint));
 }
 .result-celebration[data-result-band="5"] {
-  --result-ink: #582f15; --result-accent: #b77e2c; --result-light: #ffdf94; --result-fill: #fff7dd;
+  --result-accent: var(--effect-shade);
+  --result-light: color-mix(in srgb, var(--effect-main) 41%, var(--effect-light));
+  --result-fill: var(--effect-glint);
 }
 .result-celebration[data-result-band="6"] {
-  --result-ink: #fff1ba; --result-accent: #f2c76c; --result-light: #322346; --result-fill: #231f36;
-  box-shadow: 0 0 16px #ad72ce55, inset 0 0 17px #e8b84039;
+  --result-ink: var(--effect-glint);
+  --result-accent: var(--effect-light);
+  --result-light: color-mix(in srgb, var(--effect-ink) 66%, var(--effect-shade));
+  --result-fill: var(--effect-ink);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--effect-main) 33%, transparent),
+    inset 0 0 17px color-mix(in srgb, var(--effect-light) 22%, transparent);
 }
 .result-celebration[data-result-band="4"],
 .result-celebration[data-result-band="5"],
@@ -36,7 +45,7 @@
   outline: 1px solid var(--result-accent);
   outline-offset: -5px;
 }
-.result-celebration[data-result-band="6"] .best-paw { color: #ffe4a2; }
+.result-celebration[data-result-band="6"] .best-paw { color: var(--effect-light); }
 .result-celebration .total { font-size: clamp(3rem, 14vw, 4rem); }
 .result-title {
   margin: 2px 0 0;

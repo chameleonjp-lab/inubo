@@ -1,3 +1,4 @@
+import { DOG_EFFECT_COLORS } from '../src/content/dog-effects';
 import * as THREE from 'three';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import { getCourse } from '../src/content/courses';
@@ -231,7 +232,7 @@ test('同じ公園の再挑戦では、前の走行で上がった旗がスタ�
   const frame = (t: number) => view.frame(run, run.simUs, [], DEFAULT_SETTINGS, t, 0);
   view.frame(run, run.simUs, [{ effect: 'E17', visual: 'flagUp', sound: null, objId: checkpoint.id, atUs: 0, runId: run.id.runId }], DEFAULT_SETTINGS, 100, 0);
   frame(900);
-  const flags = meshes('f2c94c').map((m) => m.parent!);
+  const flags = meshes(DOG_EFFECT_COLORS.shiba.main.slice(1)).map((m) => m.parent!);
   const raised = flags.find((flag) => flag.userData.raiseAt === 100)!;
   expect(raised.position.y).toBeCloseTo(1.85);
   view.setCourse(park);

@@ -1,3 +1,4 @@
+import { DOG_EFFECT_COLORS, type DogEffectColors } from '../content/dog-effects';
 import * as THREE from 'three';
 import { disposeObjects } from './dispose';
 import type { DogLook } from '../content/types';
@@ -41,6 +42,7 @@ export class TrickLabStage {
   private camLook = new THREE.Vector3();
   private camReady = false;
   private fixture: LabFixtureId = 'flat';
+  private colors = DOG_EFFECT_COLORS.shiba;
 
   constructor() {
     this.scene.background = new THREE.Color('#bfe3f5');
@@ -58,7 +60,9 @@ export class TrickLabStage {
     this.scene.add(this.shadow);
   }
 
-  setRider(look: DogLook, clothes: string, helmet: string): void {
+  setRider(look: DogLook, clothes: string, helmet: string, colors: DogEffectColors = DOG_EFFECT_COLORS.shiba): void {
+    this.colors = colors;
+    (this.plantMark.material as THREE.MeshBasicMaterial).color.set(colors.main);
     if (this.rig) {
       disposeObjects(this.rig.root);
       this.rig.root.removeFromParent();
@@ -213,7 +217,7 @@ export class TrickLabStage {
     });
     for (const [h, m] of this.handles) {
       const mat = m.material as THREE.MeshStandardMaterial;
-      mat.emissive.set(h === highlight ? '#ff8a00' : pose.hand === 'holding' && h === pose.grabHandle ? '#2266ff' : '#000000');
+      mat.emissive.set(h === highlight ? this.colors.main : pose.hand === 'holding' && h === pose.grabHandle ? this.colors.partner : '#000000');
     }
     this.plantMark.visible = pose.frontFootPlanted;
     if (pose.frontFootPlanted) this.plantMark.position.set(s + 0.3, y + 0.02, x);
