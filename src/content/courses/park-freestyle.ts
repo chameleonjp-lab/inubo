@@ -18,6 +18,19 @@ const curveFood: ObjectDef[] = [
   { kind: 'food', id: 'curve-out-5', path: 'extension', u: 1334, x: 2.6, h: 0.35 },
 ];
 
+const extraBones: ObjectDef[] = [
+  { kind: 'bone', id: 'bone-start', path: 'start', u: 63, x: -1.8, h: 0.4 },
+  { kind: 'bone', id: 'bone-slope', path: 'f1-slope', u: 248, x: -0.55, h: 0.4 },
+  { kind: 'bone', id: 'bone-stairs', path: 'f1-stairs', u: 247, x: -1.4, h: 0.4 },
+  { kind: 'bone', id: 'bone-stair-rail', path: 'f1-rail', u: 247, x: -1.45, h: 0.4 },
+  { kind: 'bone', id: 'bone-short', path: 'f2-short', u: 467, x: 1, h: 0.4 },
+  { kind: 'bone', id: 'bone-long-rail', path: 'f2-rail', u: 469, x: 1.15, h: 0.4 },
+  { kind: 'bone', id: 'bone-late', path: 'late', u: 600, x: -1.3, h: 0.4 },
+  { kind: 'bone', id: 'bone-extension-1', path: 'extension', u: 894, x: 1.4, h: 0.4 },
+  { kind: 'bone', id: 'bone-extension-2', path: 'extension', u: 1110, x: -1.4, h: 0.4 },
+  { kind: 'bone', id: 'bone-extension-3', path: 'extension', u: 1386, x: 1.45, h: 0.4 },
+];
+
 const routeObjects: ObjectDef[] = [
   { kind: 'kicker', id: 'stairs-launch-1', path: 'f1-stairs', u0: 231, u1: 235, x0: -1.15, x1: 1.15, height: 0.68 },
   { kind: 'kicker', id: 'stairs-launch-2', path: 'f1-stairs', u0: 259, u1: 263, x0: -1.15, x1: 1.15, height: 0.68 },
@@ -45,11 +58,12 @@ export const parkFreestyle: CourseDef = {
         ...(object.id === 'r-long' ? { u0: 446, u1: 472 } : {}) };
       if (object.kind === 'fence') return { ...object, height: 0.8 };
       if (object.kind === 'wall') return { ...object, grind: true, height: Math.max(0.8, object.height) };
-      // 最初の骨は直進から少し外す。拾って長く跳ぶか、手前で分岐に寄るかを選べる。
+      // 第1分岐の手前にある骨は、直進から少し外す。
       if (object.kind === 'guide') return { ...object, kind: 'bone' as const, x: object.id === 'guide-1' ? -1.6 : object.x };
       return object;
     }),
     ...curveFood,
+    ...extraBones,
     ...routeObjects.map(object => object.kind === 'rail' ? { ...object, h0: 0.8, h1: 0.8 } : object),
   ],
 };

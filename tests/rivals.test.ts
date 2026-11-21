@@ -1,12 +1,14 @@
 import { expect, test } from 'vitest';
 import { getCourse } from '../src/content/courses';
+import { park } from '../src/content/courses/park';
 import { parkFreestyle } from '../src/content/courses/park-freestyle';
 import { DOGS, DOG_ORDER } from '../src/content/dogs';
 import { runWithAutopilot } from '../src/game/autopilot';
 import { FREE_RULES_VERSION } from '../src/game/free-motion';
+import { jumpMultiplier } from '../src/game/items';
 import { advanceRun, createRun, RunSession } from '../src/game/run';
-import { rivalPose } from '../src/game/rivals';
-import { sampleAt, sAtU } from '../src/game/track';
+import { rivalPose, type RivalState } from '../src/game/rivals';
+import { hwAt, sampleAt, sAtU } from '../src/game/track';
 import { identity } from './helpers';
 
 const course = getCourse('park', parkFreestyle.version);
@@ -59,6 +61,73 @@ test('先行NPCの糞を着地前に飛び越せる。地上で踏むと2秒減�
   other.begin();
   Object.assign(other.sim, { s: item.s - 0.04, x: item.x, targetX: item.x, y: item.y + 1.5, baseSpeed: 14, mode: 'air' });
   expect(advanceRun(other.sim, 5_000).events.some(event => event.kind === 'poop')).toBe(false);
+});
+
+function routeKeys(rivals: RivalState): string[] {
+  return rivals.plans.map(plan => plan.legs.filter(leg => leg.path.def.route).map(leg => leg.path.id).join('/'));
+}
+
+test('先行する2組とも全6ルートを走り、同じルートの組み合わせでも糞の位置が変わる', () => {
+  const routes = [new Set<string>(), new Set<string>()];
+  const layoutsByRoutes = new Map<string, string>();
+  let repeatedPair = false;
+  for (let i = 0; i < 192; i++) {
+    const session = new RunSession({ ...raceIdentity, runId: `npc-pattern-${i}` }, course, DOGS.shiba);
+    session.begin();
+    const rivals = session.sim.rivals!;
+    const keys = routeKeys(rivals);
+    keys.forEach((key, index) => routes[index].add(key));
+    const opening = rivals.items.get('start')!;
+    expect(opening).toHaveLength(6);
+    expect(opening.every(item => Math.abs(item.x) > 0.5)).toBe(true);
+    const pair = keys.join('|');
+    const layout = JSON.stringify(opening.map(({ s, x }) => [s, x]));
+    const previous = layoutsByRoutes.get(pair);
+    if (previous) {
+      repeatedPair = true;
+      expect(layout).not.toBe(previous);
+    }
+    layoutsByRoutes.set(pair, layout);
+    for (const { items } of rivals.drops) {
+      const path = course.paths.get(items[0].pathId)!;
+      expect(items.every(item => item.s > 0 && item.s < path.length && Math.abs(item.x) < hwAt(path, item.s))).toBe(true);
+    }
+  }
+  expect(routes.map(routesByRival => routesByRival.size)).toEqual([6, 6]);
+  expect(layoutsByRoutes.size).toBe(36);
+  expect(repeatedPair).toBe(true);
+});
+
+test('同じ走行ではカウントダウンの進み方によらずNPCの分岐と落とす位置を再現する', () => {
+  const stepped = new RunSession(raceIdentity, course, DOGS.shiba);
+  advanceWall(stepped, 0, 3_000_000);
+  const immediate = new RunSession(raceIdentity, course, DOGS.shiba);
+  immediate.begin();
+  expect(routeKeys(immediate.sim.rivals!)).toEqual(routeKeys(stepped.sim.rivals!));
+  expect(immediate.sim.rivals!.items).toEqual(stepped.sim.rivals!.items);
+  expect(immediate.sim.rivals!.drops).toEqual(stepped.sim.rivals!.drops);
+});
+
+test('骨が分岐5ルートと共通の道に10個増え、どれも拾うと5秒間ジャンプ力が上がる', () => {
+  const bones = [...course.itemsById.values()].filter(item => item.kind === 'bone');
+  const previousBones = park.objects.filter(object => object.kind === 'guide');
+  expect(bones).toHaveLength(previousBones.length + 10);
+  expect(previousBones.every(object => course.itemsById.get(object.id)?.kind === 'bone')).toBe(true);
+  const extra = bones.filter(item => item.id.startsWith('bone-'));
+  expect(extra.map(item => item.pathId)).toEqual([
+    'start', 'f1-slope', 'f1-stairs', 'f1-rail', 'f2-short', 'f2-rail', 'late', 'extension', 'extension', 'extension',
+  ]);
+  for (const item of extra) {
+    const path = course.paths.get(item.pathId)!;
+    expect(Math.abs(item.x)).toBeLessThan(hwAt(path, item.s) - 0.5);
+    expect(path.solids.some(solid => solid.s0 <= item.s && solid.s1 >= item.s && solid.x0 <= item.x && solid.x1 >= item.x)).toBe(false);
+    const run = createRun(raceIdentity, course, DOGS.shiba);
+    Object.assign(run, { pathId: path.id, s: item.s - 0.04, x: item.x, targetX: item.x, y: item.y - 0.4, baseSpeed: 14 });
+    const pickup = advanceRun(run, 5_000).events.find(event => event.kind === 'jumpBoost');
+    expect(pickup?.objId).toBe(item.id);
+    expect(run.effects.jumpUntilUs).toBe(pickup!.atUs + 5_000_000);
+    expect(jumpMultiplier(run.effects, pickup!.atUs)).toBe(1.3);
+  }
 });
 
 test('公園の分岐とカーブに、それぞれ通る意味の違いがある', () => {
