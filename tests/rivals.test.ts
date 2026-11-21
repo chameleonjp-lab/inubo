@@ -71,7 +71,7 @@ test('先行する2組とも全6ルートを走り、同じルートの組み合
   const routes = [new Set<string>(), new Set<string>()];
   const layoutsByRoutes = new Map<string, string>();
   let repeatedPair = false;
-  for (let i = 0; i < 64; i++) {
+  for (let i = 0; i < 192; i++) {
     const session = new RunSession({ ...raceIdentity, runId: `npc-pattern-${i}` }, course, DOGS.shiba);
     session.begin();
     const rivals = session.sim.rivals!;
@@ -94,6 +94,7 @@ test('先行する2組とも全6ルートを走り、同じルートの組み合
     }
   }
   expect(routes.map(routesByRival => routesByRival.size)).toEqual([6, 6]);
+  expect(layoutsByRoutes.size).toBe(36);
   expect(repeatedPair).toBe(true);
 });
 

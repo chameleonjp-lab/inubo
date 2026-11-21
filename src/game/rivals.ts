@@ -104,7 +104,10 @@ function rivalLane(leg: Leg, previous: Leg | undefined, s: number): number {
 function rivalRandom(runId: string, index: number): () => number {
   let hash = 2166136261;
   for (const char of `${runId}:${index}`) hash = Math.imul(hash ^ char.codePointAt(0)!, 16777619);
-  let seed = hash || 1;
+  // 末尾の組番号だけが違う場合も、2組の選択が偏らないようビットを混ぜる。
+  hash = Math.imul(hash ^ (hash >>> 16), 0x85ebca6b);
+  hash = Math.imul(hash ^ (hash >>> 13), 0xc2b2ae35);
+  let seed = (hash ^ (hash >>> 16)) || 1;
   return () => {
     seed ^= seed << 13;
     seed ^= seed >>> 17;
