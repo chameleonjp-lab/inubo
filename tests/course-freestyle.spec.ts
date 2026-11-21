@@ -1,3 +1,5 @@
+import { cueForEvent } from '../src/view/effects';
+import type { SimEvent } from '../src/game/types';
 import { DOG_EFFECT_COLORS } from '../src/content/dog-effects';
 import { DOG_ORDER } from '../src/content/dogs';
 import { expect, test } from '@playwright/test';
@@ -73,7 +75,11 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       await until(() => sim.score.jumps.length > 0);
       const landingPhase = impactCanvas.dataset.phase;
       const titleElement = document.querySelector<HTMLElement>('[data-testid="center-text"]')!;
-      const nameElement = titleElement.querySelector<HTMLElement>('[data-testid="landing-trick-name"]')!;
+      const flow = document.querySelector<HTMLElement>('[data-testid="trick-name-flow"]')!;
+      const nameElement = flow.querySelector<HTMLElement>('[data-testid="landing-trick-name"]')!;
+      const scroll = nameElement.getAnimations()[0];
+      scroll.pause();
+      scroll.currentTime = Number(scroll.effect!.getComputedTiming().duration) / 2;
       const scoreElement = titleElement.querySelector<HTMLElement>('[data-testid="landing-trick-score"]')!;
       for (const animation of titleElement.getAnimations({ subtree: true })) animation.finish();
       const nameBox = nameElement.getBoundingClientRect();
@@ -81,7 +87,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       const inViewport = (box: DOMRect) => box.right > 0 && box.left < innerWidth && box.bottom > 0 && box.top < innerHeight;
       const landingLayout = {
         name: nameElement.textContent, score: scoreElement.textContent, tier: titleElement.dataset.trickTier,
-        separation: scoreBox.left - nameBox.left, scoreHeight: scoreElement.offsetHeight,
+        upperHalf: nameBox.bottom <= innerHeight / 2, scoreHeight: scoreElement.offsetHeight,
         nameInViewport: inViewport(nameBox), scoreInViewport: inViewport(scoreBox),
       };
       return {
@@ -109,7 +115,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     expect(layout.score).toContain('＋' + awarded.toLocaleString('ja-JP'));
     expect(layout.tier).toMatch(/^[1-5]$/);
     expect(layout.nameInViewport && layout.scoreInViewport).toBe(true);
-    expect(layout.separation).toBeGreaterThan(70);
+    expect(layout.upperHalf).toBe(true);
     expect(layout.scoreHeight).toBeGreaterThan(37);
     expect(errors).toEqual([]);
   });
@@ -205,4 +211,51 @@ test('犬種を変更すると着地の文字と画面全体の光の色が切�
     }, mainRgb);
     expect(colors, dogId).toBe(`rgb(${partnerRgb.join(', ')})`);
   }
+});
+
+
+test('技名は上半分の5段を右から左へ流れ、6個目で1段目を差し替える', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('start').click();
+  const samples = [60, 220, 550, 950, 1650, 2000].map((points, i) => cueForEvent({
+    runId: 'lane-test', seq: i, kind: 'land', atUs: i, pathId: 'start', sMm: 3000, x: 0, y: 0,
+    data: {
+      names: [`トリック${i + 1}`], points, trickPoints: points,
+      trickBase: Math.min(points, 1000), trickTier: Math.min(i + 1, 5), fxTarget: 'B',
+    },
+  } satisfies SimEvent)!);
+  const observed = await page.evaluate((cues) => {
+    const { game } = (window as unknown as {
+      __inubo: { app: { game: { handleCues: (events: typeof cues) => void; session: RunSession } } }
+    }).__inubo.app;
+    const flow = document.querySelector<HTMLElement>('[data-testid="trick-name-flow"]')!;
+    const labels = () => [...flow.querySelectorAll<HTMLElement>('.flying-trick')];
+    game.handleCues(cues.slice(0, 5));
+    const before = labels();
+    const order = before.map(el => el.textContent);
+    const first = before[0], high = before[4];
+    const firstStyle = getComputedStyle(first), highStyle = getComputedStyle(high);
+    const levelsDiffer = parseFloat(highStyle.fontSize) > parseFloat(firstStyle.fontSize) &&
+      Number(highStyle.fontWeight) > Number(firstStyle.fontWeight) &&
+      highStyle.color !== firstStyle.color;
+    const background = firstStyle.backgroundColor;
+    const a = first.getAnimations()[0];
+    a.pause();
+    const duration = Number(a.effect!.getComputedTiming().duration);
+    a.currentTime = 0;
+    const startX = first.getBoundingClientRect().left;
+    a.currentTime = duration * 0.55;
+    const laterX = first.getBoundingClientRect().left;
+    const inUpperHalf = flow.getBoundingClientRect().bottom <= innerHeight / 2;
+    game.handleCues(cues.slice(5));
+    game.session.sim.score.jumpPoints = 6_300;
+    return { order, levelsDiffer, background, startX, laterX, inUpperHalf, after: labels().map(el => el.textContent) };
+  }, samples);
+  expect(observed.order).toEqual(['トリック1', 'トリック2', 'トリック3', 'トリック4', 'トリック5']);
+  expect(observed.after).toEqual(['トリック6', 'トリック2', 'トリック3', 'トリック4', 'トリック5']);
+  expect(observed.levelsDiffer && observed.inUpperHalf).toBe(true);
+  expect(observed.background).toBe('rgba(0, 0, 0, 0)');
+  expect(observed.startX).toBeGreaterThan(390);
+  expect(observed.laterX).toBeLessThan(observed.startX);
+  await expect(page.getByTestId('hud-trick')).toHaveText('技 6,300');
 });

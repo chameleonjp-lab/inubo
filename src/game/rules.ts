@@ -74,7 +74,8 @@ export const POOP_REACH_X = 0.45;
 
 // ---- 採点 ----
 export const TIME_SCORE_MAX = 5_000;
-export const TRICK_SCORE_MAX = 5_000;
+/** 以前の採点版だけに適用する上限。 */
+export const LEGACY_TRICK_SCORE_MAX = 5_000;
 export const DOG_BASE = 100;
 export const BODY_CARDINAL_BASE = 150;
 export const BODY_DIAGONAL_BASE = 200;

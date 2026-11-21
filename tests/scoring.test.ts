@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { deliverContacts, advanceRun, forceFall } from '../src/game/run';
-import { timeScore, totalScore, trickScore } from '../src/game/scoring';
+import { finishRun, timeScore, totalScore, trickScore } from '../src/game/scoring';
 import { sectionAt } from '../src/game/track';
-import { toCentiseconds } from '../src/game/rules';
+import { FREE_RULES_VERSION, RULES_VERSION, toCentiseconds } from '../src/game/rules';
 import { Autopilot } from '../src/game/autopilot';
 import { newRun, testCourse } from './helpers';
 import type { Candidate } from '../src/game/tricks';
@@ -192,11 +192,18 @@ describe('V12 採点', () => {
     expect(totalScore(timeScore(8000, 6000, 11000), 1800)).toBe(4800);
   });
 
-  test('技点の上限 5,000、総合の上限 10,000', () => {
-    expect(totalScore(5000, 7000)).toBe(10000);
-    expect(totalScore(5000, 5000)).toBe(10000);
-    const sc = { jumpPoints: 4700, railPoints: 300, streakBonus: 400 } as Parameters<typeof trickScore>[0];
-    expect(trickScore(sc)).toBe(5000);
+  test('自由操作では技点が5,000を超えても全点を使い、完走結果の総合点にも加える', () => {
+    const run = newRun(testCourse(), 'shiba', { rulesVersion: FREE_RULES_VERSION });
+    Object.assign(run.score, { jumpPoints: 6_300, railPoints: 300, streakBonus: 400 });
+    expect(trickScore(run.score, FREE_RULES_VERSION)).toBe(7_000);
+    expect(finishRun(run, 60_000_000)).toMatchObject({ trickRaw: 7_000, trickScore: 7_000, timeScore: 5_000, total: 12_000 });
+  });
+
+  test('従来ルールで完走した場合は、その版の公開順位が使う配点を適用する', () => {
+    const run = newRun(testCourse(), 'shiba', { rulesVersion: RULES_VERSION });
+    run.score.jumpPoints = 7_000;
+    expect(trickScore(run.score, RULES_VERSION)).toBe(5_000);
+    expect(finishRun(run, 60_000_000)).toMatchObject({ trickRaw: 7_000, trickScore: 5_000, timeScore: 5_000, total: 10_000 });
   });
 
   test('ほかのコースの基準でも、同じ式で整数に四捨五入する', () => {

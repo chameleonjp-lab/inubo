@@ -2,7 +2,7 @@ import {
   STREAK_BONUS,
   STREAK_LENGTH,
   TIME_SCORE_MAX,
-  TRICK_SCORE_MAX,
+  LEGACY_TRICK_SCORE_MAX,
   COMPOSITE_BONUS,
   toCentiseconds,
 } from './rules';
@@ -13,8 +13,8 @@ import { settleRail, loseRail } from './rails';
 import type { FailureRec, JumpRec, NearMiss, RunResult, ScoreState, SimEvent, SimState } from './types';
 
 /**
- * 採点。総合点 = タイム点（0〜5,000）＋技点（0〜5,000）、上限 10,000。
- * 技は採点区間（採点機会）ごとに最初に成功したジャンプ1回分を採点し、同じ通知の再処理では増やさない。
+ * 総合点 = タイム点（0〜5,000）＋技点。今の自由操作では、成功した技を着地ごとにすべて合計する。
+ * 従来ルールの採点区間と技点の上限は、そのルールで保存・送信する成績に使う。
  */
 
 export function createScore(): ScoreState {
@@ -33,12 +33,13 @@ export function createScore(): ScoreState {
   };
 }
 
-/** 技点（上限 5,000 を適用した後）。 */
-export function trickScore(sc: ScoreState): number {
-  return Math.min(TRICK_SCORE_MAX, trickRaw(sc));
+/** 今の自由操作だけ、技点を上限なしで合計する。 */
+export function trickScore(sc: ScoreState, rulesVersion: string): number {
+  const raw = trickRaw(sc);
+  return rulesVersion === FREE_RULES_VERSION ? raw : Math.min(LEGACY_TRICK_SCORE_MAX, raw);
 }
 
-export function trickRaw(sc: ScoreState): number {
+function trickRaw(sc: ScoreState): number {
   return sc.jumpPoints + sc.railPoints + sc.streakBonus;
 }
 
@@ -56,7 +57,7 @@ export function timeScore(recordCs: number, fullCs: number, zeroCs: number): num
 }
 
 export function totalScore(time: number, trick: number): number {
-  return Math.min(TIME_SCORE_MAX + TRICK_SCORE_MAX, time + Math.min(TRICK_SCORE_MAX, trick));
+  return time + trick;
 }
 
 type Emit = (kind: SimEvent['kind'], atUs: number, data?: SimEvent['data'], objId?: string) => void;
@@ -198,7 +199,7 @@ export function finishRun(run: SimState, atUs: number): RunResult {
   const ts = run.course.def.timeScore;
   const time = timeScore(recordCs, ts.fullCs, ts.zeroCs);
   const raw = trickRaw(sc);
-  const trick = Math.min(TRICK_SCORE_MAX, raw);
+  const trick = trickScore(sc, run.id.rulesVersion);
   const ch = run.course.def.challenge;
   const challengeDone = !!ch && (ch.kind === 'railFull' ? run.railsCompleted.includes(ch.target) : run.route.includes(ch.target));
   return {
