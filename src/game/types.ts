@@ -41,6 +41,7 @@ export type MotionMode = 'ground' | 'air' | 'rail' | 'falling';
 export interface Effects {
   foodUntilUs: number | null;
   poopUntilUs: number | null;
+  jumpUntilUs: number | null;
 }
 
 export interface StrokeRec {
@@ -61,6 +62,7 @@ export interface JumpRec {
   takeoffUs: number;
   kind: 'flat' | 'kicker' | 'rail' | 'drop';
   fromRail: string | null;
+  edgeWallId?: string;
   strokes: number[];
   resolution: TrickResolution;
 }
@@ -105,6 +107,7 @@ export type SimEventKind =
   | 'railScore'
   | 'railLost'
   | 'food'
+  | 'jumpBoost'
   | 'boostEnd'
   | 'poop'
   | 'slowEnd'

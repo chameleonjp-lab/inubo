@@ -78,13 +78,13 @@ interface Placed {
 
 export type ObjectDef =
   | (Placed & { kind: 'fence'; u: number; x0: number; x1: number; height: number; depth?: number })
-  | (Placed & { kind: 'wall'; u0: number; u1: number; x0: number; x1: number; height: number; look?: 'wall' | 'planter' | 'bollard' | 'shop' })
+  | (Placed & { kind: 'wall'; u0: number; u1: number; x0: number; x1: number; height: number; grind?: boolean; look?: 'wall' | 'planter' | 'bollard' | 'shop' })
   | (Placed & { kind: 'kicker'; u0: number; u1: number; x0: number; x1: number; height: number })
   | (Placed & { kind: 'stairs'; u0: number; u1: number; steps: number })
   | (Placed & { kind: 'gate'; u: number; x0: number; x1: number; height: number; periodUs: number; offsetUs: number })
   | (Placed & { kind: 'rail'; u0: number; u1: number; x: number; h0: number; h1: number })
   | (Placed & { kind: 'food'; u: number; x: number; h: number })
-  | (Placed & { kind: 'guide'; u: number; x: number; h: number })
+  | (Placed & { kind: 'guide' | 'bone'; u: number; x: number; h: number })
   | (Placed & { kind: 'poop'; u: number; x: number })
   | (Placed & { kind: 'checkpoint'; u: number; x: number })
   | (Placed & { kind: 'arrow'; u: number; side: 'left' | 'right'; dir: 'left' | 'right' });

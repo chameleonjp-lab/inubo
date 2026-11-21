@@ -1,5 +1,6 @@
 import { DOG_EFFECT_COLORS, dogEffectStyle, type DogEffectColors } from '../content/dog-effects';
 import { TrickImpact } from './trick-impact';
+import { helpParagraphs, initLanguage, LANGUAGES, setLanguage, t as tx, language } from './i18n';
 import { showTrickLanding, TrickNameFlow } from './trick-landing';
 import { h, clear, fmtInt } from './dom';
 import { renderBoard, renderResults } from './results';
@@ -100,6 +101,7 @@ export class App {
     transport: Transport | null,
   ) {
     this.store = browserStorage(opts.testBuild ? 'inubo-test:' : '');
+    initLanguage(this.store);
     this.records = new Records(this.store);
     this.settings = loadSettings(this.store);
     this.profile = loadProfile(this.store);
@@ -136,8 +138,8 @@ export class App {
     void this.ranking.flush();
   }
 
-  private rankingFor(courseId: CourseId, rulesVersion = RULES_VERSION): boolean {
-    return rulesVersion === RULES_VERSION && this.ranking.enabled && (this.opts.testBuild || courseId === 'park');
+  private rankingFor(courseId: CourseId, rulesVersion = FREE_RULES_VERSION): boolean {
+    return this.ranking.enabled && courseId === PARK_ID && (rulesVersion === FREE_RULES_VERSION || rulesVersion === RULES_VERSION);
   }
 
   ensureView(): GameView {
@@ -196,9 +198,9 @@ export class App {
       const best = this.records.bestScore(key);
       const fast = this.records.bestTime(key);
       if (!best && !fast) return [];
-      return [h('dt', {}, label), h('dd', {}, [
-        best && `最高 ${fmtInt(best.total)}点`,
-        fast && `最速 ${formatTime(fast.recordCs)}（${DOGS[fast.dogId].name}）`,
+      return [h('dt', {}, tx(label)), h('dd', {}, [
+        best && tx('最高 {n}', { n: `${fmtInt(best.total)} ${tx('点')}` }),
+        fast && tx('最速 {n}', { n: `${formatTime(fast.recordCs)}（${tx(DOGS[fast.dogId].name)}）` }),
       ].filter(Boolean).join('　'))];
     });
     const dogCards = DOG_ORDER.map((id) =>
@@ -217,8 +219,8 @@ export class App {
           },
         },
         dogIcon(id, id === this.dogId),
-        h('span', { class: 'card-title' }, DOGS[id].name),
-        h('span', { class: 'card-sub' }, `小回り ${DOGS[id].handlingIndex}`),
+        h('span', { class: 'card-title' }, tx(DOGS[id].name)),
+        h('span', { class: 'card-sub' }, tx('小回り {n}', { n: DOGS[id].handlingIndex })),
       ),
     );
     const hasRanking = this.rankingFor(PARK_ID);
@@ -227,7 +229,7 @@ export class App {
       ? h(
           'div',
           { class: 'name-block' },
-          h('label', { for: 'player-name' }, '名前（任意・公開順位に参加するときだけ）'),
+          h('label', { for: 'player-name' }, tx('名前（任意）')),
           (() => {
             const inp = h('input', { id: 'player-name', maxlength: 16, value: this.profile.name, autocomplete: 'off', 'data-testid': 'name', 'aria-describedby': 'ranking-name-note' }) as HTMLInputElement;
             inp.addEventListener('input', () => {
@@ -236,34 +238,55 @@ export class App {
             });
             return inp;
           })(),
-          h('p', { id: 'ranking-name-note' }, '名前は端末に保存されます。現在の自由操作の記録は公開ランキングに送信されません。'),
+          h('p', { id: 'ranking-name-note' }, tx('名前を入れてスタートすると、完走時に名前と記録がランキングに公開されます。')),
         )
       : null;
     this.setScreen(
       h(
         'section',
         { class: 'screen home', 'data-testid': 'home' },
-        h('h1', { class: 'logo' }, 'イヌボー', h('small', {}, '犬のスケボー')),
-        h('h2', {}, '犬'),
+        this.languagePicker(),
+        h('h1', { class: 'logo' }, tx('イヌボー'), h('small', {}, tx('犬のスケボー'))),
+        h('h2', {}, tx('犬')),
         h('div', { class: 'cards' }, dogCards),
         h(
           'div',
           { class: 'actions' },
-          h('button', { class: 'btn primary big', 'data-testid': 'start', onclick: () => (this.uiSound('decide'), this.startRun('competition')) }, 'スタート'),
+          h('button', { class: 'btn primary big', 'data-testid': 'start', onclick: () => (this.uiSound('decide'), this.startRun('competition')) }, tx('スタート')),
         ),
         nameBlock,
         h(
           'div',
           { class: 'actions small-row' },
-          h('button', { class: 'btn small', onclick: () => this.showHowTo() }, '遊び方'),
-          h('button', { class: 'btn small', 'data-testid': 'settings', onclick: () => this.showSettings() }, '設定'),
-          hasRanking ? h('button', { class: 'btn small', onclick: () => this.showRanking() }, 'ランキング') : null,
-          h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(officialUrl()), shareFallback) }, 'Xでシェア'),
+          h('button', { class: 'btn small', onclick: () => this.showHowTo() }, tx('遊び方')),
+          h('button', { class: 'btn small', 'data-testid': 'settings', onclick: () => this.showSettings() }, tx('設定')),
+          hasRanking ? h('button', { class: 'btn small', onclick: () => this.showRanking() }, tx('ランキング')) : null,
+          h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(officialUrl()), shareFallback) }, tx('Xでシェア')),
         ),
         shareFallback,
-        records.length ? h('dl', { class: 'home-records', 'aria-label': '自己ベスト', 'data-testid': 'home-records' }, records) : null,
+        records.length ? h('dl', { class: 'home-records', 'aria-label': tx('自己ベスト'), 'data-testid': 'home-records' }, records) : null,
       ),
     );
+  }
+
+  private languagePicker(): HTMLElement {
+    const select = h('select', { 'aria-label': tx('言語'), 'data-testid': 'language' },
+      LANGUAGES.map(([id, label]) => h('option', { value: id, lang: id }, label)));
+    select.value = language();
+    select.addEventListener('change', () => {
+      const next = LANGUAGES.find(([id]) => id === select.value);
+      if (!next) return;
+      setLanguage(next[0]);
+      // 明示的なURL指定が、利用者自身の選択を次の読み込みで上書きしないようにする。
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('lang')) {
+        url.searchParams.set('lang', next[0]);
+        window.history.replaceState(null, '', url);
+      }
+      this.showHome();
+      this.root.querySelector<HTMLElement>('[data-testid="language"]')?.focus();
+    });
+    return h('label', { class: 'home-language' }, h('span', { 'aria-hidden': 'true' }, '🌐'), select);
   }
 
   private back(): void {
@@ -276,19 +299,11 @@ export class App {
       h(
         'section',
         { class: 'screen text-screen' },
-        h('h2', {}, '遊び方'),
-        h('p', {}, '犬が自動で前へ進みます。指は曲がる・跳ぶ・技を出すために使います。'),
-        h('ul', {}, [
-          h('li', {}, '地面で左右に払う: 払った幅の分だけ横へ動きます。'),
-          h('li', {}, '上へ払う: 1回跳びます。踏切台からは高く跳べます。'),
-          h('li', {}, '上へ払って跳んだら、指を離さずそのまま画面をなぞって回転できます。指を離した後も勢いが続きます。'),
-          h('li', {}, '反対へ払うと勢いを弱められます。「両方」「犬だけ」「人だけ」は回転中でも即座に切り替えられます。'),
-          h('li', {}, '手すりには上から乗ると滑り、前へ払うと跳び降ります。正面や側面に当たると止まります。'),
-        ]),
-        h('p', {}, '技を決めて着地するたびに点が入ります。空中で回す相手や方向を変え、切り替える前と後の両方で実際に回ると連携点が入ります。3回連続で技を決めると100点を加えます。タイム点は最大5,000点です。技点は決めた分だけ加わります。'),
-        h('p', {}, 'カーブは緑の印がある内側が近道。黄色の印がある外側はフードを拾って加速できます。分かれ道の標識には、先にある遊び方が書いてあります。'),
-        h('p', {}, 'カウントダウン中にほかの犬が2組先に出ます。技の着地で落とすウンコは、踏むと2秒間減速します。'),
-        h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
+        h('h2', {}, tx('遊び方')),
+        h('p', {}, tx(helpParagraphs[0])),
+        h('ul', {}, helpParagraphs.slice(1, 5).map(key => h('li', {}, tx(key)))),
+        ...helpParagraphs.slice(5).map(key => h('p', {}, tx(key))),
+        h('button', { class: 'btn', onclick: () => this.back() }, tx('もどる')),
       ),
     );
   }
@@ -308,12 +323,12 @@ export class App {
       });
       return h('label', { class: 'setting' }, cb, label);
     };
-    const vol = h('input', { type: 'range', min: 0, max: 100, step: 5, value: Math.round(s.volume * 100), 'data-testid': 'volume', 'aria-label': '音量' }) as HTMLInputElement;
+    const vol = h('input', { type: 'range', min: 0, max: 100, step: 5, value: Math.round(s.volume * 100), 'data-testid': 'volume', 'aria-label': tx('音量') }) as HTMLInputElement;
     vol.addEventListener('input', () => {
       this.settings.volume = Number(vol.value) / 100;
       apply();
     });
-    const light = h('select', { 'data-testid': 'light', 'aria-label': '光の量' }, h('option', { value: 'normal' }, 'ふつう'), h('option', { value: 'weak' }, '弱い')) as HTMLSelectElement;
+    const light = h('select', { 'data-testid': 'light', 'aria-label': tx('光の量') }, h('option', { value: 'normal' }, tx('ふつう')), h('option', { value: 'weak' }, tx('弱い'))) as HTMLSelectElement;
     light.value = s.light;
     light.addEventListener('change', () => {
       this.settings.light = light.value === 'weak' ? 'weak' : 'normal';
@@ -323,25 +338,25 @@ export class App {
       h(
         'section',
         { class: 'screen text-screen' },
-        h('h2', {}, '設定'),
-        toggle('音を出す', () => this.settings.soundOn, (v) => (this.settings.soundOn = v), 'sound'),
-        h('label', { class: 'setting' }, '音量', vol),
-        toggle('画面を揺らす', () => this.settings.shake, (v) => (this.settings.shake = v), 'shake'),
-        h('label', { class: 'setting' }, '光の量', light),
-        toggle('自分の最速の走りを半透明で表示する', () => this.settings.ghost, (v) => (this.settings.ghost = v), 'ghost'),
-        h('p', { class: 'note' }, '設定は成績に影響しません。消音・弱い演出でも、成功と失敗は文字と形で見分けられます。'),
-        h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
+        h('h2', {}, tx('設定')),
+        toggle(tx('音を出す'), () => this.settings.soundOn, (v) => (this.settings.soundOn = v), 'sound'),
+        h('label', { class: 'setting' }, tx('音量'), vol),
+        toggle(tx('画面を揺らす'), () => this.settings.shake, (v) => (this.settings.shake = v), 'shake'),
+        h('label', { class: 'setting' }, tx('光の量'), light),
+        toggle(tx('自分の最速の走りを半透明で表示する'), () => this.settings.ghost, (v) => (this.settings.ghost = v), 'ghost'),
+        h('p', { class: 'note' }, tx('設定は成績に影響しません。')),
+        h('button', { class: 'btn', onclick: () => this.back() }, tx('もどる')),
       ),
     );
   }
 
   showRanking(): void {
-    const def = COURSE_DEFS[PARK_ID]!;
+    const def = parkFreestyle;
     const board = h('div', { class: 'board' });
     let boardRequest = 0;
     const load = (metric: 'total' | 'time') => {
       const current = ++boardRequest;
-      void this.ranking.loadBoard({ courseId: PARK_ID, courseVersion: def.version, rulesVersion: RULES_VERSION, metric }, (s) => {
+      void this.ranking.loadBoard({ courseId: PARK_ID, courseVersion: def.version, rulesVersion: FREE_RULES_VERSION, metric }, (s) => {
         if (current === boardRequest) renderBoardInto(board, s, metric, () => load(metric));
       });
     };
@@ -349,10 +364,10 @@ export class App {
       h(
         'section',
         { class: 'screen text-screen' },
-        h('h2', {}, `従来ルールのランキング｜${def.name}`),
-        h('div', { class: 'ranking-tabs' }, h('button', { class: 'btn small', onclick: () => load('total') }, '総合'), h('button', { class: 'btn small', onclick: () => load('time') }, 'タイム')),
+        h('h2', {}, `${tx('ランキング')}｜${tx(def.name)}`),
+        h('div', { class: 'ranking-tabs' }, h('button', { class: 'btn small', onclick: () => load('total') }, tx('総合')), h('button', { class: 'btn small', onclick: () => load('time') }, tx('タイム'))),
         board,
-        h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
+        h('button', { class: 'btn', onclick: () => this.back() }, tx('もどる')),
       ),
     );
     load('total');
@@ -370,7 +385,7 @@ export class App {
     if (res === 'opened' || !fallbackEl) return;
     fallbackEl.classList.remove('hidden');
     fallbackEl.replaceChildren(
-      h('p', {}, res === 'copied' ? '投稿画面を開けなかったので、同じ文をコピーしました。' : '投稿画面を開けませんでした。次の文を写して使ってください。'),
+      h('p', {}, language() === 'ja' ? (res === 'copied' ? '投稿画面を開けなかったので、同じ文をコピーしました。' : '投稿画面を開けませんでした。次の文を写して使ってください。') : tx('投稿用の文章')),
       h('textarea', { readonly: true, rows: 4, 'data-testid': 'share-text' }, text),
     );
   }
@@ -451,7 +466,7 @@ export class App {
     const saved: SaveOutcome = this.records.saveLocalResult(result, replay);
     this.ranking.finishRun(result);
     const sent = this.ranking.flush();
-    const def = COURSE_DEFS[result.courseId]!;
+    const def = getCourse(result.courseId, result.courseVersion).def;
     const fallbackHolder: { el: HTMLElement | null } = { el: null };
     const el = renderResults(result, def.name, saved, def.challenge?.label ?? null, {
       retry: () => {
@@ -473,17 +488,16 @@ export class App {
     fallbackHolder.el = el.querySelector('[data-testid="share-fallback"]');
     this.root.classList.remove('in-game');
     this.setScreen(el);
-    const status = h('p', { class: 'ranking-status', 'aria-live': 'polite' });
+    const status = el.querySelector<HTMLElement>('.ranking-status')!;
     if (this.ranking.submissionStatus(result.runId) !== 'idle') {
       let previous: SubmissionStatus = 'idle';
-      el.append(status);
       this.updateRankingStatus = () => {
         const state = this.ranking.submissionStatus(result.runId);
         if (state === previous) return;
         previous = state;
-        status.textContent = state === 'accepted' ? 'ランキングに登録しました。'
-          : state === 'rejected' ? 'この走行はランキングに登録できませんでした。'
-          : 'ランキングへの送信待ちです。通信と受付を確認して自動で再送します。';
+        status.textContent = state === 'accepted' ? tx('ランキングに登録しました。')
+          : state === 'rejected' ? tx('この走行はランキングに登録できませんでした。')
+          : tx('集計中…');
         if (state === 'accepted') el.querySelector('[data-testid="board"]')?.dispatchEvent(new Event('ranking-updated'));
       };
       this.updateRankingStatus();
@@ -575,10 +589,10 @@ class GameRun {
     this.pauseCover = h(
       'div',
       { class: 'pause-cover hidden', 'data-testid': 'pause-cover' },
-      h('h2', {}, '一時停止'),
-      h('p', { class: 'pause-hint' }, '画面から指を離してから「再開」を押してください。'),
-      h('button', { class: 'btn primary big', 'data-testid': 'resume', onclick: (e: Event) => this.resume(e) }, '再開'),
-      h('button', { class: 'btn', 'data-testid': 'retire', onclick: () => this.retire() }, 'やめる'),
+      h('h2', {}, tx('一時停止')),
+      h('p', { class: 'pause-hint' }, tx('指を離してから再開を押してください。')),
+      h('button', { class: 'btn primary big', 'data-testid': 'resume', onclick: (e: Event) => this.resume(e) }, tx('再開')),
+      h('button', { class: 'btn', 'data-testid': 'retire', onclick: () => this.retire() }, tx('やめる')),
     );
     const isPractice = identity.mode === 'practice';
     if (isPractice && !freestyle) {
@@ -603,12 +617,12 @@ class GameRun {
         h(
           'div',
           { class: 'hud-top' },
-          H('time', h('span', { class: 'hud-time', 'data-testid': 'hud-time' }, isPractice ? '練習' : '0.00')),
-          h('div', { class: 'progress', 'aria-label': 'ゴールまでの進み具合' }, H('progress', h('i', {}))),
-          H('trick', h('span', { class: 'hud-trick', 'data-testid': 'hud-trick' }, '技 0')),
-          h('button', { class: 'pause-btn', 'aria-label': '一時停止', 'data-testid': 'pause', onclick: () => this.pauseFor('manual') }, 'Ⅱ'),
+          H('time', h('span', { class: 'hud-time', 'data-testid': 'hud-time' }, isPractice ? tx('練習') : '0.00')),
+          h('div', { class: 'progress', 'aria-label': tx('ゴールまでの進み具合') }, H('progress', h('i', {}))),
+          H('trick', h('span', { class: 'hud-trick', 'data-testid': 'hud-trick' }, `${tx('技')} 0`)),
+          h('button', { class: 'pause-btn', 'aria-label': tx('一時停止'), 'data-testid': 'pause', onclick: () => this.pauseFor('manual') }, 'Ⅱ'),
         ),
-        H('streak', h('div', { class: 'streak', 'aria-label': '連続成功' }, '○○○')),
+        H('streak', h('div', { class: 'streak', 'aria-label': tx('連続成功') }, '○○○')),
         H('boost', h('div', { class: 'boost hidden' })),
         this.trickNames?.element,
         H('center', h('div', { class: 'center-text', 'data-testid': 'center-text', 'aria-live': 'polite' })),
@@ -641,7 +655,7 @@ class GameRun {
   }
 
   private freeControls(): HTMLElement {
-    const targets = h('div', { class: 'free-run-targets', role: 'group', 'aria-label': '空中で回す対象' });
+    const targets = h('div', { class: 'free-run-targets', role: 'group', 'aria-label': tx('空中で回す対象') });
     for (const [target, label] of [['common', '両方'], ['dog', '犬のみ'], ['rider', '人のみ']] as const) {
       const select = () => {
         if (this.freeTarget === target) return;
@@ -654,7 +668,7 @@ class GameRun {
         onpointerdown: event => { if ((event as PointerEvent).button === 0) select(); },
         // 指を離す時の click で、別の指が選んだ新しい対象を上書きしない。
         onclick: event => { if ((event as MouseEvent).detail === 0) select(); },
-      }, label);
+      }, tx(label));
       targets.append(button);
     }
     this.hud.freeStatus = h('p', { class: 'free-run-hint' });
@@ -891,7 +905,7 @@ class GameRun {
     this.handleCues(cues);
     for (const e of events) {
       if (e.kind === 'countdown') this.flashCountdown(String(e.data?.n ?? ''));
-      if (e.kind === 'start') this.flashCountdown('スタート');
+      if (e.kind === 'start') this.flashCountdown(tx('スタート'));
     }
     if (this.coach) {
       const lastHint = this.coach.lastHint;
@@ -924,10 +938,9 @@ class GameRun {
         this.app.settings.light === 'weak', air, pivot);
     }
     // 連携が実際に成立した瞬間だけ、足元に短く「連携」を出す（ボタンの連打では出ない）。
-    if (this.view.takeFxCombo()) this.center.footMarks.push({ text: '連携', untilMs: t + 700 });
+    if (this.view.takeFxCombo()) this.center.footMarks.push({ text: tx('連携'), untilMs: t + 700 });
     if (this.hud.freeStatus) {
-      const text = sim.freeFlight ? '画面をなぞって回る。反対へ払うと減速' :
-        this.freePractice ? '上へ払ってジャンプ。指を離さずそのまま回転できます' : '上へ払ってジャンプ。指を離さずそのまま回転できます';
+      const text = tx(sim.freeFlight ? '画面をなぞって回る。反対へ払うと減速' : '上へ払ってジャンプ。指を離さずそのまま回転できます');
       if (this.hud.freeStatus.textContent !== text) this.hud.freeStatus.textContent = text;
     }
     this.updateHud(renderUs, t);
@@ -953,20 +966,25 @@ class GameRun {
     const sim = this.session.sim;
     if (this.identity.mode === 'competition') {
       const shown = sim.finished && sim.result ? sim.result.recordCs : Math.floor(renderUs / 10_000);
-      this.hud.time.textContent = formatTime(shown).replace('秒', '');
+      this.hud.time.textContent = formatTime(shown, false);
     }
-    this.hud.trick.textContent = `技 ${fmtInt(trickScore(sim.score, sim.id.rulesVersion))}`;
+    this.hud.trick.textContent = `${tx('技')} ${fmtInt(trickScore(sim.score, sim.id.rulesVersion))}`;
     const path = sim.course.paths.get(sim.pathId)!;
     const startU = sim.course.def.start.u;
     const prog = sim.course.goal ? Math.max(0, Math.min(1, (uAtS(path, sim.s) - startU) / sim.course.progressLength)) : 0;
     (this.hud.progress as HTMLElement).style.width = `${(prog * 100).toFixed(1)}%`;
     const st = sim.score.streak;
     this.hud.streak.textContent = '●'.repeat(st) + '○'.repeat(Math.max(0, 3 - st));
-    if (foodActive(sim.effects, sim.simUs)) {
-      const left = (sim.effects.foodUntilUs! - sim.simUs) / 1e6;
-      this.hud.boost.classList.remove('hidden');
-      this.hud.boost.replaceChildren(boneGauge(left / 5), h('span', {}, `加速 ${left.toFixed(1)}秒`));
-    } else this.hud.boost.classList.add('hidden');
+    const boost = (label: string, until: number) => {
+      const left = (until - sim.simUs) / 1e6;
+      return h('div', { class: 'boost-line' }, boneGauge(left / 5), h('span', {}, `${tx(label)} ${left.toFixed(1)}${tx('秒')}`));
+    };
+    const boosts: HTMLElement[] = [];
+    if (foodActive(sim.effects, sim.simUs)) boosts.push(boost('加速', sim.effects.foodUntilUs!));
+    const jumpUntilUs = sim.effects.jumpUntilUs;
+    if (jumpUntilUs !== null && jumpUntilUs > sim.simUs) boosts.push(boost('ジャンプ力1.3倍', jumpUntilUs));
+    this.hud.boost.classList.toggle('hidden', boosts.length === 0);
+    this.hud.boost.replaceChildren(...boosts);
     const ct = this.center.current(t);
     const landing = ct ? this.center.landingText : undefined;
     const center = this.hud.center;
@@ -1136,7 +1154,7 @@ class GameRun {
       this.practicePanel.replaceChildren(
         h('h3', {}, '練習の手順はここまで'),
         h('p', {}, 'このまま練習を続けるか、本番へ進みましょう。練習の記録は競技の記録に入りません。'),
-        h('div', { class: 'row-btns' }, h('button', { class: 'btn primary', 'data-testid': 'to-race', onclick: () => this.app.startRun('competition') }, '本番へ'), this.trickLabButton(), h('button', { class: 'btn', onclick: () => this.retire() }, 'やめる')),
+        h('div', { class: 'row-btns' }, h('button', { class: 'btn primary', 'data-testid': 'to-race', onclick: () => this.app.startRun('competition') }, '本番へ'), this.trickLabButton(), h('button', { class: 'btn', onclick: () => this.retire() }, tx('やめる'))),
       );
       return;
     }
@@ -1162,7 +1180,7 @@ class GameRun {
         } }, '次へ'),
         h('button', { class: 'btn small primary', 'data-testid': 'to-race', onclick: () => this.app.startRun('competition') }, '本番へ'),
         this.trickLabButton(),
-        h('button', { class: 'btn small', onclick: () => this.retire() }, 'やめる'),
+        h('button', { class: 'btn small', onclick: () => this.retire() }, tx('やめる')),
       ),
     );
   }

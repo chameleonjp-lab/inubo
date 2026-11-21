@@ -1,3 +1,4 @@
+import { t } from '../ui/i18n';
 import { TRICK_LANDING, trickLandingText, type TrickLandingText } from './trick-landing';
 import { FX_TARGETS } from './trick-fx-81';
 import { landingSoundName } from './trick-fx';
@@ -129,33 +130,35 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'landFail':
       return cue(ev, 'E14', 'underRotatedLabel', 'landBad', { text: d.reason === 'tilted' ? '足が傾いた' : '回転不足', priority: 1 });
     case 'collide':
-      return cue(ev, 'E15', 'impactLines', 'thud', { text: 'ストップ', priority: 1 });
+      return cue(ev, 'E15', 'impactLines', 'thud', { text: t('ストップ'), priority: 1 });
     case 'relaunch':
       return cue(ev, 'E15', 'brace', 'kick');
     case 'clear':
-      return cue(ev, 'E11', 'edgePaw', 'tap', { footMark: '越えた' });
+      return cue(ev, 'E11', 'edgePaw', 'tap', { footMark: t('越えた') });
     case 'railOn':
       return cue(ev, 'E12', 'railDot', 'railOn');
     case 'railOff':
       return cue(ev, 'E12', 'railLineEnd', null);
     case 'railScore':
       return Number(d.points ?? 0) > 0
-        ? cue(ev, 'E12', 'railSpark', 'confirm', { text: `手すり ${Math.floor(Number(d.distMm ?? 0) / 1000)}m ＋${d.points}`, priority: 2 })
+        ? cue(ev, 'E12', 'railSpark', 'confirm', { text: `${t(d.wall ? '塀グラインド' : '手すりグラインド')} ＋${d.points}`, priority: 2 })
         : cue(ev, 'E12', 'railLineEnd', null);
     case 'railLost':
       return cue(ev, 'E14', 'stumble', 'recover', { text: '手すり 0点', priority: 1 });
     case 'food':
-      return cue(ev, 'E18', 'boostGauge', 'bag', { text: '加速 5秒', priority: 3 });
+      return cue(ev, 'E18', 'boostGauge', 'bag', { text: `${t('加速')} 5${t('秒')}`, priority: 3 });
+    case 'jumpBoost':
+      return cue(ev, 'E18', 'boostGauge', 'up2', { text: `${t('ジャンプ力1.3倍')} · 5${t('秒')}`, priority: 3 });
     case 'boostEnd':
       return cue(ev, 'E18', 'windLinesLong', 'downSoft');
     case 'poop':
-      return cue(ev, 'E19', 'brownPrints', 'slip', { text: '減速', priority: 3 });
+      return cue(ev, 'E19', 'brownPrints', 'slip', { text: t('減速'), priority: 3 });
     case 'slowEnd':
       return cue(ev, 'E19', 'brownPrints', 'stepsBack');
     case 'guide':
       return cue(ev, 'E20', 'guidePrints', 'wood', { text: '道しるべ', priority: 3 });
     case 'fork':
-      return cue(ev, d.trick ? 'E20' : 'E11', d.trick ? 'forkSign' : 'signSway', 'stepChoose', { footMark: String(d.label ?? '') });
+      return cue(ev, d.trick ? 'E20' : 'E11', d.trick ? 'forkSign' : 'signSway', 'stepChoose', { footMark: t(String(d.label ?? '')) });
     case 'merge':
       return cue(ev, 'E20', 'printsSettle', null);
     case 'guideClose':
@@ -163,7 +166,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'checkpoint':
       return cue(ev, 'E17', 'flagUp', 'flag');
     case 'fall':
-      return cue(ev, 'E17', 'fadeOut', 'fallDown', { text: '落下', priority: 1 });
+      return cue(ev, 'E17', 'fadeOut', 'fallDown', { text: t('落下'), priority: 1 });
     case 'respawn':
       return cue(ev, 'E17', 'respawnShow', 'respawn');
     case 'sectionScore':
@@ -171,7 +174,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'sectionMiss':
       return null;
     case 'streak':
-      return cue(ev, 'E21', 'streakLabel', 'chord3', { text: d.everyLanding ? undefined : '3区間連続 ＋100', footMark: d.everyLanding ? '3連続 ＋100' : undefined, priority: 2 });
+      return cue(ev, 'E21', 'streakLabel', 'chord3', { text: d.everyLanding ? undefined : '3区間連続 ＋100', footMark: d.everyLanding ? `${t('3連続')} ＋100` : undefined, priority: 2 });
     case 'gateLamp':
       return cue(ev, 'E16', 'lamp', 'bell');
     case 'gateRise':
@@ -182,7 +185,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'resume':
       return cue(ev, 'E23', 'reveal', 'ambientUp');
     case 'goal':
-      return cue(ev, 'E24', 'tape', 'arrive', { text: 'ゴール', priority: 2 });
+      return cue(ev, 'E24', 'tape', 'arrive', { text: t('ゴール'), priority: 2 });
   }
   return null;
 }

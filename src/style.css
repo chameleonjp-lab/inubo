@@ -1036,11 +1036,6 @@ ol.sections {
   color: #ffffff;
 }
 
-.result-techniques { margin-block: 12px; }
-.result-techniques h3 { font-size: 1rem; }
-.result-techniques ol { padding: 0; list-style: none; }
-.result-techniques li { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #19374638; text-align: left; }
-.result-techniques strong { flex: none; color: var(--effect-shade); }
 
 .trick-impact {
   position: absolute;
@@ -1049,3 +1044,54 @@ ol.sections {
   height: 100%;
   pointer-events: none;
 }
+
+.home-language {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  width: fit-content;
+  max-width: 100%;
+}
+.home-language select {
+  max-width: min(60vw, 15rem);
+  min-height: 44px;
+  padding: .3rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: .65rem;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.home h1.logo {
+  margin: .8rem auto 1.15rem;
+  text-align: center;
+  font-size: clamp(2.35rem, 8.8vw, 4.5rem);
+  line-height: 1.05;
+}
+.home .logo small { margin-top: .5rem; line-height: 1.35; }
+@media (orientation: landscape) and (max-height: 500px) {
+  .home { position: relative; }
+  .home-language {
+    position: absolute;
+    top: calc(10px + var(--safe-top));
+    left: max(10px, var(--safe-left));
+  }
+  .home-language select { max-width: 20vw; }
+  .home h1.logo { font-size: clamp(2.2rem, 7vw, 3.4rem); }
+}
+.results .board-list {
+  max-height: min(46vh, 28rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.board-list li { grid-template-columns: minmax(2rem, auto) minmax(0, 1fr) minmax(0, .74fr) minmax(0, .84fr); }
+.board-list .dog, .board-list .val { overflow-wrap: anywhere; }
+.board-list .val { text-align: right; font-weight: 800; }
+.ranking-status:empty { display: none; }
+.boost-line { display: flex; align-items: center; gap: .28rem; }
+.results .actions:not(.result-bottom) {
+  display: grid;
+  grid-template-columns: minmax(0, 23rem);
+  margin-inline: auto;
+}
+.result-bottom a { align-content: center; text-decoration: none; text-align: center; }

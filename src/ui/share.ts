@@ -1,3 +1,4 @@
+import { language, t } from './i18n';
 import type { RunResult } from '../game/types';
 
 /**
@@ -15,18 +16,22 @@ export function officialUrl(): string | null {
 }
 
 /** 完走タイムの表示（仕様書の例と同じく、秒と 0.01 秒で表す。例: 76.00秒）。 */
-export function formatTime(recordCs: number): string {
-  return `${Math.floor(recordCs / 100)}.${String(recordCs % 100).padStart(2, '0')}秒`;
+export function formatTime(recordCs: number, unit = true): string {
+  const time = `${Math.floor(recordCs / 100)}.${String(recordCs % 100).padStart(2, '0')}`;
+  if (!unit) return time;
+  return language() === 'ja' ? time + '秒' : `${(recordCs / 100).toLocaleString(language(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${t('秒')}`;
 }
 
 export function resultShareText(r: RunResult, courseName: string, dogName: string, url: string | null): string {
   const lines = [`イヌボー｜${courseName}を${dogName}で完走！`, `タイム ${formatTime(r.recordCs)}／総合 ${r.total.toLocaleString('ja-JP')}点`];
+  if (language() !== 'ja') lines.splice(0, 2, `${t('イヌボー')}｜${t(courseName)} · ${t(dogName)}`, `${t('タイム')} ${formatTime(r.recordCs)} · ${t('総合')} ${r.total.toLocaleString(language())} ${t('点')}`);
   if (url) lines.push(url);
   return lines.join('\n');
 }
 
 export function homeShareText(url: string | null): string {
   const lines = ['イヌボー｜犬がスケボーになって街を滑るゲーム。技を決めるか、最速を狙うか。'];
+  if (language() !== 'ja') lines[0] = t('イヌボー') + '｜' + t('犬のスケボー');
   if (url) lines.push(url);
   return lines.join('\n');
 }

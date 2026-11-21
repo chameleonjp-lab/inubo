@@ -245,17 +245,32 @@ test('画面の向きを変えると一時停止する', async ({ page }) => {
 test('V17・V18（試験用の接続先）: 名前を入れて走ると、結果の順位に開始時の名前で 1 件だけ出る', async ({ page }) => {
   await page.goto('/?ranking=mock&autoplay=safe&speed=12');
   await page.fill('[data-testid="name"]', 'テスト<犬>&');
-  await expect(page.locator('#ranking-name-note')).toContainText('公開ランキングに送信されません');
-  // 旧ルールの公開ランキング試験は、利用者に見えない検査用入口から継続する。
-  await page.evaluate(() => (window as unknown as {
-    __inubo: { app: { startRun: (mode: 'competition', version: string) => void } }
-  }).__inubo.app.startRun('competition', 'rules-1'));
+  await expect(page.locator('#ranking-name-note')).toContainText('ランキングに公開');
+  await page.getByTestId('start').click();
   await page.waitForSelector('[data-testid="results"]', { timeout: 90_000 });
-  await page.getByRole('button', { name: 'ランキング（総合）' }).click();
   await expect(page.locator('[data-testid="board"] [data-state="ready"] li')).toHaveCount(1);
   await expect(page.locator('[data-testid="board"]')).toContainText('テスト<犬>&');
-  await page.getByRole('button', { name: 'ランキング（タイム）' }).click();
-  await expect(page.locator('[data-testid="board"] [data-state="ready"] li')).toHaveCount(1);
+  const order = await page.getByTestId('results').evaluate(section =>
+    [...section.querySelectorAll('[data-testid="retry"], [data-testid="share"], [data-testid="board"], [data-testid="detail-ranking"]')]
+      .map(element => element.getAttribute('data-testid')));
+  expect(order).toEqual(['retry', 'share', 'board', 'detail-ranking']);
+  await expect(page.getByText('今回の高得点トリック')).toHaveCount(0);
+  await expect(page.getByTestId('detail-ranking')).toHaveAttribute('href', /chameleonjp_lab\/inubo-ranking\.html/);
+});
+
+test('ホームから15言語を選べ、リロードしても遊び方と操作表示に選択が反映される', async ({ page }) => {
+  await page.goto('/');
+  const select = page.getByTestId('language');
+  await expect(select.locator('option')).toHaveCount(15);
+  await select.selectOption('fr');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Inubo');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+  await page.getByRole('button', { name: 'Comment jouer' }).click();
+  await expect(page.getByText('Les os renforcent le saut', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Retour' }).click();
+  await page.getByTestId('start').click();
+  await expect(page.getByTestId('run-target-rider')).toHaveText('Skateur seul');
 });
 
 test('公開前（既定）: 名前の欄とランキングへの導線を出さない', async ({ page }) => {

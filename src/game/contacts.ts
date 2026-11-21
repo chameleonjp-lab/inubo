@@ -192,16 +192,26 @@ export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): F
   if (m.air) {
     // 手すりへ上から乗る
     for (const r of p.rails) {
-      if (r.s1 < m.s0 || r.s0 - FOOT_FRONT > sEnd) continue;
+      if (r.s1 < m.s0 || r.s0 - FOOT_FRONT > sEnd + 1e-9) continue;
       const f = (tau: number) => {
         const pt = at(tau);
         return pt.y - railTopAt(r, pt.s);
       };
+      if (r.wall && run.jump?.edgeWallId === r.id) {
+        const reachesWall = (tau: number) => {
+          const pt = at(tau);
+          return f(tau) >= 0 && pt.s >= r.s0 - FOOT_FRONT - 1e-9 && pt.s <= r.s1
+            && pt.x >= r.wall!.x0 - FOOT_HALF_WIDTH - 1e-9 && pt.x <= r.wall!.x1 + FOOT_HALF_WIDTH + 1e-9;
+        };
+        if (reachesWall(spanUs)) add(firstTrue(spanUs, reachesWall), { type: 'railMount', rail: r });
+        continue;
+      }
       if (f(0) <= 0 || f(spanUs) > 0) continue;
       const tau = firstTrue(spanUs, (t) => f(t) <= 0);
       const pt = at(tau);
       // 足元（前足は鼻先の長さまで）が手すりに重なっていれば乗れる。
-      if (pt.vy < 0 && pt.s >= r.s0 - FOOT_FRONT && pt.s <= r.s1 && Math.abs(pt.x - r.x) <= RAIL_SNAP) add(tau, { type: 'railMount', rail: r });
+      const onTop = r.wall ? pt.x >= r.wall.x0 && pt.x <= r.wall.x1 : Math.abs(pt.x - r.x) <= RAIL_SNAP;
+      if (pt.vy < 0 && pt.s >= r.s0 - FOOT_FRONT && pt.s <= r.s1 && onTop) add(tau, { type: 'railMount', rail: r });
     }
     // 着地
     const landPred = (tau: number) => {

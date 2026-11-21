@@ -1,5 +1,6 @@
 import { COURSE_DEFS } from '../content/courses/index';
-import { RULES_VERSION } from '../game/rules';
+import { parkFreestyle } from '../content/courses/park-freestyle';
+import { FREE_RULES_VERSION, RULES_VERSION } from '../game/rules';
 import { timeScore } from '../game/scoring';
 import type { BoardQuery, BoardRow, FinishPayload, SendStatus, StartSnapshot, Transport } from './client';
 
@@ -28,6 +29,8 @@ function sameJson(a: unknown, b: unknown): boolean {
 
 /** 送信待ちの記録には、その走行の版が使っていた採点基準を適用する。 */
 function scoreCriteria({ courseId, courseVersion, rulesVersion }: Pick<StartSnapshot, 'courseId' | 'courseVersion' | 'rulesVersion'>) {
+  if (rulesVersion === FREE_RULES_VERSION)
+    return courseId === 'park' && courseVersion === parkFreestyle.version ? parkFreestyle.timeScore : null;
   if (rulesVersion !== RULES_VERSION) return null;
   if (courseId === 'park') {
     if (courseVersion === 'park-1') return { fullCs: 6000, zeroCs: 11000 };
@@ -79,7 +82,8 @@ export class MockRankingServer implements Transport {
       if (!criteria) return 'rejected';
       const ints = [f.recordCs, f.timeScore, f.trickScore, f.total];
       if (!ints.every((v) => Number.isInteger(v) && v >= 0)) return 'rejected';
-      if (f.trickScore > 5000 || f.timeScore > 5000 || f.total > 10000 || f.recordCs <= 0) return 'rejected';
+      if (f.timeScore > 5000 || f.total > 2_147_483_647 || f.recordCs <= 0 || f.recordCs > 2_147_483_647
+        || (f.rulesVersion !== FREE_RULES_VERSION && f.trickScore > 5000)) return 'rejected';
       // サーバー側の検算: タイム点はコースの基準から計算し直し、総合はタイム点＋技点。
       if (timeScore(f.recordCs, criteria.fullCs, criteria.zeroCs) !== f.timeScore) return 'rejected';
       if (f.timeScore + f.trickScore !== f.total) return 'rejected';

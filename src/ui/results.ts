@@ -1,3 +1,4 @@
+import { language, t } from './i18n';
 import { dogEffectStyle } from '../content/dog-effects';
 import './result-celebration.css';
 import { resultCelebration } from './result-celebration';
@@ -21,7 +22,7 @@ export interface ResultsActions {
 }
 
 export function renderResults(r: RunResult, courseName: string, saved: SaveOutcome, challengeLabel: string | null, act: ResultsActions): HTMLElement {
-  const paw = (on: boolean, label: string) => (on ? h('span', { class: 'best-paw', 'aria-label': label, title: label }, '🐾 更新') : null);
+  const paw = (on: boolean, label: string) => (on ? h('span', { class: 'best-paw', 'aria-label': language() === 'ja' ? label : t('更新'), title: language() === 'ja' ? label : t('更新') }, `🐾 ${t('更新')}`) : null);
   const celebration = resultCelebration(r.total);
   const ornaments = Array.from({ length: celebration.ornaments }, (_, i) => {
     const pair = Math.floor(i / 2);
@@ -38,57 +39,47 @@ export function renderResults(r: RunResult, courseName: string, saved: SaveOutco
       h('li', { class: `sec sec-${s.state}`, title: `区間${i + 1}` }, h('span', { class: 'sec-n' }, String(i + 1)), h('span', { class: 'sec-p' }, s.state === 'scored' ? fmtInt(s.points) : s.state === 'missed' ? '－' : '・')),
     ),
   ) : null;
-  const techniques = r.sections.length === 0 ? r.jumps.filter(jump => jump.awarded > 0).sort((a, b) => b.awarded - a.awarded).slice(0, 3) : [];
   const near = r.nearMiss
     ? h('div', { class: 'near-miss', 'data-testid': 'near-miss' }, h('h3', {}, `惜しかった区間: ${r.nearMiss.sectionNumber}`), h('p', {}, r.nearMiss.hint))
     : null;
-  const stamp = saved.newStamp ? h('p', { class: 'stamp-new' }, `🐾 ${DOGS[r.dogId].name}の「${courseName}」完走スタンプ`) : null;
-  const challenge = saved.newChallenge && challengeLabel ? h('p', { class: 'stamp-new' }, `🐾 寄り道課題を達成: ${challengeLabel}`) : null;
-  const notSaved = saved.attempted && !saved.saved ? h('p', { class: 'warn' }, 'この端末に記録を保存できませんでした。今回の結果はこの画面で確認できます。') : null;
+  const stamp = saved.newStamp ? h('p', { class: 'stamp-new' }, `🐾 ${t('完走スタンプ')} · ${t(DOGS[r.dogId].name)} · ${t(courseName)}`) : null;
+  const challenge = saved.newChallenge && challengeLabel ? h('p', { class: 'stamp-new' }, `🐾 ${t('寄り道課題を達成')}${language() === 'ja' ? ' · ' + challengeLabel : ''}`) : null;
+  const notSaved = saved.attempted && !saved.saved ? h('p', { class: 'warn' }, t('記録を保存できませんでした。')) : null;
 
-  const board = h('div', { class: 'board hidden', 'data-testid': 'board' });
-  let rankingBlock: HTMLElement | null = null;
-  let refreshBoard: (() => void) | null = null;
-  board.addEventListener('ranking-updated', () => refreshBoard?.());
+  const status = h('p', { class: 'ranking-status', 'aria-live': 'polite' });
+  const board = h('div', { class: 'board', 'data-testid': 'board', 'aria-live': 'polite' });
+  const detailURL = new URL('https://chameleonjp-lab.github.io/chameleonjp_lab/inubo-ranking.html');
+  detailURL.searchParams.set('lang', language());
   if (act.ranking) {
-    let boardRequest = 0;
-    const show = (metric: 'total' | 'time') => {
-      board.classList.remove('hidden');
-      refreshBoard = () => show(metric);
-      const current = ++boardRequest;
-      act.ranking!(metric, (s) => {
-        if (current === boardRequest) renderBoard(board, s, metric, () => show(metric));
+    let request = 0;
+    const show = () => {
+      const current = ++request;
+      act.ranking!('total', state => {
+        if (request === current) renderBoard(board, state, 'total', show);
       });
     };
-    rankingBlock = h(
-      'div',
-      { class: 'ranking-tabs' },
-      h('button', { class: 'btn small', onclick: () => show('total') }, 'ランキング（総合）'),
-      h('button', { class: 'btn small', onclick: () => show('time') }, 'ランキング（タイム）'),
-    );
+    board.addEventListener('ranking-updated', show);
+    show();
   }
 
   return h(
     'section',
     { class: 'screen results', 'data-testid': 'results', style: dogEffectStyle(r.dogId) },
-    h('p', { class: 'res-course' }, `${courseName}｜${DOGS[r.dogId].name}`),
+    h('p', { class: 'res-course' }, `${t(courseName)}｜${t(DOGS[r.dogId].name)}`),
     h('div', { class: 'result-celebration', 'data-result-stage': celebration.stage, 'data-result-band': celebration.band, 'data-testid': 'result-celebration' },
       h('div', { class: 'result-ornaments', 'aria-hidden': 'true' }, ornaments),
-      h('div', { class: 'total-wrap' }, h('div', { class: 'total', 'data-testid': 'total' }, fmtInt(r.total)), h('span', { class: 'total-unit' }, '点'), paw(saved.newBestScore, '総合の自己最高を更新')),
-      h('h2', { class: 'result-title', 'data-testid': 'result-title' }, celebration.title),
+      h('div', { class: 'total-wrap' }, h('div', { class: 'total', 'data-testid': 'total' }, fmtInt(r.total)), h('span', { class: 'total-unit' }, t('点')), paw(saved.newBestScore, '総合の自己最高を更新')),
+      h('h2', { class: 'result-title', 'data-testid': 'result-title' }, language() === 'ja' ? celebration.title : t('称号 {n}', { n: celebration.stage })),
     ),
     h(
       'dl',
       { class: 'breakdown' },
-      h('div', { class: 'row reveal', style: 'animation-delay:.2s' }, h('dt', {}, '完走タイム'), h('dd', { 'data-testid': 'time' }, formatTime(r.recordCs), paw(saved.newBestTime, '完走タイムの自己最速を更新'))),
-      h('div', { class: 'row reveal', style: 'animation-delay:.45s' }, h('dt', {}, 'タイム点'), h('dd', { 'data-testid': 'time-score' }, fmtInt(r.timeScore))),
-      h('div', { class: 'row reveal', style: 'animation-delay:.7s' }, h('dt', {}, '技点'), h('dd', { 'data-testid': 'trick-score' }, fmtInt(r.trickScore))),
+      h('div', { class: 'row reveal', style: 'animation-delay:.2s' }, h('dt', {}, t('完走タイム')), h('dd', { 'data-testid': 'time' }, formatTime(r.recordCs), paw(saved.newBestTime, '完走タイムの自己最速を更新'))),
+      h('div', { class: 'row reveal', style: 'animation-delay:.45s' }, h('dt', {}, t('タイム点')), h('dd', { 'data-testid': 'time-score' }, fmtInt(r.timeScore))),
+      h('div', { class: 'row reveal', style: 'animation-delay:.7s' }, h('dt', {}, t('技点')), h('dd', { 'data-testid': 'trick-score' }, fmtInt(r.trickScore))),
     ),
-    h('p', { class: 'trick-detail' }, `ジャンプの技 ${fmtInt(r.jumpPoints)}・手すり ${fmtInt(r.railPoints)}・連続 ${fmtInt(r.streakBonus)}${r.trickRaw > r.trickScore ? `（上限 5,000 を適用）` : ''}`),
+    h('p', { class: 'trick-detail' }, t('ジャンプの技 {jump}・手すりと塀 {rail}・連続 {combo}', { jump: fmtInt(r.jumpPoints), rail: fmtInt(r.railPoints), combo: fmtInt(r.streakBonus) })),
     sections,
-    techniques.length ? h('div', { class: 'result-techniques' },
-      h('h3', {}, '今回の高得点トリック'),
-      h('ol', {}, techniques.map(jump => h('li', {}, h('span', {}, jump.names.join('＋')), h('strong', {}, fmtInt(jump.awarded) + '点'))))) : null,
     near,
     stamp,
     challenge,
@@ -96,28 +87,31 @@ export function renderResults(r: RunResult, courseName: string, saved: SaveOutco
     h(
       'div',
       { class: 'actions' },
-      h('button', { class: 'btn primary', 'data-testid': 'retry', onclick: act.retry }, 'もう一度（同じ犬・コース）'),
-      h('button', { class: 'btn x-share', 'data-testid': 'share', onclick: act.share }, 'Xでシェア'),
-      h('button', { class: 'btn', 'data-testid': 'home', onclick: act.home }, 'ホームへ'),
+      h('button', { class: 'btn primary', 'data-testid': 'retry', onclick: act.retry }, t('再スタート')),
+      h('button', { class: 'btn x-share', 'data-testid': 'share', onclick: act.share }, t('Xでシェア')),
     ),
     h('div', { class: 'share-fallback hidden', 'data-testid': 'share-fallback' }),
-    rankingBlock,
-    board,
+    act.ranking ? status : null,
+    act.ranking ? board : null,
+    h('div', { class: 'actions result-bottom' },
+      act.ranking ? h('a', { class: 'btn', href: detailURL.href, 'data-testid': 'detail-ranking' }, t('詳細ランキング')) : null,
+      h('button', { class: 'btn', 'data-testid': 'home', onclick: act.home }, t('ホームへ'))),
+
   );
 }
 
 export function renderBoard(el: HTMLElement, s: BoardState, metric: 'total' | 'time', retry: () => void): void {
   el.replaceChildren();
-  el.append(h('h3', {}, metric === 'total' ? '総合スコアの順位（上位30人）' : '完走タイムの順位（上位30人）'));
-  if (s.kind === 'loading') el.append(h('p', { 'data-state': 'loading' }, '読み込み中…'));
-  else if (s.kind === 'empty') el.append(h('p', { 'data-state': 'empty' }, 'まだ記録がありません。'));
-  else if (s.kind === 'error') el.append(h('p', { 'data-state': 'error' }, '読み込めませんでした。'), h('button', { class: 'btn small', onclick: retry }, '再試行'));
+  el.append(h('h3', {}, `${t('上位30人')} · ${t(metric === 'total' ? '総合' : 'タイム')}`));
+  if (s.kind === 'loading') el.append(h('p', { 'data-state': 'loading' }, t('読み込み中…')));
+  else if (s.kind === 'empty') el.append(h('p', { 'data-state': 'empty' }, t('まだ記録がありません。')));
+  else if (s.kind === 'error') el.append(h('p', { 'data-state': 'error' }, t('読み込めませんでした。')), h('button', { class: 'btn small', onclick: retry }, t('再試行')));
   else if (s.kind === 'ready') {
     el.append(
       h(
         'ol',
-        { class: 'board-list', 'data-state': 'ready' },
-        s.rows.map((r) => h('li', {}, h('span', { class: 'rank' }, `${r.rank}位`), h('span', { class: 'name' }, r.displayName), h('span', { class: 'dog' }, DOGS[r.dogId].name), h('span', { class: 'val' }, metric === 'total' ? `${fmtInt(r.value)}点` : formatTime(r.value)))),
+        { class: 'board-list', 'data-state': 'ready', tabindex: 0, 'aria-label': t('上位30人') },
+        s.rows.map((r) => h('li', {}, h('span', { class: 'rank' }, t('{n}位', { n: fmtInt(r.rank) })), h('span', { class: 'name' }, r.displayName), h('span', { class: 'dog' }, t(DOGS[r.dogId].name)), h('span', { class: 'val' }, metric === 'total' ? `${fmtInt(r.value)} ${t('点')}` : formatTime(r.value)))),
       ),
     );
   }

@@ -2,11 +2,12 @@ import './trick-landing.css';
 import './trick-name-flow.css';
 import type { TrickLandingText } from '../view/trick-landing';
 import { h } from './dom';
+import { t, translateTrickName } from './i18n';
 
 export function showTrickLanding(element: HTMLElement, landing: TrickLandingText, showName = true): void {
   const changes = [
-    landing.switchCount > 0 ? `対象切替 ${landing.switchCount}回` : '',
-    landing.directionCount > 0 ? `方向切替 ${landing.directionCount}回` : '',
+    landing.switchCount > 0 ? `${t('対象切替')} ${landing.switchCount}` : '',
+    landing.directionCount > 0 ? `${t('方向切替')} ${landing.directionCount}` : '',
   ].filter(Boolean).join('・');
   const numeric = landing.score.startsWith('＋');
   element.replaceChildren(h('div', {
@@ -20,16 +21,16 @@ export function showTrickLanding(element: HTMLElement, landing: TrickLandingText
     'data-fx-level': String(landing.landingLevel),
   },
     showName ? h('div', { class: 'trick-landing-title' },
-      h('span', { class: 'trick-landing-name', 'data-testid': 'landing-trick-name' }, landing.name)) : null,
+      h('span', { class: 'trick-landing-name', 'data-testid': 'landing-trick-name' }, translateTrickName(landing.name))) : null,
     h('div', { class: 'trick-landing-points' },
       h('span', {
         class: `trick-landing-score${numeric ? ' is-numeric' : ''}`,
         'data-testid': 'landing-trick-score',
-      }, landing.score, numeric ? h('small', {}, '点') : null),
-      landing.full ? h('span', { class: 'trick-landing-full' }, '回転満点') : null,
+      }, landing.score, numeric ? h('small', {}, t('点')) : null),
+      landing.full ? h('span', { class: 'trick-landing-full' }, t('回転満点')) : null,
       landing.switchBonus > 0
         ? h('span', { class: 'trick-landing-combo', 'data-testid': 'landing-combo' },
-          h('strong', {}, `連携 ＋${landing.switchBonus.toLocaleString('ja-JP')}点`), changes ? h('small', {}, changes) : null)
+          h('strong', {}, `${t('連携')} ＋${landing.switchBonus.toLocaleString()} ${t('点')}`), changes ? h('small', {}, changes) : null)
         : null),
   ));
 }
@@ -57,7 +58,7 @@ function scrollDuration(from: number, width: number): number {
 export class TrickNameFlow {
   private readonly lanes = Array.from({ length: MAX_TRICK_NAMES }, (_, i) =>
     h('div', { class: 'trick-name-lane', 'data-lane': i + 1 }));
-  readonly element = h('div', { class: 'trick-name-flow', 'data-testid': 'trick-name-flow', role: 'log', 'aria-label': '決めた技' }, this.lanes);
+  readonly element = h('div', { class: 'trick-name-flow', 'data-testid': 'trick-name-flow', role: 'log', 'aria-label': t('決めた技') }, this.lanes);
   private active: FlyingTrick[] = [];
   private width = 0;
   private paused = false;
@@ -89,7 +90,7 @@ export class TrickNameFlow {
       'data-target': landing.fxTarget ?? undefined,
       'data-level': level,
       style: `--flow-level:${level};--flow-weight:${weight};--flow-saturation:${saturation}%`,
-    }, h('span', {}, landing.name));
+    }, h('span', {}, translateTrickName(landing.name)));
     lane.append(label);
     const width = label.getBoundingClientRect().width;
     const animation = label.animate(scrollKeyframes(from, width), { duration: scrollDuration(from, width), fill: 'both' });
