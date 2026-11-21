@@ -194,6 +194,74 @@ test('設定: 音のオン・オフ、音量、揺れ、光の量を別々に変
   await expect(page.locator('[data-testid="light"]')).toHaveValue('weak');
 });
 
+test.describe('PCの操作', () => {
+  test.use({ hasTouch: false });
+
+  test('A・S・Dで対象を切り替え、マウスでドラッグしたまま次の動きに反映する', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('start').click();
+    for (const [target, key] of [['common', 'A'], ['dog', 'S'], ['rider', 'D']] as const) {
+      const button = page.getByTestId(`run-target-${target}`);
+      await expect(button).toHaveAttribute('aria-keyshortcuts', key);
+      await expect(button.locator('kbd')).toBeVisible();
+    }
+    await expect.poll(async () => (await gameState(page))?.phase).toBe('running');
+    const box = (await page.getByTestId('surface').boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height * 0.67;
+    await page.mouse.move(x, y - 90);
+    await expect.poll(async () => (await gameState(page))?.swipeJumps).toBe(0);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y - 90);
+    for (const [n, [key, target]] of [['s', 'dog'], ['d', 'rider'], ['a', 'common']].entries()) {
+      await page.keyboard.press(key);
+      await expect(page.getByTestId(`run-target-${target}`)).toHaveAttribute('aria-pressed', 'true');
+      await page.mouse.move(x + (n + 1) * 15, y - 90);
+    }
+    await expect.poll(() => page.evaluate(() => {
+      const game = (window as unknown as { __inubo: { app: { game: { session: {
+        sim: { freeFlight: { motion: { seen: Map<number, { target: string }> } } | null };
+      } } } } }).__inubo.app.game;
+      return [...(game.session.sim.freeFlight?.motion.seen.values() ?? [])].map(input => input.target);
+    })).toEqual(['dog', 'rider', 'common']);
+    await page.mouse.up();
+  });
+
+  test('設定でキー変更、重複時の交換、再読み込みと初期値への復帰ができる', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('settings').click();
+    const bind = async (target: string, key: string) => {
+      await page.getByTestId(`bind-key-${target}`).click();
+      await page.keyboard.press(key);
+    };
+    await bind('dog', 'k');
+    await bind('rider', 'k');
+    await bind('common', 'Space');
+    await bind('rider', 'Escape');
+    await expect(page.getByTestId('bind-key-common')).toHaveText('Space');
+    await expect(page.getByTestId('bind-key-dog')).toHaveText('D');
+    await expect(page.getByTestId('bind-key-rider')).toHaveText('K');
+    await page.reload();
+    await page.getByTestId('start').click();
+    await page.keyboard.press('k');
+    await expect(page.getByTestId('run-target-rider')).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('s');
+    await expect(page.getByTestId('run-target-rider')).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('run-target-common')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('pause').click();
+    await page.keyboard.press('k');
+    await expect(page.getByTestId('run-target-common')).toHaveAttribute('aria-pressed', 'true');
+    await page.getByTestId('retire').click();
+    await page.getByTestId('settings').click();
+    await page.getByTestId('reset-target-keys').click();
+    for (const [target, key] of [['common', 'A'], ['dog', 'S'], ['rider', 'D']]) {
+      await expect(page.getByTestId(`bind-key-${target}`)).toHaveText(key);
+    }
+  });
+});
+
 test('練習広場: 5 つの手順を順に試せ、途中で次へ・本番へ進める。練習は記録を作らない', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('home').waitFor();

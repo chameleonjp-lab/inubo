@@ -17,6 +17,8 @@ import { foodActive } from '../game/items';
 import { maxSpeed } from '../game/motion';
 import { GestureRecognizer } from '../input/gestures';
 import { FreePointerController } from '../input/free-pointer';
+import { keyLabel, ROTATION_TARGETS, targetKeyFromEvent } from '../input/target-keys';
+import { renderTargetKeySettings } from './target-key-settings';
 import { COURSE_DEFS, getCourse } from '../content/courses/index';
 import { parkFreestyle } from '../content/courses/park-freestyle';
 import { DOGS, DOG_ORDER } from '../content/dogs';
@@ -303,6 +305,7 @@ export class App {
         h('p', {}, tx(helpParagraphs[0])),
         h('ul', {}, helpParagraphs.slice(1, 5).map(key => h('li', {}, tx(key)))),
         ...helpParagraphs.slice(5).map(key => h('p', {}, tx(key))),
+        h('p', {}, tx('PCではマウスの左ボタンを押しながらドラッグします。A・S・Dで回す対象を切り替えられます。キーは設定で変更できます。')),
         h('button', { class: 'btn', onclick: () => this.back() }, tx('もどる')),
       ),
     );
@@ -344,6 +347,7 @@ export class App {
         toggle(tx('画面を揺らす'), () => this.settings.shake, (v) => (this.settings.shake = v), 'shake'),
         h('label', { class: 'setting' }, tx('光の量'), light),
         toggle(tx('自分の最速の走りを半透明で表示する'), () => this.settings.ghost, (v) => (this.settings.ghost = v), 'ghost'),
+        renderTargetKeySettings(s, apply),
         h('p', { class: 'note' }, tx('設定は成績に影響しません。')),
         h('button', { class: 'btn', onclick: () => this.back() }, tx('もどる')),
       ),
@@ -543,6 +547,7 @@ class GameRun {
   private shownLanding: CenterText['landingText'];
   private readonly trickNames: TrickNameFlow | null;
   private freeTarget: FreeTarget = 'common';
+  private readonly targetButtons = new Map<FreeTarget, HTMLButtonElement>();
   private trails: HTMLCanvasElement;
   private impact: TrickImpact | null = null;
   private readonly colors: DogEffectColors;
@@ -581,7 +586,7 @@ class GameRun {
     this.session = new RunSession(identity, getCourse(identity.courseId, identity.courseVersion), DOGS[identity.dogId],
       identity.mode === 'competition' ? state => this.recorder.sample(state) : undefined);
     this.setInputViewport(window.innerWidth, window.innerHeight);
-    this.trails = h('canvas', { class: 'trails', 'data-testid': 'surface' });
+    this.trails = h('canvas', { class: 'trails', 'data-testid': 'surface', tabindex: -1 });
     const impactCanvas = identity.rulesVersion === FREE_RULES_VERSION
       ? h('canvas', { class: 'trick-impact', 'aria-hidden': 'true', 'data-testid': 'trick-impact' }) : null;
     if (impactCanvas) this.impact = new TrickImpact(impactCanvas, this.colors);
@@ -641,6 +646,7 @@ class GameRun {
     }
     if (app.opts.debug) this.hud.debug.classList.remove('hidden');
     this.bindPointers();
+    if (freestyle) window.addEventListener('keydown', this.handleTargetKey);
     this.renderPractice();
   }
 
@@ -656,19 +662,17 @@ class GameRun {
 
   private freeControls(): HTMLElement {
     const targets = h('div', { class: 'free-run-targets', role: 'group', 'aria-label': tx('空中で回す対象') });
-    for (const [target, label] of [['common', '両方'], ['dog', '犬のみ'], ['rider', '人のみ']] as const) {
-      const select = () => {
-        if (this.freeTarget === target) return;
-        this.freeTarget = target;
-        this.freePointer?.retargetAll(target);
-        for (const child of targets.children) child.setAttribute('aria-pressed', String(child === button));
-      };
+    for (const [target, label] of ROTATION_TARGETS) {
+      const key = keyLabel(this.app.settings.targetKeys[target]);
+      const select = () => this.selectFreeTarget(target);
       const button = h('button', {
         type: 'button', 'aria-pressed': String(target === this.freeTarget), 'data-testid': `run-target-${target}`,
+        'aria-keyshortcuts': key === '+' ? 'Plus' : key,
         onpointerdown: event => { if ((event as PointerEvent).button === 0) select(); },
         // 指を離す時の click で、別の指が選んだ新しい対象を上書きしない。
         onclick: event => { if ((event as MouseEvent).detail === 0) select(); },
-      }, tx(label));
+      }, tx(label), h('kbd', { class: 'run-target-key', 'aria-hidden': 'true', 'data-key-label': key }));
+      this.targetButtons.set(target, button);
       targets.append(button);
     }
     this.hud.freeStatus = h('p', { class: 'free-run-hint' });
@@ -678,6 +682,26 @@ class GameRun {
         h('button', { type: 'button', class: 'btn small', 'data-testid': 'free-trick-guide', onclick: () => this.app.startTrickLab(null) }, '38技のお手本'),
       ) : null);
   }
+
+  private selectFreeTarget(target: FreeTarget): void {
+    if (this.freeTarget === target) return;
+    this.freeTarget = target;
+    this.freePointer?.retargetAll(target);
+    for (const [id, button] of this.targetButtons) button.setAttribute('aria-pressed', String(id === target));
+  }
+
+  private readonly handleTargetKey = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented || this.session.paused || this.session.phase === 'finished') return;
+    const focused = event.target instanceof HTMLElement ? event.target : null;
+    if (focused?.closest('input, textarea, select, [contenteditable]')) return;
+    if ((event.key === 'Enter' || event.key === ' ') && focused?.closest('button, a[href]')) return;
+    const key = targetKeyFromEvent(event);
+    if (!key) return;
+    const binding = ROTATION_TARGETS.find(([target]) => this.app.settings.targetKeys[target] === key);
+    if (!binding) return;
+    event.preventDefault();
+    this.selectFreeTarget(binding[0]);
+  };
 
   start(): void {
     this.lastFrameMs = nowMs();
@@ -693,6 +717,7 @@ class GameRun {
 
   destroy(): void {
     this.destroyed = true;
+    window.removeEventListener('keydown', this.handleTargetKey);
     cancelAnimationFrame(this.raf);
     this.trickNames?.clear();
     this.app.audio.stopTrickLanding();
@@ -747,8 +772,10 @@ class GameRun {
       this.submit(facts);
     };
     el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
       if (this.practiceDemo) return;
+      if (e.pointerType === 'mouse') el.focus({ preventScroll: true });
       this.app.audio.unlock();
       this.session.pointerDown(e.pointerId);
       try {

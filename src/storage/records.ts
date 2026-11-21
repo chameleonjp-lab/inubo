@@ -1,6 +1,7 @@
 import type { CourseId, DogId } from '../content/types';
 import type { RunResult } from '../game/types';
 import type { ReplayData } from '../view/replay';
+import { DEFAULT_TARGET_KEYS, loadTargetKeys, type TargetKeys } from '../input/target-keys';
 
 /**
  * 端末内の記録。コース・コースの版・ルールの版を組にして、総合の自己最高と完走タイムの自己最速を別々に保存する。
@@ -212,9 +213,12 @@ export interface Settings {
   shake: boolean;
   light: 'normal' | 'weak';
   ghost: boolean;
+  targetKeys: TargetKeys;
 }
 
-export const DEFAULT_SETTINGS: Settings = { soundOn: true, volume: 0.8, shake: true, light: 'normal', ghost: true };
+export const DEFAULT_SETTINGS: Settings = {
+  soundOn: true, volume: 0.8, shake: true, light: 'normal', ghost: true, targetKeys: { ...DEFAULT_TARGET_KEYS },
+};
 
 export function loadSettings(store: StorageLike): Settings {
   const s = read<Partial<Settings>>(store, `${NS}:settings`) ?? {};
@@ -224,6 +228,7 @@ export function loadSettings(store: StorageLike): Settings {
     shake: typeof s.shake === 'boolean' ? s.shake : DEFAULT_SETTINGS.shake,
     light: s.light === 'weak' || s.light === 'normal' ? s.light : DEFAULT_SETTINGS.light,
     ghost: typeof s.ghost === 'boolean' ? s.ghost : DEFAULT_SETTINGS.ghost,
+    targetKeys: loadTargetKeys(s.targetKeys),
   };
 }
 

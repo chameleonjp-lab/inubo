@@ -221,6 +221,18 @@ h2 {
   font-size: 16px;
 }
 
+.target-key-settings {
+  min-width: 0;
+  margin: 18px 0 12px;
+  padding: 6px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.target-key-settings legend { padding: 0 5px; font-weight: 700; }
+.target-key-row { justify-content: space-between; }
+.target-key-row button { min-width: 5rem; overflow-wrap: anywhere; }
+.target-key-row button[aria-pressed='true'] { border-color: var(--accent); }
+
 .note {
   color: var(--muted);
   font-size: 13px;
@@ -520,6 +532,20 @@ canvas.trails {
   touch-action: manipulation;
 }
 .free-run-targets button[aria-pressed='true'] { background: #233849; color: #fff9ed; }
+.run-target-key { display: none; }
+@media (any-pointer: fine) {
+  .run-target-key {
+    display: block;
+    font-size: .68em;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .run-target-key::before { content: attr(data-key-label); }
+  canvas.trails { cursor: grab; }
+  canvas.trails:active { cursor: grabbing; }
+}
 
 .practice-demo-playing .countdown,
 .practice-demo-playing .center-text {
