@@ -1,5 +1,6 @@
 import type { Settings } from '../storage/records';
 import type { Cue } from '../view/effects';
+import { RaceMusic } from './race-music';
 
 /**
  * 音。1回鳴らす音（出来事ごと）と、接触中・走行中の連続音（手すりの滑走音、足音、風）を分ける。
@@ -15,6 +16,7 @@ export interface SoundCommand {
   /** 音の高さの倍率（区間の連続成功で段を上げる、逆回転で順を反転するなど）。 */
   pitch: number;
   reverse: boolean;
+  trickPoints?: number;
 }
 
 export interface LoopState {
@@ -35,6 +37,12 @@ export interface MotionForSound {
 const DEDUPE_MS = 70;
 const SAME_OBJECT_MS = 650;
 const RESUME_RAMP_MS = 450;
+
+function scoredTrick(cue: Cue): number {
+  if (cue.effect !== 'E13' && cue.visual !== 'railSpark' && cue.visual !== 'pawTrails') return 0;
+  const points = cue.data?.points;
+  return typeof points === 'number' && Number.isFinite(points) && points > 0 ? points : 0;
+}
 
 export class SoundScheduler {
   private lastByName = new Map<string, number>();
@@ -69,24 +77,33 @@ export class SoundScheduler {
   /** 演出から、今鳴らす1回の音を決める。 */
   onCues(cues: Cue[], nowMs: number): SoundCommand[] {
     const out: SoundCommand[] = [];
-    if (!this.audible) return out;
+    if (!this.audible || !cues.length) return out;
+    const bestAtContact = new Map<number, Cue>();
+    for (const cue of cues) {
+      const points = scoredTrick(cue);
+      const current = bestAtContact.get(cue.atUs);
+      if (points && (!current || points >= scoredTrick(current))) bestAtContact.set(cue.atUs, cue);
+    }
     for (const c of cues) {
       if (!c.sound) continue;
       if (this.paused && c.sound !== 'ambientDown') continue;
+      const points = scoredTrick(c);
+      if (points && bestAtContact.get(c.atUs) !== c) continue;
       if (c.effect === 'E13' && c.sound.startsWith('trickLanding') && typeof c.data?.jumpId === 'number') {
         const key = `${c.runId}:${c.data.jumpId}`;
         if (this.landedJumps.has(key)) continue;
         this.landedJumps.add(key);
         if (this.landedJumps.size > 200) this.landedJumps.delete(this.landedJumps.values().next().value!);
       }
-      const lastName = this.lastByName.get(c.sound);
+      const soundKey = points ? `${c.sound}:${Math.floor(points / 100)}` : c.sound;
+      const lastName = this.lastByName.get(soundKey);
       if (lastName !== undefined && nowMs - lastName < DEDUPE_MS) continue;
       if (c.objId && c.sound === 'thud') {
         const lastObj = this.lastByObj.get(c.objId);
         if (lastObj !== undefined && nowMs - lastObj < SAME_OBJECT_MS) continue;
         this.lastByObj.set(c.objId, nowMs);
       }
-      this.lastByName.set(c.sound, nowMs);
+      this.lastByName.set(soundKey, nowMs);
       const streak = typeof c.data?.streak === 'number' ? c.data.streak : 0;
       const name = String(c.data?.name ?? '');
       out.push({
@@ -94,6 +111,7 @@ export class SoundScheduler {
         gain: this.master(nowMs),
         pitch: c.sound === 'stepUp' ? 1 + 0.12 * Math.max(0, streak - 1) : 1,
         reverse: (c.sound === 'dogSpinV' || c.sound === 'dogSpinH') && (name.includes('後ろ') || name.includes('左')),
+        ...(points ? { trickPoints: points } : {}),
       });
     }
     return out;
@@ -216,6 +234,28 @@ for (const [target, base] of Object.entries(FX_LANDING_BASE) as ['B' | 'H' | 'D'
   });
 }
 
+/** 技1回の得点は最大2,950点。100点ごとにフレーズの音が1つ増え、高得点では和音も重なる。 */
+export function trickScoreTones(points: number, name: string): Tone[] {
+  const steps = Math.min(29, Math.max(0, Math.floor(points / 100)));
+  const match = /^trickLanding([BHD])\d{2}$/.exec(name);
+  const target = match?.[1] as keyof typeof FX_LANDING_BASE | undefined;
+  const root = target ? FX_LANDING_BASE[target] : FX_LANDING_BASE.B;
+  const type = target === 'D' ? 'triangle' : 'sine';
+  const scale = [0, 4, 7, 9, 12, 16, 19, 21, 24, 21, 19, 16];
+  const hz = (semi: number) => root * 2 ** (semi / 12);
+  const last = steps * 0.035;
+  const tones: Tone[] = Array.from({ length: steps + 1 }, (_, i) => ({
+    f: hz(scale[i % scale.length]), t: i * 0.035, d: i === steps ? 0.13 + steps * 0.004 : 0.075,
+    type, g: i === 0 ? 0.49 : 0.27,
+  }));
+  if (steps >= 4) tones.push({ f: hz(-12), t: 0, d: 0.16, type: 'triangle', g: 0.31 });
+  if (steps >= 8) tones.push({ f: hz(7), t: last, d: 0.24, type: 'triangle', g: 0.2 });
+  if (steps >= 12) tones.push({ f: hz(12), t: last, d: 0.25, g: 0.21 });
+  if (steps >= 18) tones.push({ f: hz(16), t: last, d: 0.29, g: 0.17 }, { f: hz(0), t: last, d: 0.26, type: 'triangle', g: 0.22 });
+  if (steps >= 24) tones.push({ f: hz(24), t: last + 0.065, d: 0.34, g: 0.19 });
+  return tones;
+}
+
 /** すべての1回音に合成の定義があるかを検査で確かめるため、名前の一覧を出す。 */
 export function synthNames(): string[] {
   return Object.keys(TONES);
@@ -231,6 +271,11 @@ export class AudioEngine {
   private grindGain: GainNode | null = null;
   private nextStepMs = 0;
   private trickLandingNotes = new Set<OscillatorNode>();
+  private readonly raceMusic = new RaceMusic();
+
+  stopRaceMusic(reset = true): void {
+    this.raceMusic.stop(reset);
+  }
 
   /** 最初の操作・再開の操作の中で呼ぶ（ブラウザはユーザー操作から音を開始できる）。 */
   unlock(): void {
@@ -248,7 +293,7 @@ export class AudioEngine {
         const ch = this.noise.getChannelData(0);
         for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
       }
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') void this.ctx.resume().catch(() => {});
     } catch {
       this.ctx = null;
     }
@@ -260,6 +305,7 @@ export class AudioEngine {
   }
 
   suspend(): void {
+    this.stopRaceMusic(false);
     try {
       if (this.ctx && this.ctx.state === 'running') void this.ctx.suspend();
     } catch {
@@ -270,10 +316,10 @@ export class AudioEngine {
   play(cmd: SoundCommand): void {
     const ctx = this.ctx;
     if (!ctx || !this.master || cmd.gain <= 0) return;
-    const tones = TONES[cmd.name];
+    const tones = cmd.trickPoints ? trickScoreTones(cmd.trickPoints, cmd.name) : TONES[cmd.name];
     if (!tones) return;
     const now = ctx.currentTime;
-    const isTrickLanding = cmd.name.startsWith('trickLanding');
+    const isTrickLanding = !!cmd.trickPoints || cmd.name.startsWith('trickLanding');
     if (isTrickLanding) this.stopTrickLanding();
     const list = cmd.reverse ? tones.slice().reverse().map((t, i, arr) => ({ ...t, t: arr[arr.length - 1 - i].t })) : tones;
     for (const t of list) {
@@ -312,11 +358,12 @@ export class AudioEngine {
   }
 
   /** 毎フレーム呼ぶ。全体の音量と連続音を、判断の結果に合わせる。 */
-  update(masterGain: number, loops: LoopState, nowMs: number): void {
+  update(masterGain: number, loops: LoopState, nowMs: number, raceMusic = false): void {
     const ctx = this.ctx;
     if (!ctx || !this.master || !this.noise) return;
     const t = ctx.currentTime;
     if (masterGain <= 0) this.stopTrickLanding();
+    this.raceMusic.update(ctx, this.master, raceMusic ? masterGain : 0);
     this.master.gain.setTargetAtTime(masterGain > 0 ? 1 : 0, t, 0.05);
     // 風
     if (loops.wind) {

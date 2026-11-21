@@ -194,6 +194,69 @@ test('設定: 音のオン・オフ、音量、揺れ、光の量を別々に変
   await expect(page.locator('[data-testid="light"]')).toHaveValue('weak');
 });
 
+for (const [device, userAgent, touchPoints] of [
+  ['iPhone', 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X)', 5],
+  ['iPadのデスクトップ表示', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 5],
+  ['Androidタブレット', 'Mozilla/5.0 (Linux; Android 16; Tablet)', 10],
+] as const) {
+  test(`${device}ではマウスを使える場合もキー設定を表示しない`, async ({ page }) => {
+    await page.addInitScript(({ ua, touches }) => {
+      Object.defineProperty(navigator, 'userAgent', { value: ua });
+      Object.defineProperty(navigator, 'maxTouchPoints', { value: touches });
+      const realMatch = window.matchMedia.bind(window);
+      window.matchMedia = query => query === '(any-pointer: fine) and (any-hover: hover)'
+        ? { ...realMatch(query), matches: true } : realMatch(query);
+    }, { ua: userAgent, touches: touchPoints });
+    await page.goto('/');
+    await page.getByTestId('settings').click();
+    await expect(page.getByTestId('bind-key-common')).toHaveCount(0);
+    await expect(page.getByTestId('sound')).toBeVisible();
+  });
+}
+
+test('走行BGMはスタートから鳴り、一時停止で止まり、再開すると続きから鳴る', async ({ page }) => {
+  await page.addInitScript(() => {
+    const history: { action: 'start' | 'stop'; offset: number }[] = [];
+    Object.defineProperty(window, 'raceMusicHistory', { value: history });
+    const create = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource = function () {
+      const source = create.call(this);
+      const start = source.start.bind(source);
+      const stop = source.stop.bind(source);
+      let music = false;
+      source.start = (when, offset, duration) => {
+        music = source.loop && (source.buffer?.duration ?? 0) > 8;
+        if (music) history.push({ action: 'start', offset: offset ?? 0 });
+        start(when, offset, duration);
+      };
+      source.stop = (when) => {
+        if (music) history.push({ action: 'stop', offset: 0 });
+        stop(when);
+      };
+      return source;
+    };
+  });
+  const history = () => page.evaluate(() => (window as unknown as {
+    raceMusicHistory: { action: string; offset: number }[];
+  }).raceMusicHistory);
+  await page.goto('/');
+  await page.getByTestId('start').click();
+  expect(await history()).toEqual([]);
+  await expect.poll(history, { timeout: 15_000 }).toEqual([{ action: 'start', offset: 0 }]);
+  await page.getByTestId('pause').click();
+  await expect.poll(async () => (await history()).map(event => event.action)).toEqual(['start', 'stop']);
+  await page.getByTestId('resume').click();
+  await expect.poll(async () => (await history())[2]?.offset ?? 0).toBeGreaterThan(0);
+  await page.getByTestId('pause').click();
+  await page.getByTestId('retire').click();
+  await page.getByTestId('settings').click();
+  await page.getByTestId('sound').uncheck();
+  await page.getByRole('button', { name: 'もどる' }).click();
+  await page.getByTestId('start').click();
+  await expect.poll(async () => (await gameState(page))?.phase, { timeout: 15_000 }).toBe('running');
+  expect((await history()).map(event => event.action)).toEqual(['start', 'stop', 'start', 'stop']);
+});
+
 test.describe('PCの操作', () => {
   test.use({ hasTouch: false });
 
@@ -205,7 +268,7 @@ test.describe('PCの操作', () => {
       await expect(button).toHaveAttribute('aria-keyshortcuts', key);
       await expect(button.locator('kbd')).toBeVisible();
     }
-    await expect.poll(async () => (await gameState(page))?.phase).toBe('running');
+    await expect.poll(async () => (await gameState(page))?.phase, { timeout: 15_000 }).toBe('running');
     const box = (await page.getByTestId('surface').boundingBox())!;
     const x = box.x + box.width / 2;
     const y = box.y + box.height * 0.67;

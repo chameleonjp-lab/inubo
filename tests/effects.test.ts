@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { CenterText, EFFECTS, UI_CUES, cueForEvent, pickCenterText, type Cue } from '../src/view/effects';
-import { SoundScheduler, synthNames } from '../src/audio/sound';
+import { SoundScheduler, synthNames, trickScoreTones } from '../src/audio/sound';
 import { DEFAULT_SETTINGS, type Settings } from '../src/storage/records';
 import { getCourse } from '../src/content/courses/index';
 import { runWithAutopilot } from '../src/game/autopilot';
@@ -9,6 +9,23 @@ import { newRun, testCourse } from './helpers';
 import type { SimEvent, SimEventKind } from '../src/game/types';
 
 const ev = (kind: SimEventKind, atUs: number, data?: SimEvent['data'], objId?: string): SimEvent => ({ runId: 'r', seq: 0, atUs, kind, pathId: 'p', sMm: 0, x: 0, y: 0, data, objId });
+
+test('技の加点が100点上がるたびに音が重なり、同時に成立した技では高い得点の音が鳴る', () => {
+  const scheduler = new SoundScheduler(DEFAULT_SETTINGS);
+  for (let points = 100; points <= 2_900; points += 100) {
+    const lower = trickScoreTones(points - 1, 'trickLandingD05');
+    const higher = trickScoreTones(points, 'trickLandingD05');
+    expect(higher.length).toBeGreaterThan(lower.length);
+    expect(trickScoreTones(points + 1, 'trickLandingD05')).toEqual(higher);
+  }
+  const rail = cueForEvent(ev('railScore', 100, { points: 350 }))!;
+  const landing = cueForEvent(ev('land', 100, { points: 900, trickPoints: 1_000, trickTier: 5, jumpId: 1, fxTarget: 'D' }))!;
+  expect(scheduler.onCues([rail, landing], 1000)).toEqual([expect.objectContaining({ trickPoints: 900 })]);
+  expect(scheduler.onCues([landing], 1100)).toEqual([]);
+  expect(scheduler.onCues([cueForEvent(ev('land', 200, { points: 0, plain: true }))!], 1200))
+    .toEqual([expect.objectContaining({ name: 'landSoft' })]);
+  expect(scheduler.onCues([rail], 1300)).toEqual([expect.objectContaining({ trickPoints: 350 })]);
+});
 
 describe('V14 演出', () => {
   test('E01〜E24 のすべてに、見た目と音の割り当てがある', () => {
