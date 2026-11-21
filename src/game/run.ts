@@ -86,7 +86,7 @@ export function createRun(identity: RunIdentity, course: CourseRt, dog: DogSpec)
     lastCheckpoint: { pathId: p.id, s, x: 0, id: 'start' },
     fallUntilUs: null,
     effects: createEffects(),
-    rivals: identity.mode === 'competition' && identity.courseId === 'park' && identity.rulesVersion === FREE_RULES_VERSION ? createRivals(course) : null,
+    rivals: identity.mode === 'competition' && identity.courseId === 'park' && identity.rulesVersion === FREE_RULES_VERSION ? createRivals(course, identity.runId) : null,
     consumed: {},
     guide: { active: false, forkId: null },
     jump: null,
