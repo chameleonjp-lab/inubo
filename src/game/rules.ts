@@ -14,8 +14,8 @@ export const COUNTDOWN_US = 3_000_000;
 export const MAX_FRAME_US = 100_000;
 
 // ---- 動き ----
-/** 柴犬（指数100）の平地の最高速 m/s。 */
-export const BASE_SPEED = 10;
+/** 全犬種で共通の平地の最高速 m/s。変更前のウィペットの速さを使う。 */
+export const BASE_SPEED = 10.7;
 /** 発進・再発進の加速 m/s²。 */
 export const LAUNCH_ACCEL = 14;
 /** 坂で通常速度がゆるやかに変わる速さ m/s²。 */

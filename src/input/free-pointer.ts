@@ -3,7 +3,7 @@ import { add3, cross3, scale3, unit3 } from '../game/free-math';
 import type { FreeMotionInput, FreeTarget } from '../game/free-motion';
 
 interface Point { x: number; y: number }
-interface Finger { point: Point; target: FreeTarget; origin: Point; radius: number }
+interface Finger { position: Point; point: Point; target: FreeTarget; origin: Point; radius: number }
 /** 指の軌跡を仮想球に投影する。ジェスチャー名や技の判定は行わない。 */
 export class FreePointerController {
   private fingers = new Map<number, Finger>();
@@ -18,7 +18,17 @@ export class FreePointerController {
   get activeCount(): number { return this.fingers.size; }
   /** 指を離さず操作対象を変更する。切替そのものは回転指令を発生させない。 */
   retargetAll(target: FreeTarget): void {
-    for (const finger of this.fingers.values()) finger.target = target;
+    for (const [id, finger] of this.fingers) {
+      finger.target = target;
+      this.recenter(id, finger.position.x, finger.position.y);
+    }
+  }
+  /** 地上のスワイプや別の対象での移動を、新しい操作の始点に持ち越さない。 */
+  recenter(id: number, x: number, y: number): void {
+    const finger = this.fingers.get(id);
+    if (!this.centerOnTouch || !finger || !Number.isFinite(x + y)) return;
+    finger.position = finger.origin = { x, y };
+    finger.point = { x: 0, y: 0 };
   }
   setSurface(width: number, height: number): void {
     const w = Math.max(1, width), h = Math.max(1, height);
@@ -33,7 +43,7 @@ export class FreePointerController {
     }
     const origin = this.centerOnTouch ? { x, y } : { x: this.width / 2, y: this.height / 2 };
     const radius = 0.45 * Math.min(this.width, this.height);
-    this.fingers.set(id, { point: this.point(x, y, origin, radius), target, origin, radius });
+    this.fingers.set(id, { position: { x, y }, point: this.point(x, y, origin, radius), target, origin, radius });
     return true;
   }
   move(id: number, x: number, y: number, atUs: number): FreeMotionInput[] {
@@ -56,7 +66,10 @@ export class FreePointerController {
       const world = add3(add3(scale3(this.basis.right, v[0]), scale3(this.basis.up, v[1])), scale3(this.basis.toward, v[2]));
       inputs.push({ seq: ++this.seq, atUs, target: f.target, rotation: world });
     };
-    visit(f.point, end); f.point = end; return inputs;
+    visit(f.point, end);
+    f.point = end;
+    f.position = { x, y };
+    return inputs;
   }
   up(id: number): void { this.fingers.delete(id); }
   cancel(id: number): void { this.up(id); }

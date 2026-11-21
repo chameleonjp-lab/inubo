@@ -140,38 +140,54 @@ test('ジャンプの指を保持したまま即回転し、ボタンを押し�
         await new Promise(resolve => requestAnimationFrame(resolve));
       }
     };
-    const pointer = (kind: string, x: number, y: number) =>
-      surface.dispatchEvent(new PointerEvent(kind, { pointerId: 19, pointerType: 'touch', clientX: x, clientY: y,
-        bubbles: true, cancelable: true }));
+    const sample = (kind: string, x: number, y: number) =>
+      new PointerEvent(kind, { pointerId: 19, pointerType: 'touch', clientX: x, clientY: y,
+        bubbles: true, cancelable: true });
+    const pointer = (kind: string, x: number, y: number) => surface.dispatchEvent(sample(kind, x, y));
     const choose = (target: string) => {
       const button = document.querySelector(`[data-testid="run-target-${target}"]`)!;
-      button.dispatchEvent(new PointerEvent('pointerdown', { pointerId: target === 'dog' ? 40 : 41,
+      button.dispatchEvent(new PointerEvent('pointerdown', { pointerId: target === 'dog' ? 40 : 41, button: 0,
         pointerType: 'touch', bubbles: true, cancelable: true }));
       return button.getAttribute('aria-pressed');
     };
     await until(() => session.phase === 'running' && sim.simUs >= 40_000);
     const x = innerWidth * 0.45, y = innerHeight * 0.62;
     pointer('pointerdown', x, y);
-    pointer('pointermove', x, y - 90); // 同じ指で踏切
-    await until(() => sim.freeFlight !== null);
-    pointer('pointermove', x + 80, y - 96); // 指を離さず回転
-    await until(() => sim.freeFlight!.motion.omega.common.some(v => Math.abs(v) > 0.2));
-    const common = sim.freeFlight!.motion.omega.common.some(v => Math.abs(v) > 0.2);
+    const beforeBatch = sim.simUs;
+    await until(() => sim.simUs >= beforeBatch + 20_000);
+    const jump = sample('pointermove', x, y - 90);
+    const firstSwipe = sample('pointermove', x + 12, y - 90);
+    Object.defineProperty(jump, 'timeStamp', { value: performance.now() - 8 });
+    Object.defineProperty(firstSwipe, 'timeStamp', { value: performance.now() - 4 });
+    Object.defineProperty(firstSwipe, 'getCoalescedEvents', { value: () => [jump, firstSwipe] });
+    surface.dispatchEvent(firstSwipe);
+    await until(() => sim.freeFlight?.motion.omega.common.some(v => Math.abs(v) > 0.2) === true);
+    const first = [...sim.freeFlight!.motion.seen.values()][0];
+    const jumpToTurnUs = first.atUs - sim.freeFlight!.takeoffUs;
     const dogPressed = choose('dog');
-    pointer('pointermove', x + 135, y - 102);
+    pointer('pointermove', x + 24, y - 90);
     await until(() => sim.freeFlight!.motion.omega.dog.some(v => Math.abs(v) > 0.2));
     const riderPressed = choose('rider');
-    pointer('pointermove', x + 180, y - 108);
+    const dogButton = document.querySelector('[data-testid="run-target-dog"]')!;
+    dogButton.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }));
+    const riderAfterDogRelease = document.querySelector('[data-testid="run-target-rider"]')!.getAttribute('aria-pressed');
+    pointer('pointermove', x + 36, y - 90);
     await until(() => sim.freeFlight!.motion.omega.rider.some(v => Math.abs(v) > 0.2));
-    const record = Object.values(sim.strokes).find(stroke => stroke.downUs < sim.simUs && stroke.upUs === null && stroke.freeTarget === 'rider');
-    const result = { common, dogPressed, riderPressed, rider: sim.freeFlight!.motion.omega.rider,
+    const commonPressed = choose('common');
+    pointer('pointermove', x + 48, y - 90);
+    await until(() => sim.freeFlight!.motion.seen.size === 4);
+    const record = Object.values(sim.strokes).find(stroke => stroke.downUs < sim.simUs && stroke.upUs === null && stroke.freeTarget === 'common');
+    const result = { jumpToTurnUs, commonPressed, dogPressed, riderPressed, riderAfterDogRelease,
+      targets: [...sim.freeFlight!.motion.seen.values()].map(input => input.target),
       sameFinger: !!record && record.tag === 'air', rules: sim.id.rulesVersion };
-    pointer('pointerup', x + 180, y - 108);
+    pointer('pointerup', x + 48, y - 90);
     return result;
   });
-  expect(observed).toMatchObject({ common: true, dogPressed: 'true', riderPressed: 'true',
+  expect(observed).toMatchObject({ commonPressed: 'true', dogPressed: 'true', riderPressed: 'true', riderAfterDogRelease: 'true',
+    targets: ['common', 'dog', 'rider', 'common'],
     sameFinger: true, rules: FREE_RULES_VERSION });
-  expect(observed.rider.some(v => Math.abs(v) > 0.2)).toBe(true);
+  expect(observed.jumpToTurnUs).toBeGreaterThanOrEqual(0);
+  expect(observed.jumpToTurnUs).toBeLessThan(10_000);
 });
 
 test('犬種を変更すると着地の文字と画面全体の光の色が切り替わる', async ({ page }) => {

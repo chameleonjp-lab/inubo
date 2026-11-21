@@ -80,9 +80,8 @@ describe('コースのデータ', () => {
     expect(course.def.objects.filter((o) => o.kind === 'kicker')).toHaveLength(105);
     expect(course.opportunities).toHaveLength(18);
     for (const dog of DOG_ORDER) {
-      const base = BASE_SPEED * DOGS[dog].speedIndex / 100;
-      expect(maxSpeed(newRun(course, dog))).toBeCloseTo(base * 1.5);
-      expect(maxSpeed(newRun(getCourse('practice'), dog))).toBeCloseTo(base);
+      expect(maxSpeed(newRun(course, dog))).toBeCloseTo(BASE_SPEED * 1.5);
+      expect(maxSpeed(newRun(getCourse('practice'), dog))).toBeCloseTo(BASE_SPEED);
     }
   });
 });
@@ -124,20 +123,20 @@ describe('公園の近道と技の道', () => {
 });
 
 describe('犬種の性能（R32〜R35）', () => {
-  test('平地・効果なしの最高速はコーギー・柴犬・ウィペットの順に 93・100・107', () => {
+  test('平地・効果なしの最高速は全犬種で、変更前のウィペットと同じ 10.7 m/s', () => {
     const speeds = DOG_ORDER.map((dog) => {
       const run = newRun(testCourse(), dog);
       let t = 0;
       while (t < 5_000_000) advanceRun(run, (t += 5_000));
       return run.baseSpeed;
     });
-    expect(speeds.map((v) => Math.round(v * 10))).toEqual([100, 93, 107]);
+    for (const speed of speeds) expect(speed).toBeCloseTo(10.7);
   });
 
   test('ジャンプの高さ・回転時間・接触の大きさ・基礎点は全犬種で共通', () => {
     // 犬種の定義に、ジャンプや接触や回転の値を持たせていない。
     for (const d of Object.values(DOGS)) {
-      expect(Object.keys(d).sort()).toEqual(['handlingIndex', 'id', 'look', 'name', 'speedIndex']);
+      expect(Object.keys(d).sort()).toEqual(['handlingIndex', 'id', 'look', 'name']);
     }
     expect(JUMP_VY).toBeGreaterThan(0);
     expect(DOG_SPIN_US).toBeGreaterThan(0);

@@ -4,6 +4,7 @@ import { GestureRecognizer } from '../src/input/gestures';
 import { DOGS } from '../src/content/dogs';
 import { getCourse } from '../src/content/courses/index';
 import { runWithAutopilot } from '../src/game/autopilot';
+import { BASE_SPEED } from '../src/game/rules';
 import { identity, newRun, runTo, testCourse } from './helpers';
 import type { GestureFact, SimState } from '../src/game/types';
 
@@ -144,15 +145,15 @@ describe('V01 起点と中断', () => {
 });
 
 describe('V02 描画間隔', () => {
-  test('8.990〜9.010 秒を1回の更新にしても、加速終了の 9.000 秒で分けて 0.125＋0.100＝0.225m 進む', () => {
+  test('8.990〜9.010 秒を1回の更新にしても、加速終了の 9.000 秒で分けて進む', () => {
     const course = testCourse();
     const run = newRun(course);
     runTo(run, 8_990_000);
-    expect(run.baseSpeed).toBeCloseTo(10, 9);
+    expect(run.baseSpeed).toBeCloseTo(BASE_SPEED, 9);
     run.effects.foodUntilUs = 9_000_000;
     const s0 = run.s;
     advanceRun(run, 9_010_000);
-    expect(run.s - s0).toBeCloseTo(0.225, 9);
+    expect(run.s - s0).toBeCloseTo(BASE_SPEED * (1.25 * 0.01 + 0.01), 9);
   });
 
   test('刻みの途中で効果が切れても、その時刻で分けて進む', () => {
@@ -162,7 +163,7 @@ describe('V02 描画間隔', () => {
     run.effects.foodUntilUs = 9_001_200;
     const s0 = run.s;
     advanceRun(run, 9_010_000);
-    expect(run.s - s0).toBeCloseTo(12.5 * 0.0112 + 10 * 0.0088, 9);
+    expect(run.s - s0).toBeCloseTo(BASE_SPEED * (1.25 * 0.0112 + 0.0088), 9);
   });
 
   test('同じ入力を 30・60・120 回/秒と、ときどき描画を飛ばす条件で再生しても、通過時刻・取得物・得点が一致する', () => {

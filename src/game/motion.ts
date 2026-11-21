@@ -31,7 +31,7 @@ import type { SimState } from './types';
  */
 
 export function maxSpeed(run: SimState): number {
-  return (BASE_SPEED * run.dog.speedIndex * (run.course.def.speedMultiplier ?? 1)) / 100;
+  return BASE_SPEED * (run.course.def.speedMultiplier ?? 1);
 }
 
 export function lateralSpeedOf(run: SimState): number {

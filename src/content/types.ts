@@ -9,8 +9,6 @@ export type DogId = 'shiba' | 'corgi' | 'whippet';
 export interface DogSpec {
   id: DogId;
   name: string;
-  /** 直線の最高速の指数（柴犬=100）。 */
-  speedIndex: number;
   /** 目標の横位置に届く速さの指数（柴犬=100）。 */
   handlingIndex: number;
   /** 見た目と、自由操作中の身体の接触範囲に使う。 */
