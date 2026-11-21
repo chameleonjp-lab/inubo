@@ -41,10 +41,15 @@ export const parkFreestyle: CourseDef = {
   objects: [
     ...park.objects.filter(object => object.id !== 'k-3').map(object => {
       if (object.kind === 'food' && object.path === 'f2-short') return { ...object, x: -0.35 };
-      if (object.kind === 'rail' && object.id === 'r-long') return { ...object, u0: 446, u1: 472 };
+      if (object.kind === 'rail') return { ...object, h0: 0.8, h1: 0.8,
+        ...(object.id === 'r-long' ? { u0: 446, u1: 472 } : {}) };
+      if (object.kind === 'fence') return { ...object, height: 0.8 };
+      if (object.kind === 'wall') return { ...object, grind: true, height: Math.max(0.8, object.height) };
+      // 最初の骨は直進から少し外す。拾って長く跳ぶか、手前で分岐に寄るかを選べる。
+      if (object.kind === 'guide') return { ...object, kind: 'bone' as const, x: object.id === 'guide-1' ? -1.6 : object.x };
       return object;
     }),
     ...curveFood,
-    ...routeObjects,
+    ...routeObjects.map(object => object.kind === 'rail' ? { ...object, h0: 0.8, h1: 0.8 } : object),
   ],
 };

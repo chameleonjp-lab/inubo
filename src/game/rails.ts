@@ -1,4 +1,4 @@
-import { RAIL_POINTS_MAX, RAIL_POINTS_PER_M } from './rules';
+import { FREE_RULES_VERSION, RAIL_POINTS_MAX, RAIL_POINTS_PER_M } from './rules';
 import type { PendingRail, SimEvent, SimState } from './types';
 import type { RailRt } from './track';
 
@@ -18,8 +18,9 @@ export function railPoints(distMm: number): number {
 export function mountRail(run: SimState, rail: RailRt, atUs: number, sMm: number, emit: Emit): void {
   run.rail = { railId: rail.id, entryMm: sMm, entryUs: atUs };
   run.mode = 'rail';
-  run.x = rail.x;
-  run.targetX = rail.x;
+  run.x = rail.wall ? Math.max(rail.wall.x0, Math.min(rail.wall.x1, run.x)) : rail.x;
+  if (run.blocked?.solidId === rail.id) run.blocked = null;
+  run.targetX = run.x;
   run.vy = 0;
   emit('railOn', atUs, { railId: rail.id }, rail.id);
 }
@@ -47,11 +48,13 @@ export function settleRail(run: SimState, pending: PendingRail, atUs: number, em
     emit('railScore', atUs, { railId: pending.railId, points: 0, distMm: pending.distMm, already: true }, pending.railId);
     return 0;
   }
-  const pts = railPoints(pending.distMm);
+  const wall = !!run.course.railsById.get(pending.railId)?.wall;
+  const pts = run.id.rulesVersion === FREE_RULES_VERSION
+    ? 50 + Math.floor(pending.distMm / 1000) * RAIL_POINTS_PER_M : railPoints(pending.distMm);
   sc.scoredRails[pending.railId] = pts;
   sc.railPoints += pts;
   sc.railLog.push({ railId: pending.railId, distMm: pending.distMm, points: pts, lost: false });
-  emit('railScore', atUs, { railId: pending.railId, points: pts, distMm: pending.distMm }, pending.railId);
+  emit('railScore', atUs, { railId: pending.railId, points: pts, distMm: pending.distMm, wall }, pending.railId);
   return pts;
 }
 

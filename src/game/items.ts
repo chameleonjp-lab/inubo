@@ -8,7 +8,17 @@ import type { ItemRt } from './track';
  */
 
 export function createEffects(): Effects {
-  return { foodUntilUs: null, poopUntilUs: null };
+  return { foodUntilUs: null, poopUntilUs: null, jumpUntilUs: null };
+}
+
+export const JUMP_BOOST_US = 5_000_000;
+
+export function takeBone(e: Effects, tUs: number): void {
+  e.jumpUntilUs = tUs + JUMP_BOOST_US;
+}
+
+export function jumpMultiplier(e: Effects, tUs: number): number {
+  return e.jumpUntilUs !== null && tUs < e.jumpUntilUs ? 1.3 : 1;
 }
 
 export function foodActive(e: Effects, tUs: number): boolean {

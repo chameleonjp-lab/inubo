@@ -96,7 +96,7 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       };
     });
     expect(observed.version).toBe(FREE_RULES_VERSION);
-    expect(observed.ranked).toBe(false);
+    expect(observed.ranked).toBe(entry === 'start');
     expect(observed.drewAir).toBe(true);
     expect(observed.landingPhase).toBe('landing');
     expect(observed.held).toBe(true);

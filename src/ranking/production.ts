@@ -1,4 +1,5 @@
 import { BOARD_LIMIT, type BoardQuery, type BoardRow, type FinishPayload, type SendStatus, type StartSnapshot, type Transport } from './client';
+import { FREE_RULES_VERSION } from '../game/rules';
 
 type Endpoint = 'inubo_ranking_start' | 'inubo_ranking_finish' | 'inubo_ranking_board';
 
@@ -17,13 +18,13 @@ function sendStatus(value: unknown): SendStatus {
   throw networkError();
 }
 
-function boardRow(value: unknown, metric: BoardQuery['metric']): BoardRow | null {
+function boardRow(value: unknown, { metric, rulesVersion }: BoardQuery): BoardRow | null {
   if (!value || typeof value !== 'object') return null;
   const { rank, display_name, value: score, dog_id } = value as Record<string, unknown>;
   if (typeof rank !== 'number' || !Number.isInteger(rank) || rank < 1 || rank > BOARD_LIMIT
     || typeof display_name !== 'string' || !display_name.trim() || display_name.length > 32
     || typeof score !== 'number' || !Number.isInteger(score) || score < (metric === 'time' ? 1 : 0)
-    || score > (metric === 'time' ? 2_147_483_647 : 10_000)
+    || score > (metric === 'time' || rulesVersion === FREE_RULES_VERSION ? 2_147_483_647 : 10_000)
     || (dog_id !== 'shiba' && dog_id !== 'corgi' && dog_id !== 'whippet')) return null;
   return { rank, displayName: display_name, value: score, dogId: dog_id };
 }
@@ -78,7 +79,7 @@ export function createProductionTransport(): Transport | null {
     async getBoard(q) {
       const result = await request('inubo_ranking_board', { ...courseFields(q), p_metric: q.metric, p_limit: q.limit });
       if (!Array.isArray(result) || result.length > BOARD_LIMIT) throw networkError();
-      const rows = result.map((row: unknown) => boardRow(row, q.metric)).filter((row) => row !== null);
+      const rows = result.map((row: unknown) => boardRow(row, q)).filter((row) => row !== null);
       if (result.length > 0 && rows.length === 0) throw networkError();
       return rows;
     },

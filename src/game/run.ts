@@ -4,6 +4,7 @@ import {
   FALL_US,
   FOOT_FRONT,
   FOOT_HALF_WIDTH,
+  GRAVITY,
   JUMP_VY,
   KICKER_VY,
   MAX_FRAME_US,
@@ -12,7 +13,7 @@ import {
   STEP_UP,
   TICK_US,
 } from './rules';
-import { createEffects, nextEffectEnd, stepPoop, takeFood } from './items';
+import { createEffects, jumpMultiplier, nextEffectEnd, stepPoop, takeBone, takeFood } from './items';
 import {
   currentPath,
   forwardSpeedAt,
@@ -37,6 +38,7 @@ import {
   railGrade,
   railTopAt,
   sampleAt,
+  solidTop,
   supportGrade,
   supportHeight,
   type CourseRt,
@@ -316,7 +318,7 @@ function takeoff(run: SimState, t: number, kind: JumpRec['kind'], vy: number, em
   run.jumpCounter += 1;
   run.jump = { jumpId: run.jumpCounter, takeoffUs: t, kind, fromRail, strokes: [], resolution: EMPTY_RESOLUTION };
   run.mode = 'air';
-  run.vy = vy;
+  run.vy = kind === 'drop' ? vy : vy * jumpMultiplier(run.effects, t);
   if (kind !== 'drop') emit('jump', t, { jumpId: run.jumpCounter, kind, ...(viaSwipe ? { viaSwipe } : {}) });
 }
 
@@ -410,6 +412,9 @@ function processContact(run: SimState, c: Contact, t: number, emit: Emit): void 
       } else if (it.kind === 'poop') {
         stepPoop(run.effects, t);
         emit('poop', t, { untilUs: run.effects.poopUntilUs }, it.id);
+      } else if (it.kind === 'bone') {
+        takeBone(run.effects, t);
+        emit('jumpBoost', t, { untilUs: run.effects.jumpUntilUs }, it.id);
       } else {
         run.guide.active = true;
         if (p.next.kind === 'fork') run.guide.forkId = p.next.forkId;
@@ -648,7 +653,12 @@ function applyFact(run: SimState, f: GestureFact, t: number, emit: Emit): void {
       rec.consumed = true;
       if (run.mode === 'ground') {
         const ramp = onKicker(run);
-        takeoff(run, atUs, ramp ? 'kicker' : 'flat', ramp ? KICKER_VY : JUMP_VY, emit, null, true);
+        const p = currentPath(run);
+        const wall = p.solids.find(solid => solid.rail?.wall && (run.blocked?.solidId === solid.id || insideExpanded(solid, run.s, run.x))
+          && run.y < solidTop(p, solid, run.s, atUs));
+        const edgeVy = wall ? Math.sqrt(2 * GRAVITY * (solidTop(p, wall, run.s, atUs) - run.y + 0.32)) : 0;
+        takeoff(run, atUs, ramp ? 'kicker' : 'flat', Math.max(edgeVy, ramp ? KICKER_VY : JUMP_VY), emit, null, true);
+        if (wall && run.jump) run.jump.edgeWallId = wall.id;
       } else if (run.mode === 'rail' && run.rail) {
         const railId = run.rail.railId;
         leaveRail(run, atUs, sMmOf(run.s), 'jump', emit);

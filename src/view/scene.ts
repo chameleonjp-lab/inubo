@@ -1,3 +1,4 @@
+import { language, t } from '../ui/i18n';
 import * as THREE from 'three';
 import { disposeObjects } from './dispose';
 import { roadGeometry, solidGeometry, stairTreadGeometry } from './course-geometry';
@@ -275,6 +276,7 @@ export class GameView {
   readonly cam = new FollowCamera();
   private courseGroup = new THREE.Group();
   private course: CourseRt | null = null;
+  private courseLanguage = language();
   private rig: Rig | null = null;
   private ghostRig: Rig | null = null;
   private ghost: ReplayData | null = null;
@@ -470,8 +472,9 @@ export class GameView {
   }
 
   setCourse(course: CourseRt): void {
-    if (this.course === course) return;
+    if (this.course === course && this.courseLanguage === language()) return;
     this.course = course;
+    this.courseLanguage = language();
     this.effectDog = null;
     disposeObjects(this.courseGroup);
     this.courseGroup.clear();
@@ -574,7 +577,7 @@ export class GameView {
       const opts = p.next.options;
       const g = new THREE.Group();
       opts.forEach((o, i) => {
-        const tex = labelTexture(o.detail ?? `${o.trick ? '★ ' : ''}${o.label}`, parkRouteLooks[o.to] && o.detail ? parkRouteLooks[o.to].road : o.trick ? '#7a3b00' : '#1f2a37', o.detail ? '#111c26' : '#ffffff');
+        const tex = labelTexture(o.detail ? t(o.detail) : `${o.trick ? '★ ' : ''}${t(o.label)}`, parkRouteLooks[o.to] && o.detail ? parkRouteLooks[o.to].road : o.trick ? '#7a3b00' : '#1f2a37', o.detail ? '#111c26' : '#ffffff');
         const plate = new THREE.Mesh(new THREE.PlaneGeometry(o.detail ? 3.25 : 2.4, 0.74), new THREE.MeshBasicMaterial({ map: tex }));
         const mid = (Math.max(o.xMin, -hwAt(p, p.length)) + Math.min(o.xMax, hwAt(p, p.length))) / 2;
         // 追従カメラより高く掲げ、近づいてくる犬に文字の表を向ける。
@@ -640,14 +643,14 @@ export class GameView {
       for (let i = 0; i <= segments; i++) {
         const s = r.s0 + length * i / segments;
         const [x, z] = worldXZ(p, s, r.x);
-        pts.push(new THREE.Vector3(x, railTopAt(r, s) - 0.04, z));
+        pts.push(new THREE.Vector3(x, railTopAt(r, s) - 0.07, z));
       }
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 2, 0.05, 8), new THREE.MeshStandardMaterial({ color: '#c9d1d9', metalness: 0.8, roughness: 0.3 }));
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 2, 0.07, 8), new THREE.MeshStandardMaterial({ color: '#e5f3ff', metalness: 0.5, roughness: 0.3 }));
       this.courseGroup.add(tube);
       for (let s = r.s0 + 0.2; s < r.s1; s += 2.5) {
         const top = railTopAt(r, s);
         const base = baseHeight(p, s);
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, top - base, 6), new THREE.MeshLambertMaterial({ color: '#8b949e' }));
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, top - base, 6), new THREE.MeshLambertMaterial({ color: '#8b949e' }));
         placeOnPath(post, p, s, r.x, base + (top - base) / 2);
         this.courseGroup.add(post);
       }
@@ -706,14 +709,14 @@ export class GameView {
       this.courseGroup.add(holder);
     } else if (so.kind === 'wall' && so.height >= 1.2) {
       // 踏切台で越す高い壁: 坂の印（R27）
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8), new THREE.MeshBasicMaterial({ map: labelTexture('◢ 踏切台', '#0b4f8a', '#ffffff', 384, 256), side: THREE.DoubleSide }));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8), new THREE.MeshBasicMaterial({ map: labelTexture('◢ ' + t('踏切台'), '#0b4f8a', '#ffffff', 384, 256), side: THREE.DoubleSide }));
       placeOnPath(sign, p, so.s0 - 0.02, (so.x0 + so.x1) / 2, base + so.height * 0.6);
       sign.rotation.y -= Math.PI / 2;
       this.courseGroup.add(sign);
     }
   }
 
-  private buildItem(p: PathRt, id: string, kind: 'food' | 'poop' | 'guide', s: number, x: number, y: number): void {
+  private buildItem(p: PathRt, id: string, kind: 'food' | 'poop' | 'guide' | 'bone', s: number, x: number, y: number): void {
     const g = new THREE.Group();
     if (kind === 'food') {
       const bag = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.36, 0.2), new THREE.MeshLambertMaterial({ color: '#e8a33d' }));
@@ -732,7 +735,8 @@ export class GameView {
         g.add(b);
       });
     } else {
-      const m = new THREE.MeshLambertMaterial({ color: '#fff4cf', emissive: '#4a3c10' });
+      const m = new THREE.MeshLambertMaterial(kind === 'bone'
+        ? { color: '#eefff8', emissive: '#00a988' } : { color: '#fff4cf', emissive: '#4a3c10' });
       const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.5, 8), m);
       bar.rotation.z = Math.PI / 2;
       bar.position.y = 0.25;
@@ -815,7 +819,7 @@ export class GameView {
       post.position.set(0, 1.7, z);
       g.add(post);
     }
-    const top = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.7, hw * 2 + 0.9), new THREE.MeshBasicMaterial({ map: labelTexture('GOAL ゴール', '#d7263d', '#ffffff', 512, 96) }));
+    const top = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.7, hw * 2 + 0.9), new THREE.MeshBasicMaterial({ map: labelTexture(t('ゴール'), '#d7263d', '#ffffff', 512, 96) }));
     top.position.y = 3.5;
     g.add(top);
     const tape = new THREE.Mesh(new THREE.PlaneGeometry(0.08, hw * 2), new THREE.MeshBasicMaterial({ color: '#ffef5a', side: THREE.DoubleSide }));

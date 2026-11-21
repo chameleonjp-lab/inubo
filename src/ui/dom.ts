@@ -1,5 +1,7 @@
 /** 画面の要素を作る小さな道具。利用者の入力（名前など）は必ず文字として入れ、HTML として解釈しない。 */
 
+import { language } from './i18n';
+
 type Child = Node | string | number | null | undefined | false;
 
 export function h<K extends keyof HTMLElementTagNameMap>(
@@ -27,5 +29,5 @@ export function clear(el: Element): void {
 }
 
 export function fmtInt(n: number): string {
-  return n.toLocaleString('ja-JP');
+  return n.toLocaleString(language());
 }

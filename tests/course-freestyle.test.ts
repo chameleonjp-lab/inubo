@@ -3,6 +3,10 @@ import { DOGS } from '../src/content/dogs';
 import { advanceRun, RunSession } from '../src/game/run';
 import { FREE_RULES_VERSION, SWITCH_FREE_RULES_VERSION, sampleFreeSpan, type FreeTarget } from '../src/game/free-motion';
 import { qDistance } from '../src/game/free-math';
+import { JUMP_VY } from '../src/game/rules';
+import { jumpMultiplier } from '../src/game/items';
+import { COMBO_TRICKS, PAIR_TRICKS, SINGLE_TRICKS, freeTrickName } from '../src/game/free-trick-catalog';
+import { LANGUAGES, setLanguage, translateTrickName } from '../src/ui/i18n';
 import type { Vec3 } from '../src/game/math';
 import type { GestureFact } from '../src/game/types';
 import { FreePointerController } from '../src/input/free-pointer';
@@ -14,6 +18,55 @@ const jumpAt = 200_000;
 const down = (strokeId: number, atUs: number, freeTarget: FreeTarget = 'common'): GestureFact => ({ kind: 'down', atUs, strokeId, freeTarget });
 const turn = (strokeId: number, atUs: number, seq: number, rotation: Vec3, target?: FreeTarget): GestureFact => ({ kind: 'freeRotate', atUs, strokeId, seq, rotation, target });
 const up = (strokeId: number, atUs: number, cancelled = false): GestureFact => ({ kind: 'up', atUs, strokeId, cancelled });
+
+test('3対象の全技名を15言語の表示へ変えられる', () => {
+  try {
+    for (const [lang] of LANGUAGES) {
+      setLanguage(lang);
+      for (const target of ['common', 'dog', 'rider'] as const) {
+        const patterns = [...SINGLE_TRICKS.flat().map(pattern => [pattern, true] as const),
+          ...[...PAIR_TRICKS, ...Object.values(COMBO_TRICKS)].map(pattern => [pattern, false] as const)];
+        const names = patterns.map(([pattern, single]) => {
+          const count = pattern.minimumHalfTurns === 1 ? '半回転' : `${pattern.minimumHalfTurns / 2}回転`;
+          return `限界突破・天翔ける疾風の連続技・${freeTrickName(target, pattern, single)}・${count}の大連舞`;
+        });
+        const localized = names.map(translateTrickName);
+        if (lang === 'ja') expect(localized).toEqual(names);
+        else {
+          expect(localized.every(name => !name.includes('の大連舞') && !name.includes('NaN'))).toBe(true);
+          expect(new Set(localized).size).toBe(50);
+        }
+      }
+    }
+  } finally {
+    setLanguage('ja');
+  }
+});
+
+test('骨は5秒間だけジャンプ初速を1.3倍にし、効果が終わる時刻から元へ戻る', () => {
+  const course = testCourse({ objects: [{ kind: 'bone', id: 'bone', path: 'main', u: 4, x: 0, h: 0.4 }] });
+  const run = newRun(course, 'shiba', free);
+  advanceRun(run, 1_000_000);
+  const pickup = eventsOf(run, 'jumpBoost')[0];
+  expect(pickup?.objId).toBe('bone');
+  expect(run.effects.jumpUntilUs).toBe(pickup.atUs + 5_000_000);
+  expect(jumpMultiplier(run.effects, pickup.atUs + 4_999_999)).toBe(1.3);
+  expect(jumpMultiplier(run.effects, pickup.atUs + 5_000_000)).toBe(1);
+  advanceRun(run, 1_005_000, jumpFacts(1_000_000));
+  expect(run.vy).toBeCloseTo(JUMP_VY * 1.3 - 14 * 0.005);
+});
+
+test('塀の手前で止まっても真上へ跳び乗れ、滑って着地すると技点が入る', () => {
+  const course = testCourse({ objects: [{ kind: 'wall', id: 'wall', path: 'main', u0: 16, u1: 21,
+    x0: -1, x1: 1, height: 1.8, grind: true }] });
+  const run = newRun(course, 'shiba', free);
+  advanceRun(run, 2_500_000);
+  expect(run.blocked?.solidId).toBe('wall');
+  advanceRun(run, 5_500_000, jumpFacts(2_500_000));
+  expect(eventsOf(run, 'railOn').some(event => event.objId === 'wall')).toBe(true);
+  expect(eventsOf(run, 'railScore').find(event => event.objId === 'wall')?.data).toMatchObject({ wall: true, points: 100 });
+  expect(run.score.railPoints).toBe(100);
+});
 
 test('踏切の指を離さずすぐ回る。続いて新しい指でも回せて慣性と逆回転を維持する', () => {
   const run = newRun(testCourse(), 'shiba', free);

@@ -65,11 +65,12 @@ export interface RailRt {
   /** 両端の上面の高さ（絶対値）。 */
   H0: number;
   H1: number;
+  wall?: Solid;
 }
 
 export interface ItemRt {
   id: string;
-  kind: 'food' | 'poop' | 'guide';
+  kind: 'food' | 'poop' | 'guide' | 'bone';
   pathId: string;
   s: number;
   x: number;
@@ -391,7 +392,7 @@ export function solidTop(p: PathRt, so: Solid, s: number, tUs: number): number {
 export function supportHeight(p: PathRt, s: number, x: number, footY: number, tUs: number): number {
   let best = baseHeight(p, s);
   for (const so of p.solids) {
-    if (!so.standable) continue;
+    if (!so.standable || so.rail?.wall) continue;
     if (s < so.s0 || s > so.s1 || x < so.x0 || x > so.x1) continue;
     const top = solidTop(p, so, s, tUs);
     if (top <= footY + STEP_UP + 1e-9 && top > best) best = top;
@@ -424,6 +425,14 @@ function placeObject(course: CourseRt, o: ObjectDef): void {
     }
     case 'wall': {
       const so: Solid = { id: o.id, kind: 'wall', pathId: p.id, s0: sAtU(p, o.u0), s1: sAtU(p, o.u1), x0: o.x0, x1: o.x1, standable: true, height: o.height, look: o.look };
+      if (o.grind) {
+        const { id, pathId, s0, s1 } = so;
+        const rail: RailRt = { id, pathId, s0, s1, x: (o.x0 + o.x1) / 2, wall: so,
+          H0: baseHeight(p, s0) + o.height, H1: baseHeight(p, s1) + o.height };
+        so.rail = rail;
+        p.rails.push(rail);
+        course.railsById.set(id, rail);
+      }
       p.solids.push(so);
       course.solidsById.set(o.id, so);
       break;
@@ -462,6 +471,7 @@ function placeObject(course: CourseRt, o: ObjectDef): void {
       break;
     }
     case 'food':
+    case 'bone':
     case 'guide': {
       const s = sAtU(p, o.u);
       const it: ItemRt = { id: o.id, kind: o.kind, pathId: p.id, s, x: o.x, y: baseHeight(p, s) + o.h };
