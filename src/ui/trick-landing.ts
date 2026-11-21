@@ -2,15 +2,15 @@ import './trick-landing.css';
 import type { TrickLandingText } from '../view/trick-landing';
 import { h } from './dom';
 
-/**
- * 着地の技名・点・連携点の表示。81種類の着地L の段階と対象を data-fx-* に載せ、文字の飾りだけを変える。
- * 大きな光は3D画面の床に描くので、ここでは文字を読みやすく保つ。
- */
 export function showTrickLanding(element: HTMLElement, landing: TrickLandingText): void {
-  element.dataset.fxTarget = landing.fxTarget ?? '';
-  element.dataset.fxLanding = landing.landingId ?? '';
+  const changes = [
+    landing.switchCount > 0 ? `対象切替 ${landing.switchCount}回` : '',
+    landing.directionCount > 0 ? `方向切替 ${landing.directionCount}回` : '',
+  ].filter(Boolean).join('・');
+  const numeric = landing.score.startsWith('＋');
   element.replaceChildren(h('div', {
     class: 'trick-landing-card',
+    style: `--fx-level:${landing.landingLevel}`,
     'data-testid': 'trick-fx-card',
     'data-fx-target': landing.fxTarget ?? 'none',
     'data-fx-f': landing.emphasisId ?? '',
@@ -18,13 +18,17 @@ export function showTrickLanding(element: HTMLElement, landing: TrickLandingText
     'data-fx-l': landing.landingId ?? '',
     'data-fx-level': String(landing.landingLevel),
   },
-    h('span', { class: 'trick-fx-mark', 'aria-hidden': 'true' }),
-    h('span', { class: 'trick-landing-name', 'data-testid': 'landing-trick-name' }, landing.name),
-    landing.switchBonus > 0
-      ? h('span', { class: 'trick-landing-combo', 'data-testid': 'landing-combo' },
-        `切替 ${landing.switchCount}連携　＋${landing.switchBonus.toLocaleString('ja-JP')}点`)
-      : null,
-    h('span', { class: 'trick-landing-score', 'data-testid': 'landing-trick-score' },
-      landing.full ? h('span', { class: 'trick-landing-full' }, '回転満点') : null, landing.score),
+    h('div', { class: 'trick-landing-title' },
+      h('span', { class: 'trick-landing-name', 'data-testid': 'landing-trick-name' }, landing.name)),
+    h('div', { class: 'trick-landing-points' },
+      h('span', {
+        class: `trick-landing-score${numeric ? ' is-numeric' : ''}`,
+        'data-testid': 'landing-trick-score',
+      }, landing.score, numeric ? h('small', {}, '点') : null),
+      landing.full ? h('span', { class: 'trick-landing-full' }, '回転満点') : null,
+      landing.switchBonus > 0
+        ? h('span', { class: 'trick-landing-combo', 'data-testid': 'landing-combo' },
+          h('strong', {}, `連携 ＋${landing.switchBonus.toLocaleString('ja-JP')}点`), changes ? h('small', {}, changes) : null)
+        : null),
   ));
 }

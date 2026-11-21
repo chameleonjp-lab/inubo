@@ -110,7 +110,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
       if (stage) {
         const landingText = trickLandingText(names, pts, Number(d.trickPoints ?? pts), d.sectionUsed === true, {
           basePoints: Number(d.trickBase ?? d.trickPoints ?? pts),
-          switchBonus: Number(d.switchBonus ?? 0), switchCount: Number(d.switchCount ?? 0), fxTarget: d.fxTarget,
+          switchBonus: Number(d.switchBonus ?? 0), switchCount: Number(d.switchCount ?? 0), directionCount: Number(d.directionCount ?? 0), fxTarget: d.fxTarget,
         });
         // 実回転の対象が分かる着地は81種類の着地L（床の演出は scene が描く）。分からない記録は従来どおり。
         if (landingText.fxTarget && landingText.landingLevel > 0) {
@@ -171,7 +171,7 @@ export function cueForEvent(ev: SimEvent): Cue | null {
     case 'sectionMiss':
       return null;
     case 'streak':
-      return cue(ev, 'E21', 'streakLabel', 'chord3', { text: '3区間連続 ＋100', priority: 2 });
+      return cue(ev, 'E21', 'streakLabel', 'chord3', { text: d.everyLanding ? undefined : '3区間連続 ＋100', footMark: d.everyLanding ? '3連続 ＋100' : undefined, priority: 2 });
     case 'gateLamp':
       return cue(ev, 'E16', 'lamp', 'bell');
     case 'gateRise':

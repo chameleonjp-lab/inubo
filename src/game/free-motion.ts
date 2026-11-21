@@ -1,9 +1,11 @@
 import { DEG, length, quatMul, type Quat, type Vec3 } from './math';
 import { add3, normalQ, rotateBody, rotationQ, scale3 } from './free-math';
 
-export const FREE_RULES_VERSION = 'rules-freestyle-2';
+import { FREE_RULES_VERSION } from './rules';
+export { FREE_RULES_VERSION };
+export const SWITCH_FREE_RULES_VERSION = 'rules-freestyle-2';
 export const PREVIOUS_FREE_RULES_VERSION = 'rules-freestyle-1';
-export const isFreestyleVersion = (version: string): boolean => version === FREE_RULES_VERSION || version === PREVIOUS_FREE_RULES_VERSION;
+export const isFreestyleVersion = (version: string): boolean => version === FREE_RULES_VERSION || version === SWITCH_FREE_RULES_VERSION || version === PREVIOUS_FREE_RULES_VERSION;
 export const FREE_TICK_US = 5_000;
 export const FREE_DECAY = Math.log(2) / 0.8;
 const SWIPE_GAIN = 20;

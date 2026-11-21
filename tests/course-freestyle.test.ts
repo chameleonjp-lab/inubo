@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { DOGS } from '../src/content/dogs';
 import { advanceRun, RunSession } from '../src/game/run';
-import { FREE_RULES_VERSION, sampleFreeSpan, type FreeTarget } from '../src/game/free-motion';
+import { FREE_RULES_VERSION, SWITCH_FREE_RULES_VERSION, sampleFreeSpan, type FreeTarget } from '../src/game/free-motion';
 import { qDistance } from '../src/game/free-math';
 import type { Vec3 } from '../src/game/math';
 import type { GestureFact } from '../src/game/types';
@@ -76,7 +76,7 @@ test('接地までの回転で即時採点し、実際の着地区間に1回だ�
     { path: 'main', u0: 0, u1: 8.4, opp: 'first' },
     { path: 'main', u0: 8.4, u1: 60, opp: 'second' },
   ] });
-  const run = newRun(course, 'shiba', free);
+  const run = newRun(course, 'shiba', { rulesVersion: SWITCH_FREE_RULES_VERSION });
   const facts = [...jumpFacts(jumpAt), down(1, 240_000), turn(1, 250_000, 1, [0, 0.78, 0]), up(1, 270_000)];
   advanceRun(run, 970_000, facts);
   expect(run.score.jumps).toEqual([]);
@@ -91,6 +91,23 @@ test('接地までの回転で即時採点し、実際の着地区間に1回だ�
   expect(run.score.jumps).toEqual([landing]);
   expect(run.score.scoredOpps.second).toBeUndefined();
   expect(eventsOf(run, 'sectionMiss').some(e => e.data?.opp === 'first')).toBe(false);
+});
+
+test('現行ルールは同じ場所と採点区間外でも技を加点し、移動で連続成功を切らない', () => {
+  const course = testCourse({ sections: [{ path: 'main', u0: 0, u1: 19, opp: 'first' }] });
+  const run = newRun(course, 'shiba', free);
+  for (const [i, at] of [200_000, 1_130_000, 2_065_000].entries()) {
+    const finger = i + 1;
+    advanceRun(run, at + 860_000, [
+      ...jumpFacts(at), down(finger, at + 40_000),
+      turn(finger, at + 50_000, finger, [0, 0.9, 0]), up(finger, at + 90_000),
+    ]);
+  }
+  expect(run.score.jumps).toHaveLength(3);
+  expect(run.score.jumps.every(jump => jump.awarded > 0 && jump.opp === null)).toBe(true);
+  expect(run.score.streakBonus).toBe(100);
+  expect(eventsOf(run, 'sectionMiss')).toEqual([]);
+  expect(eventsOf(run, 'sectionScore')).toEqual([]);
 });
 
 test('どの時刻で描画しても未知の姿勢と着地が同じ。再生用の姿勢にも犬・人を別々に記録する', () => {

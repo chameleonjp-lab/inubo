@@ -135,3 +135,18 @@ test('3対象の実回転を挟む切替を高加点し、単なる切替連打�
   const spam = inputs.map((input, i) => ({ ...input, atUs: i * 10_000, rotation: [0, 0.001, 0] as Vec3 }));
   expect(scoreFreeMotion(state.history, 800_000, 0, spam).switchBonus).toBe(0);
 });
+
+test('向きを切り替えて実際に回った場合だけ新ルールで250点を加える', () => {
+  const inputs = [
+    { seq: 1, atUs: 0, target: 'common' as const, rotation: [0, 1.35, 0] as Vec3 },
+    { seq: 2, atUs: 350_000, target: 'common' as const, rotation: [0, -2.3, 0] as Vec3 },
+  ];
+  const state = createFreeMotion();
+  advanceFreeMotion(state, airtime, inputs);
+  const result = scoreFreeMotion(state.history, airtime, 0, inputs);
+  expect(result).toMatchObject({ directionCount: 1, switchCount: 0, switchBonus: 250 });
+  expect(result.points).toBe(result.basePoints + 250);
+  expect(scoreFreeMotion(state.history, airtime, 0, inputs, false).switchBonus).toBe(0);
+  const tap = [inputs[0], { ...inputs[1], rotation: [0, -0.01, 0] as Vec3 }];
+  expect(scoreFreeMotion(state.history, airtime, 0, tap).switchBonus).toBe(0);
+});

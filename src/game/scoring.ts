@@ -7,6 +7,7 @@ import {
   toCentiseconds,
 } from './rules';
 import { resolveTricks, scoreJump, type JumpScore } from './tricks';
+import { FREE_RULES_VERSION } from './free-motion';
 import { sectionAt, type PathRt, type SectionRt } from './track';
 import { settleRail, loseRail } from './rails';
 import type { FailureRec, JumpRec, NearMiss, RunResult, ScoreState, SimEvent, SimState } from './types';
@@ -102,8 +103,9 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
     run.pendingRail = null;
   }
 
+  const everyLanding = run.id.rulesVersion === FREE_RULES_VERSION;
   const p = run.course.paths.get(contact.pathId) as PathRt;
-  const sec = sectionAt(p, contact.sMm);
+  const sec = everyLanding ? null : sectionAt(p, contact.sMm);
   if (!hasTrick) {
     emit('land', contact.atUs, { jumpId: jump.jumpId, points: 0, tenths: js.tenths, plain: true, onRail: contact.onRail });
     return js;
@@ -127,16 +129,16 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
     return js;
   }
   let awarded = 0;
-  if (sec && !sc.scoredOpps[sec.opp]) {
+  if (everyLanding || (sec && !sc.scoredOpps[sec.opp])) {
     awarded = js.points;
-    sc.scoredOpps[sec.opp] = { points: awarded, jumpId: jump.jumpId, sectionKey: sec.key };
+    if (sec) sc.scoredOpps[sec.opp] = { points: awarded, jumpId: jump.jumpId, sectionKey: sec.key };
     sc.jumpPoints += awarded;
     sc.streak += 1;
-    emit('sectionScore', contact.atUs, { opp: sec.opp, section: sec.key, points: awarded, streak: sc.streak });
+    if (sec) emit('sectionScore', contact.atUs, { opp: sec.opp, section: sec.key, points: awarded, streak: sc.streak });
     if (sc.streak >= STREAK_LENGTH) {
       sc.streakBonus += STREAK_BONUS;
       sc.streak = 0;
-      emit('streak', contact.atUs, { bonus: STREAK_BONUS });
+      emit('streak', contact.atUs, { bonus: STREAK_BONUS, everyLanding });
     }
   }
   sc.jumps.push({ jumpId: jump.jumpId, atUs: contact.atUs, opp: sec?.opp ?? null, sectionKey: sec?.key ?? null, names: js.names, base: js.base, composite: js.composite, tenths: js.tenths, points: js.points, awarded, onRail: !!contact.onRail });
@@ -146,10 +148,10 @@ export function settleLanding(run: SimState, contact: LandingContact, emit: Emit
     tenths: js.tenths,
     composite: js.composite,
     names: js.names,
-    sectionUsed: !!sec && awarded === 0,
+    ...(everyLanding ? {} : { sectionUsed: !!sec && awarded === 0 }),
     onRail: contact.onRail,
     ...(js.trickTier ? { trickTier: js.trickTier, trickPoints: js.points,
-      trickBase: js.trickBase ?? js.points, switchBonus: js.switchBonus ?? 0, switchCount: js.switchCount ?? 0 } : {}),
+      trickBase: js.trickBase ?? js.points, switchBonus: js.switchBonus ?? 0, switchCount: js.switchCount ?? 0, directionCount: js.directionCount ?? 0 } : {}),
     // 演出だけが読む実回転の区分（B=両方、D=犬、H=人）。得点・区間・記録の計算には使わない。
     ...(js.trickTier && js.scoredTarget ? { fxTarget: js.scoredTarget === 'common' ? 'B' : js.scoredTarget === 'dog' ? 'D' : 'H' } : {}),
   });
@@ -215,7 +217,7 @@ export function finishRun(run: SimState, atUs: number): RunResult {
     jumpPoints: sc.jumpPoints,
     railPoints: sc.railPoints,
     streakBonus: sc.streakBonus,
-    sections: run.course.opportunities.map((opp) => ({
+    sections: (run.id.rulesVersion === FREE_RULES_VERSION ? [] : run.course.opportunities).map((opp) => ({
       opp,
       points: sc.scoredOpps[opp]?.points ?? 0,
       state: sc.scoredOpps[opp] ? 'scored' : sc.missedOpps.includes(opp) ? 'missed' : 'open',

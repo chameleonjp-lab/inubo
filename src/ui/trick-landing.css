@@ -1,101 +1,118 @@
+.center-text:has(.trick-landing-card)[data-trick-tier]:not([data-trick-tier='0']) {
+  inset: calc(var(--safe-top) + 70px) calc(var(--safe-right) + 12px) calc(var(--safe-bottom) + 56px) calc(var(--safe-left) + 12px);
+  width: auto;
+  max-width: none;
+  margin: 0;
+  transform: none;
+}
 .trick-landing-card {
+  --fx-a: #ff702e;
+  --fx-b: #24cfff;
   position: relative;
-  display: grid;
-  justify-items: center;
-  gap: 4px;
-  padding: 5px 12px;
+  width: 100%;
+  height: 100%;
+  text-align: left;
   color: #fff;
-  text-align: center;
-  text-shadow: 0 1px 3px #0c1819;
   -webkit-text-stroke: 0;
-  border-radius: 9px;
-  background: #102423ed;
+}
+.trick-landing-card[data-fx-target='H'] { --fx-a: #467aff; --fx-b: #a6efff; }
+.trick-landing-card[data-fx-target='D'] { --fx-a: #f66e24; --fx-b: #ffdd55; }
+.trick-landing-title {
+  position: absolute;
+  top: 2%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: fit-content;
+  max-width: min(87%, 560px);
+  padding: 10px 26px 12px 15px;
+  background: linear-gradient(110deg, #132335fa 64%, #223c53ef);
+  border-left: 6px solid var(--fx-a);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 15px) 100%, 0 100%);
 }
 .trick-landing-name {
-  font-weight: 850;
-  font-size: clamp(16px, 4vw, 23px);
-  line-height: 1.28;
+  color: white;
+  font-weight: 950;
+  font-size: clamp(18px, 4.2vmin, 28px);
+  line-height: 1.18;
   overflow-wrap: anywhere;
   text-wrap: balance;
 }
-.trick-landing-score {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  font-size: 16px;
-  font-weight: 850;
-  line-height: 1.25;
-  font-variant-numeric: tabular-nums;
-}
-.trick-landing-full {
-  padding: 1px 7px;
-  border: 1px solid #efc95e;
-  border-radius: 999px;
-  color: #fff6c2;
-}
-[data-trick-tier='2'] .trick-landing-card { color: #c7f8ff; box-shadow: inset 0 -1px #68ddea; }
-[data-trick-tier='3'] .trick-landing-card { color: #e4f7ff; text-shadow: 0 0 8px #2698ff; }
-[data-trick-tier='3'] .trick-landing-score { color: #c7ebff; }
-[data-trick-tier='4'] .trick-landing-card { color: #fff1a3; box-shadow: inset 0 -1px #f5c856; }
-[data-trick-tier='4'] .trick-landing-name { text-shadow: 0 0 8px #b96b1e; }
-[data-trick-tier='4'] .trick-landing-card::after {
-  content: '';
+.trick-landing-points {
   position: absolute;
-  bottom: 0;
-  left: 6%;
-  width: 22%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #fff4a1, transparent);
-  animation: trick-landing-sweep 160ms ease-out both;
+  right: 0;
+  top: 27%;
+  max-width: 54%;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
 }
-[data-trick-tier='5'] .trick-landing-card {
-  color: #fff3b9;
-  border-block: 1px solid #d7af62;
-  box-shadow: inset 0 0 12px #73159597, 0 0 12px #edb94578;
-  background: #272232f5;
+.trick-landing-score {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  padding: 1px 12px 4px 18px;
+  color: var(--fx-b);
+  font-size: 18px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  text-align: right;
+  background: #101e32ee;
+  border-right: 5px solid var(--fx-b);
+  transform: skew(-7deg);
+  box-shadow: 0 2px 0 #0a1729, 0 0 calc(4px + var(--fx-level) * 1.4px) var(--fx-b);
 }
-[data-trick-tier='5'] .trick-landing-name {
-  -webkit-text-stroke: .55px #814576;
-  text-shadow: 0 0 8px #e38f56;
+.trick-landing-score.is-numeric {
+  font-size: clamp(35px, calc(8.3vmin + var(--fx-level) * 1.55px), 72px);
+  letter-spacing: -0.08em;
+  text-shadow: 0 2px 0 #293955;
 }
-[data-trick-tier='5'] .trick-landing-score { font-size: 20px; color: #fff5bf; }
-[data-paused='true'] .trick-landing-card::after { animation-play-state: paused; }
-@keyframes trick-landing-sweep {
-  from { opacity: 1; transform: translateX(0); }
-  to { opacity: 0; transform: translateX(300%); }
+.trick-landing-score small {
+  font-size: 0.37em;
+  margin-left: 0.25em;
+  letter-spacing: 0;
 }
-@media (prefers-reduced-motion: reduce) {
-  [data-trick-tier='4'] .trick-landing-card::after { animation: none; display: none; }
-  .center-text:has(.trick-landing-card) { transition: none; transform: none; }
+.trick-landing-full, .trick-landing-combo {
+  padding: 4px 8px;
+  font-size: clamp(11px, 3vmin, 15px);
+  line-height: 1.24;
+  color: #182439;
+  background: #fff0a7;
+  font-weight: 900;
+  text-align: right;
+  text-shadow: none;
 }
-
-
-/* 81種類の着地L：対象（B=両方・H=人・D=犬）で色、段階（1〜10）で縁と下線の強さを変える。
-   大きな光は3D画面の床に描くので、文字の飾りは控えめにして、読みやすさを優先する。 */
-.trick-landing-card { isolation: isolate; overflow: hidden; min-width: min(235px, 82vw); max-width: min(92vw, 560px); --fx-a: #8fd8e4; --fx-b: #8fd8e4; --fx-k: 0; }
-.trick-landing-card > :not(.trick-fx-mark) { position: relative; z-index: 2; }
-.trick-landing-card[data-fx-target='B'] { --fx-a: #ff9a3c; --fx-b: #4d9eff; }
-.trick-landing-card[data-fx-target='H'] { --fx-a: #4d9eff; --fx-b: #bfe0ff; }
-.trick-landing-card[data-fx-target='D'] { --fx-a: #ff9a3c; --fx-b: #ffc14d; }
-.trick-landing-card[data-fx-level='2'] { --fx-k: 1; } .trick-landing-card[data-fx-level='3'] { --fx-k: 2; }
-.trick-landing-card[data-fx-level='4'] { --fx-k: 3; } .trick-landing-card[data-fx-level='5'] { --fx-k: 4; }
-.trick-landing-card[data-fx-level='6'] { --fx-k: 5; } .trick-landing-card[data-fx-level='7'] { --fx-k: 6; }
-.trick-landing-card[data-fx-level='8'] { --fx-k: 7; } .trick-landing-card[data-fx-level='9'] { --fx-k: 8; }
-.trick-landing-card[data-fx-level='10'] { --fx-k: 9; }
-.trick-landing-card:not([data-fx-target='none']) {
-  border-inline: 2px solid var(--fx-a);
-  box-shadow: inset 0 calc(-1px - var(--fx-k) * 0.25px) 0 var(--fx-b), 0 0 calc(var(--fx-k) * 1.3px) color-mix(in srgb, var(--fx-a) 55%, transparent);
+.trick-landing-combo {
+  background: #141e34f5;
+  color: #fff;
+  border-right: 3px solid var(--fx-a);
 }
-/* 段の左右の小さな印（両方は二色、人は青い線、犬は肉球の点）。 */
-.trick-fx-mark { pointer-events: none; position: absolute; z-index: 1; inset: auto 8px 4px; height: 3px; border-radius: 3px; opacity: .55;
-  background: linear-gradient(90deg, var(--fx-a), var(--fx-b)); transform-origin: center; scale: calc(0.25 + var(--fx-k) * 0.08) 1; }
-[data-fx-target='D'] .trick-fx-mark { background: radial-gradient(circle, var(--fx-b) 40%, transparent 42%) 0 0 / 9px 3px repeat-x; }
-[data-fx-target='none'] .trick-fx-mark { display: none; }
-.trick-landing-combo { font-size: clamp(12px,3vw,15px); padding: 3px 9px; border-radius: 999px; color: #172936; background: #fff1a7; font-weight: 850; text-shadow: none; }
+.trick-landing-combo strong, .trick-landing-combo small { display: block; }
+.trick-landing-combo small { color: #e2ebfa; font-size: 0.83em; }
+[data-trick-tier='4'] .trick-landing-title,
+[data-trick-tier='5'] .trick-landing-title {
+  background: linear-gradient(110deg, #231330 55%, #3f294b 85%, #6d345c);
+  border-left-width: 9px;
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .center-text:has(.trick-landing-card)[data-trick-tier]:not([data-trick-tier='0']) {
+    top: calc(var(--safe-top) + 60px);
+  }
+  .trick-landing-title { max-width: 56%; }
+  .trick-landing-points { top: 17%; }
+}
 @media (prefers-reduced-motion: no-preference) {
-  .trick-landing-card:not([data-fx-target='none']) .trick-fx-mark { animation: trick-fx-mark 600ms ease-out both; }
+  .trick-landing-title { animation: trick-name-enter 210ms cubic-bezier(.15,.8,.25,1) both; }
+  .trick-landing-points { animation: trick-points-enter 290ms cubic-bezier(.18,.81,.3,1.16) both; }
+  [data-paused='true'] :is(.trick-landing-title, .trick-landing-points) { animation-play-state: paused; }
 }
-[data-paused='true'] .trick-fx-mark { animation-play-state: paused; }
-@keyframes trick-fx-mark { from { opacity: .9; scale: 0.1 1; } to { opacity: .55; } }
+@keyframes trick-name-enter {
+  from { transform: translateX(-22%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes trick-points-enter {
+  from { transform: translate(25%, 10%) scale(.65); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}

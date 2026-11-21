@@ -42,3 +42,9 @@ button, select { font: inherit; color: inherit; }
 }
 .free-status:has(.trick-landing-card) { padding: 0; background: none; }
 .free-perf { font: 11px/1.4 ui-monospace, monospace; overflow-wrap: anywhere; flex-basis: 100%; }
+
+.free-status .trick-landing-card { min-height: 101px; }
+.free-status .trick-landing-title { top: 0; max-width: 64%; }
+.free-status .trick-landing-name { font-size: clamp(12px, 3vmin, 15px); }
+.free-status .trick-landing-points { top: 27px; gap: 3px; }
+.free-status .trick-landing-score.is-numeric { font-size: clamp(23px, 5.3vmin, 34px); }

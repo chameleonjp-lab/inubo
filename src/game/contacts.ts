@@ -1,3 +1,4 @@
+import { FREE_RULES_VERSION } from './free-motion';
 import { FALL_DEPTH, FOOT_FRONT, FOOT_HALF_WIDTH, RAIL_SNAP, STEP_DOWN, STEP_UP } from './rules';
 import { touches } from './items';
 import { landingSupport, offRoad, pointAt, type MotionPoint, type SegmentMotion } from './motion';
@@ -118,7 +119,7 @@ export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): F
   if (run.mode === 'falling') return null;
 
   // 区間の終了線
-  const sec = sectionAt(p, sMmOf(m.s0));
+  const sec = run.id.rulesVersion === FREE_RULES_VERSION ? null : sectionAt(p, sMmOf(m.s0));
   if (sec) add(crossLinear(m.s0, m.dsdt, sec.s1Mm / 1000, spanUs), { type: 'sectionEnd', section: sec });
 
   // ゴール・道の終わり
@@ -132,14 +133,19 @@ export function findContacts(run: SimState, m: SegmentMotion, spanUs: number): F
   }
 
   // アイテム（足元中心が物の位置を越えた時刻に、横と高さの重なりを調べる）
-  for (const it of p.items) {
-    if (run.consumed[it.id]) continue;
-    if (it.s < m.s0 - 1e-9 || it.s > sEnd + 1e-9) continue;
-    const tau = crossLinear(m.s0, Math.max(m.dsdt, 1e-12), it.s, spanUs, true);
-    if (tau === null) continue;
-    const pt = at(tau);
-    if (touches(it, pt.x, pt.y, run.mode === 'ground')) add(tau, { type: 'item', item: it });
-  }
+  const checkItems = (items: readonly ItemRt[]) => {
+    for (const it of items) {
+      if (it.s < m.s0 - 1e-9 || run.consumed[it.id]) continue;
+      if (it.s > sEnd + 1e-9) break;
+      const tau = crossLinear(m.s0, Math.max(m.dsdt, 1e-12), it.s, spanUs, true);
+      if (tau === null) continue;
+      const pt = at(tau);
+      if (touches(it, pt.x, pt.y, run.mode === 'ground')) add(tau, { type: 'item', item: it });
+    }
+  };
+  checkItems(p.items);
+  const rivalItems = run.rivals?.items.get(p.id);
+  if (rivalItems) checkItems(rivalItems);
 
   // 物への接触（正面・側面）と踏切台の先端
   for (const so of p.solids) {

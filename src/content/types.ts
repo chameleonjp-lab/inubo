@@ -47,6 +47,7 @@ export interface ForkOption {
   xMax: number;
   /** 道しるべが足跡を出す「技を狙える道」。 */
   trick?: boolean;
+  detail?: string;
   label: string;
 }
 

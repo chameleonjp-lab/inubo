@@ -4,6 +4,7 @@
  * 値の多くは仕様書§1の「試作値」。実機（iPhone 17 Pro）で測ってから固定する。
  */
 export const RULES_VERSION = 'rules-1';
+export const FREE_RULES_VERSION = 'rules-freestyle-3';
 
 /** 走行計算の一定の刻み。描画の回数とは無関係に、走行時刻 0 から 5ms ごとに進める。 */
 export const TICK_US = 5_000;
