@@ -4,7 +4,7 @@ import type { RunResult } from '../game/types';
 /**
  * Xでシェア。結果の文には、今回の犬種・コース・完走タイム・総合点・確認済みの正式URLを1回ずつ入れる。
  * ホームの共有（ゲーム紹介）とは文を分ける。投稿は遊んだ人が決める（投稿画面を開くだけ）。
- * X の投稿画面の URL は公式文書の Web Intent（https://x.com/intent/tweet?text=...）。
+ * X の投稿画面には本文とリンクを別の項目で渡す。
  */
 
 export const X_INTENT = 'https://x.com/intent/tweet';
@@ -36,8 +36,23 @@ export function homeShareText(url: string | null): string {
   return lines.join('\n');
 }
 
-export function intentUrl(text: string): string {
-  return `${X_INTENT}?text=${encodeURIComponent(text)}`;
+/** 共有画像を追加する前に参照された URL と区別するため、X で共有するリンクを固定する。 */
+export function xShareUrl(url: string | null): string | null {
+  if (!url) return null;
+  const link = new URL(url);
+  link.searchParams.set('share', '1');
+  return link.href;
+}
+
+export function intentUrl(text: string, url: string | null = null): string {
+  const intent = new URL(X_INTENT);
+  intent.searchParams.set('text', text);
+  if (url) intent.searchParams.set('url', url);
+  return intent.href;
+}
+
+export function shareTextWithLink(text: string, url: string | null): string {
+  return url ? `${text}\n${url}` : text;
 }
 
 export interface ShareEnv {
@@ -49,16 +64,16 @@ export interface ShareEnv {
  * 投稿画面を開く。開けなければ同じ文のコピーへ進む。
  * 戻り値: 'opened' | 'copied' | 'manual'（コピーもできないので、文を画面に出して手で写してもらう）。
  */
-export async function shareOnX(text: string, env: ShareEnv): Promise<'opened' | 'copied' | 'manual'> {
+export async function shareOnX(text: string, env: ShareEnv, url: string | null = null): Promise<'opened' | 'copied' | 'manual'> {
   let win: unknown = null;
   try {
-    win = env.open(intentUrl(text));
+    win = env.open(intentUrl(text, url));
   } catch {
     win = null;
   }
   if (win) return 'opened';
   try {
-    await env.copy(text);
+    await env.copy(shareTextWithLink(text, url));
     return 'copied';
   } catch {
     return 'manual';

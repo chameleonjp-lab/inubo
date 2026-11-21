@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { MemoryStorage, Records, loadProfile, loadSettings, saveSettings, DEFAULT_SETTINGS } from '../src/storage/records';
 import { ReplayRecorder, replayPoseAt, type ReplayData } from '../src/view/replay';
-import { homeShareText, intentUrl, resultShareText, shareOnX, shareableResult } from '../src/ui/share';
+import { homeShareText, intentUrl, resultShareText, shareOnX, shareableResult, xShareUrl } from '../src/ui/share';
 import { getCourse } from '../src/content/courses/index';
 import { runWithAutopilot, Autopilot } from '../src/game/autopilot';
 import { advanceRun } from '../src/game/run';
@@ -210,13 +210,29 @@ describe('V16 共有と結果', () => {
     expect(once(url)).toBe(1);
     const u = intentUrl(text);
     expect(u.startsWith('https://x.com/intent/tweet?text=')).toBe(true);
-    expect(decodeURIComponent(u.split('text=')[1])).toBe(text);
+    expect(new URL(u).searchParams.get('text')).toBe(text);
     // ホームの共有はゲームの紹介で、結果の値を入れない。
     expect(homeShareText(url)).not.toContain('点');
   });
 
   test('正式 URL が未確認のうちは、共有文に URL を入れない', () => {
     expect(resultShareText(result({}), '公園', '柴犬', null)).not.toMatch(/https?:/);
+  });
+
+  test('Xには画像再取得用のリンクを1回だけ渡し、コピーにも同じリンクを入れる', async () => {
+    const link = xShareUrl(url);
+    expect(link).toBe(url + '?share=1');
+    expect(xShareUrl(null)).toBeNull();
+    const text = resultShareText(result({}), '公園&<試験>#1', '柴犬', null);
+    const opened: URL[] = [];
+    const copied: string[] = [];
+    await shareOnX(text, {
+      open: value => (opened.push(new URL(value)), null),
+      copy: async value => void copied.push(value),
+    }, link);
+    expect(opened[0].searchParams.get('text')).toBe(text);
+    expect(opened[0].searchParams.getAll('url')).toEqual([link]);
+    expect(copied).toEqual([`${text}\n${link}`]);
   });
 
   test('投稿画面を開けない場合は、同じ文のコピーへ進む。コピーもできなければ手で写せるようにする', async () => {
