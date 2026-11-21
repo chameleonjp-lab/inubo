@@ -4,7 +4,7 @@ import { DOG_ORDER } from '../src/content/dogs';
 import { Autopilot, runWithAutopilot } from '../src/game/autopilot';
 import { FOOT_FRONT, FOOT_HALF_WIDTH, TICK_US } from '../src/game/rules';
 import { advanceRun } from '../src/game/run';
-import { gatePhase, solidTop } from '../src/game/track';
+import { baseHeight, gatePhase, solidTop } from '../src/game/track';
 import { newRun } from './helpers';
 
 const course = getCourse('park');
@@ -83,11 +83,13 @@ describe('走行中に障害物を通過する高さと横位置', () => {
           break;
         }
         samples++;
-        if (solid.gate) expect(gatePhase(solid.gate, run.simUs).phase).toBe('up');
         if (move === 'jump') {
           expect(run.mode).toBe('air');
-          expect(run.y).toBeGreaterThan(solidTop(path, solid, run.s, run.simUs));
+          // 最高速で到着時刻が変わっても、閉じたゲートを跳び越せる高さを検証する。
+          const top = solid.gate ? baseHeight(path, run.s) + solid.height : solidTop(path, solid, run.s, run.simUs);
+          expect(run.y).toBeGreaterThan(top);
         } else {
+          if (solid.gate) expect(gatePhase(solid.gate, run.simUs).phase).toBe('up');
           expect(run.mode).toBe('ground');
           expect(run.x + FOOT_HALF_WIDTH < solid.x0 || run.x - FOOT_HALF_WIDTH > solid.x1).toBe(true);
         }

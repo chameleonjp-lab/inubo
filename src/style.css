@@ -489,7 +489,7 @@ canvas.trails {
   position: absolute;
   left: max(10px, env(safe-area-inset-left, 0px));
   bottom: calc(10px + var(--safe-bottom));
-  max-width: min(320px, 90%);
+  width: min(350px, calc(100% - max(10px, env(safe-area-inset-left, 0px)) - max(10px, env(safe-area-inset-right, 0px))));
   pointer-events: none;
   color: #172633;
 }
@@ -504,19 +504,19 @@ canvas.trails {
   line-height: 1.35;
 }
 
-.free-run-targets, .free-run-lessons { display: flex; flex-wrap: wrap; gap: 5px; }
-.free-run-lessons { margin-top: 5px; }
+.free-run-targets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.free-run-lessons { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
 .free-run-targets button, .free-run-lessons button { pointer-events: auto; }
 .free-run-targets button {
-  min-height: 44px;
-  min-width: 62px;
-  padding: 4px 8px;
+  min-height: 56px;
+  padding: 6px 4px;
   border: 1px solid #263e4d;
   border-radius: 8px;
   background: #fff9ed;
   color: #233849;
   font: inherit;
-  font-size: 13px;
+  font-size: 17px;
+  font-weight: 800;
   touch-action: manipulation;
 }
 .free-run-targets button[aria-pressed='true'] { background: #233849; color: #fff9ed; }

@@ -34,6 +34,7 @@ import type { GestureFact, RunIdentity, RunResult, SimEvent } from '../game/type
  */
 
 const PARK_ID = 'park';
+const AIR_SWIPE_GAIN = 1.25;
 
 function nowMs(): number {
   return performance.now();
@@ -217,7 +218,7 @@ export class App {
         },
         dogIcon(id, id === this.dogId),
         h('span', { class: 'card-title' }, DOGS[id].name),
-        h('span', { class: 'card-sub' }, `速さ ${DOGS[id].speedIndex}・小回り ${DOGS[id].handlingIndex}`),
+        h('span', { class: 'card-sub' }, `小回り ${DOGS[id].handlingIndex}`),
       ),
     );
     const hasRanking = this.rankingFor(PARK_ID);
@@ -641,14 +642,19 @@ class GameRun {
 
   private freeControls(): HTMLElement {
     const targets = h('div', { class: 'free-run-targets', role: 'group', 'aria-label': '空中で回す対象' });
-    for (const [target, label] of [['common', '両方'], ['dog', '犬だけ'], ['rider', '人だけ']] as const) {
+    for (const [target, label] of [['common', '両方'], ['dog', '犬のみ'], ['rider', '人のみ']] as const) {
       const select = () => {
         if (this.freeTarget === target) return;
         this.freeTarget = target;
         this.freePointer?.retargetAll(target);
         for (const child of targets.children) child.setAttribute('aria-pressed', String(child === button));
       };
-      const button = h('button', { type: 'button', 'aria-pressed': String(target === this.freeTarget), 'data-testid': `run-target-${target}`, onpointerdown: select, onclick: select }, label);
+      const button = h('button', {
+        type: 'button', 'aria-pressed': String(target === this.freeTarget), 'data-testid': `run-target-${target}`,
+        onpointerdown: event => { if ((event as PointerEvent).button === 0) select(); },
+        // 指を離す時の click で、別の指が選んだ新しい対象を上書きしない。
+        onclick: event => { if ((event as MouseEvent).detail === 0) select(); },
+      }, label);
       targets.append(button);
     }
     this.hud.freeStatus = h('p', { class: 'free-run-hint' });
@@ -696,23 +702,35 @@ class GameRun {
 
   private bindPointers(): void {
     const el = this.trails;
-    const pos = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect();
-      return [e.clientX - r.left, e.clientY - r.top] as const;
-    };
-    const moveFree = (e: PointerEvent, x: number, y: number, at: number, now: number) => {
+    const sampleTime = (e: PointerEvent, at: number, now: number) => {
       const stroke = this.freeStrokes.get(e.pointerId);
-      if (!stroke || !this.freePointer) return;
+      if (!stroke) return at;
       const lag = Math.max(0, Math.min(100, now - e.timeStamp));
       const atUs = Math.max(stroke.atUs, this.session.sim.simUs, Math.round(at - lag * (this.freePractice ? 500 : 1000)));
       stroke.atUs = atUs;
-      const inputs = this.freePointer.move(e.pointerId, x, y, atUs);
-      if (!inputs.length) return;
-      const rotation: [number, number, number] = [0, 0, 0];
-      for (const input of inputs) {
-        for (const axis of [0, 1, 2] as const) rotation[axis] += input.rotation[axis];
+      return atUs;
+    };
+    const queueMovement = (id: number, x: number, y: number, atUs: number, facts: GestureFact[]) => {
+      const stroke = this.freeStrokes.get(id);
+      if (!stroke || !this.freePointer) { this.submit(facts); return; }
+      // 踏切と直後の回転が一緒に届いても、その順で計算する。
+      if (!this.session.sim.freeFlight && facts.some(fact => fact.kind === 'forward')) {
+        this.freePointer.recenter(id, x, y);
+        this.submit(facts);
+        return;
       }
-      this.submit([{ kind: 'freeRotate', atUs, strokeId: stroke.id, seq: inputs[inputs.length - 1].seq, rotation, target: inputs[inputs.length - 1].target }]);
+      const inputs = this.freePointer.move(id, x, y, atUs);
+      if (inputs.length) {
+        const rotation: [number, number, number] = [0, 0, 0];
+        for (const input of inputs) {
+          for (const axis of [0, 1, 2] as const) rotation[axis] += input.rotation[axis] * AIR_SWIPE_GAIN;
+        }
+        const { seq, target } = inputs[inputs.length - 1];
+        // 離す直前の移動も、その指を閉じる前に回転へ渡す。
+        const insertAt = facts.at(-1)?.kind === 'up' ? facts.length - 1 : facts.length;
+        facts.splice(insertAt, 0, { kind: 'freeRotate', atUs, strokeId: stroke.id, seq, rotation, target });
+      }
+      this.submit(facts);
     };
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -729,7 +747,8 @@ class GameRun {
         this.recognizer.ignorePointer(e.pointerId);
         return;
       }
-      const [x, y] = pos(e);
+      const rect = el.getBoundingClientRect();
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
       const [fact] = this.recognizer.pointerDown(e.pointerId, x, y, at, nowMs());
       if (this.freePointer?.down(e.pointerId, x, y, this.freeTarget)) {
         this.freeStrokes.set(e.pointerId, { id: fact.strokeId, atUs: at });
@@ -744,20 +763,26 @@ class GameRun {
       const list = e.getCoalescedEvents?.() ?? [];
       const last = list[list.length - 1];
       if (!last || last.clientX !== e.clientX || last.clientY !== e.clientY) list.push(e);
+      const rect = el.getBoundingClientRect();
       for (const ce of list) {
-        const [x, y] = pos(ce);
-        this.submit(this.recognizer.pointerMove(e.pointerId, x, y, at));
-        moveFree(ce, x, y, at, now);
+        const x = ce.clientX - rect.left, y = ce.clientY - rect.top;
+        const atUs = sampleTime(ce, at, now);
+        queueMovement(e.pointerId, x, y, atUs, this.recognizer.pointerMove(e.pointerId, x, y, atUs));
       }
     });
     const end = (e: PointerEvent, cancelled: boolean) => {
       const clock = this.session.runClockUs(this.wallUs());
       const at = clock ?? this.session.sim.simUs;
-      const [x, y] = pos(e);
-      if (!cancelled && clock !== null) moveFree(e, x, y, at, nowMs());
+      const rect = el.getBoundingClientRect();
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
+      const now = nowMs();
+      if (cancelled || clock === null) this.submit(this.recognizer.pointerCancel(e.pointerId, at, now));
+      else {
+        const atUs = sampleTime(e, at, now);
+        queueMovement(e.pointerId, x, y, atUs, this.recognizer.pointerUp(e.pointerId, x, y, atUs, now));
+      }
       this.freePointer?.up(e.pointerId);
       this.freeStrokes.delete(e.pointerId);
-      this.submit(cancelled ? this.recognizer.pointerCancel(e.pointerId, at, nowMs()) : this.recognizer.pointerUp(e.pointerId, x, y, at, nowMs()));
       this.session.pointerUp(e.pointerId, this.wallUs());
       if (!this.session.paused) this.app.sound.setPaused(false, nowMs());
     };

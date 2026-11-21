@@ -220,12 +220,16 @@ for (const vp of [
     await page.goto('/');
     await page.click('[data-testid="start"]');
     await page.waitForTimeout(3500);
-    for (const id of ['pause', 'hud-time', 'hud-trick', 'free-run-controls', 'run-target-dog']) {
+    for (const id of ['pause', 'hud-time', 'hud-trick', 'free-run-controls', 'run-target-common', 'run-target-dog', 'run-target-rider']) {
       const b = (await page.locator(`[data-testid="${id}"]`).boundingBox())!;
       expect(b.x).toBeGreaterThanOrEqual(0);
       expect(b.y).toBeGreaterThanOrEqual(0);
       expect(b.x + b.width).toBeLessThanOrEqual(vp.width);
       expect(b.y + b.height).toBeLessThanOrEqual(vp.height);
+      if (id.startsWith('run-target-')) {
+        expect(b.width).toBeGreaterThanOrEqual(100);
+        expect(b.height).toBeGreaterThanOrEqual(56);
+      }
     }
   });
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { railPoints } from '../src/game/rails';
 import { advanceRun, forceFall } from '../src/game/run';
+import { BASE_SPEED } from '../src/game/rules';
 import { eventsOf, jumpFacts, newRun, runTo, testCourse } from './helpers';
 import type { GestureFact, SimState } from '../src/game/types';
 
@@ -39,7 +40,7 @@ describe('V09 手すり', () => {
       while (run.s < 33) advanceRun(run, (t += 5_000));
       advanceRun(run, (t += 5_000), jumpFacts(t - 5_000));
       const mountUs = untilMounted(run, 'A');
-      const offUs = mountUs + Math.round(meters * 100_000);
+      const offUs = mountUs + Math.round(meters * 1e6 / BASE_SPEED);
       runTo(run, offUs + 2_000_000, railJumpOff(offUs), 5_000);
       const score = eventsOf(run, 'railScore')[0];
       expect(score.data).toMatchObject({ railId: 'A', points: expected });

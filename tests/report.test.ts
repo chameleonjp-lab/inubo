@@ -79,9 +79,9 @@ test('自動再生: 公園を 3 犬種 × 3 経路で走り、犬種差を 3 区
       if (reportPath) lines.push(`| ${DOGS[dog].name} | ${name} | ${v.map((x) => x.toFixed(2)).join(' | ')} | ${m.toFixed(2)} |`);
     }
   }
-  // 直線では最高速の速いウィペットが最も短く、コーギーが最も長い。
-  expect(med.whippet['直線']).toBeLessThan(med.shiba['直線']);
-  expect(med.shiba['直線']).toBeLessThan(med.corgi['直線']);
+  // 同じ直線を同じ手順で走ったタイムは全犬種で一致する。
+  expect(med.whippet['直線']).toBe(med.shiba['直線']);
+  expect(med.corgi['直線']).toBe(med.shiba['直線']);
   lines.push('');
   if (reportPath) writeFileSync(reportPath, lines.join('\n') + '\n');
 });
