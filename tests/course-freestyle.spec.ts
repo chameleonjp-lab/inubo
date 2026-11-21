@@ -72,9 +72,21 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       const speedAfterReverse = omega();
       await until(() => sim.score.jumps.length > 0);
       const landingPhase = impactCanvas.dataset.phase;
+      const titleElement = document.querySelector<HTMLElement>('[data-testid="center-text"]')!;
+      const nameElement = titleElement.querySelector<HTMLElement>('[data-testid="landing-trick-name"]')!;
+      const scoreElement = titleElement.querySelector<HTMLElement>('[data-testid="landing-trick-score"]')!;
+      for (const animation of titleElement.getAnimations({ subtree: true })) animation.finish();
+      const nameBox = nameElement.getBoundingClientRect();
+      const scoreBox = scoreElement.getBoundingClientRect();
+      const inViewport = (box: DOMRect) => box.right > 0 && box.left < innerWidth && box.bottom > 0 && box.top < innerHeight;
+      const landingLayout = {
+        name: nameElement.textContent, score: scoreElement.textContent, tier: titleElement.dataset.trickTier,
+        separation: scoreBox.left - nameBox.left, scoreHeight: scoreElement.offsetHeight,
+        nameInViewport: inViewport(nameBox), scoreInViewport: inViewport(scoreBox),
+      };
       return {
         version: sim.id.rulesVersion, ranked: sim.id.rankingOptIn, held, heldTurn, displayTurn, drift, premature, speedBeforeReverse, speedAfterReverse,
-        drewAir, landingPhase, landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
+        drewAir, landingPhase, landingLayout, landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
       };
     });
     expect(observed.version).toBe(FREE_RULES_VERSION);
@@ -91,21 +103,14 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     expect(observed.fixedTricks).toBe(0);
     expect(observed.landing).toMatchObject({ names: [expect.stringMatching(/犬と人の右/)], tenths: 10 });
     expect(observed.landing.points).toBeGreaterThan(0);
-    const title = page.getByTestId('center-text');
-    const name = page.getByTestId('landing-trick-name');
-    const score = page.getByTestId('landing-trick-score');
-    await expect(name).toHaveText(observed.landing.names[0]);
-    await expect(score).toBeVisible();
+    const layout = observed.landingLayout;
+    expect(layout.name).toBe(observed.landing.names[0]);
     const awarded = entry === 'practice' ? observed.landing.points : observed.landing.awarded;
-    if (awarded > 0) await expect(score).toContainText('＋' + awarded.toLocaleString('ja-JP'));
-    else await expect(score).toHaveText(/区間採点済み|加点なし/);
-    await expect(name).toBeInViewport();
-    await expect(score).toBeInViewport();
-    const [nameBox, scoreBox] = await Promise.all([name.boundingBox(), score.boundingBox()]);
-    expect(scoreBox!.x).toBeGreaterThan(nameBox!.x + 70);
-    // 拡大しながら表示されるので、変形の影響を受けない箱の高さを測る。
-    expect(await score.evaluate(element => (element as HTMLElement).offsetHeight)).toBeGreaterThan(37);
-    await expect(title).toHaveAttribute('data-trick-tier', /^[1-5]$/);
+    expect(layout.score).toContain('＋' + awarded.toLocaleString('ja-JP'));
+    expect(layout.tier).toMatch(/^[1-5]$/);
+    expect(layout.nameInViewport && layout.scoreInViewport).toBe(true);
+    expect(layout.separation).toBeGreaterThan(70);
+    expect(layout.scoreHeight).toBeGreaterThan(37);
     expect(errors).toEqual([]);
   });
 }
@@ -171,7 +176,7 @@ test('犬種を変更すると着地の文字と画面全体の光の色が切�
     const { main, partner } = DOG_EFFECT_COLORS[dogId];
     const rgb = (hex: string) => hex.slice(1).match(/../g)!.map(s => parseInt(s, 16));
     const mainRgb = rgb(main), partnerRgb = rgb(partner);
-    const landingColor = await page.evaluate(async (first) => {
+    const colors = await page.evaluate(async (first) => {
       const { session } = (window as unknown as { __inubo: { app: { game: TestGame } } }).__inubo.app.game;
       session.begin();
       const atUs = session.sim.simUs + 20_000;
@@ -187,16 +192,17 @@ test('犬種を変更すると着地の文字と画面全体の光の色が切�
       while (performance.now() < deadline) {
         await new Promise(resolve => requestAnimationFrame(resolve));
         if (canvas.dataset.phase !== 'landing') continue;
+        const score = document.querySelector('[data-testid="landing-trick-score"]');
+        if (!score) continue;
         const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
         for (let i = 0; i < data.length; i += 4) {
           if (data[i + 3] > 90 && first.every((channel, j) => Math.abs(data[i + j] - channel) < 5)) {
-            return true;
+            return getComputedStyle(score).color;
           }
         }
       }
-      return false;
+      return null;
     }, mainRgb);
-    expect(landingColor, dogId).toBe(true);
-    await expect(page.getByTestId('landing-trick-score')).toHaveCSS('color', `rgb(${partnerRgb.join(', ')})`);
+    expect(colors, dogId).toBe(`rgb(${partnerRgb.join(', ')})`);
   }
 });
