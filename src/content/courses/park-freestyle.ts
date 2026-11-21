@@ -21,8 +21,8 @@ const curveFood: ObjectDef[] = [
 const routeObjects: ObjectDef[] = [
   { kind: 'kicker', id: 'stairs-launch-1', path: 'f1-stairs', u0: 231, u1: 235, x0: -1.15, x1: 1.15, height: 0.68 },
   { kind: 'kicker', id: 'stairs-launch-2', path: 'f1-stairs', u0: 259, u1: 263, x0: -1.15, x1: 1.15, height: 0.68 },
-  { kind: 'rail', id: 'rail-stair-bridge', path: 'f1-rail', u0: 248, u1: 278, x: 0, h0: 0.72, h1: 0.72 },
-  { kind: 'kicker', id: 'rail-bridge-launch', path: 'f1-rail', u0: 241, u1: 245, x0: -0.62, x1: 0.62, height: 0.5 },
+  { kind: 'rail', id: 'rail-stair-bridge', path: 'f1-rail', u0: 248, u1: 278, x: 0.82, h0: 0.72, h1: 0.72 },
+  { kind: 'kicker', id: 'rail-bridge-launch', path: 'f1-rail', u0: 241, u1: 245, x0: 0.45, x1: 1.25, height: 0.5 },
   { kind: 'kicker', id: 'long-rail-high-launch', path: 'f2-rail', u0: 479, u1: 484, x0: -1.15, x1: 0.5, height: 0.9 },
   { kind: 'food', id: 'long-rail-air-food', path: 'f2-rail', u: 494, x: -0.3, h: 3.15 },
 ];

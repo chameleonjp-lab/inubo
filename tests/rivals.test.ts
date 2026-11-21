@@ -1,9 +1,10 @@
 import { expect, test } from 'vitest';
 import { getCourse } from '../src/content/courses';
 import { parkFreestyle } from '../src/content/courses/park-freestyle';
-import { DOGS } from '../src/content/dogs';
+import { DOGS, DOG_ORDER } from '../src/content/dogs';
+import { runWithAutopilot } from '../src/game/autopilot';
 import { FREE_RULES_VERSION } from '../src/game/free-motion';
-import { advanceRun, RunSession } from '../src/game/run';
+import { advanceRun, createRun, RunSession } from '../src/game/run';
 import { rivalPose } from '../src/game/rivals';
 import { sampleAt, sAtU } from '../src/game/track';
 import { identity } from './helpers';
@@ -74,3 +75,23 @@ test('公園の分岐とカーブに、それぞれ通る意味の違いがあ�
   expect(curveFood.every(item => item.x * sampleAt(course.paths.get(item.pathId)!, item.s).kappa < 0)).toBe(true);
   expect(getCourse('park').opportunities.length).toBeGreaterThan(0);
 });
+
+const { safe, short, trick } = course.def.autoRoutes;
+for (const dogId of DOG_ORDER) {
+  for (const [first, label1] of [[safe, '脇の坂'], [short, '中央の階段'], [trick, '手すり']] as const) {
+    for (const [second, label2] of [[safe, '短い平道'], [trick, '手すり道']] as const) {
+      test(`現行の公園で ${dogId} が ${label1} と ${label2} を選んで完走できる`, () => {
+        const run = createRun({ ...raceIdentity, dogId }, course, DOGS[dogId]);
+        runWithAutopilot(run, [
+          ...first.filter(step => step.at < 286),
+          ...safe.filter(step => step.at >= 286 && step.at < 410),
+          ...second.filter(step => step.at >= 410 && step.at < 500),
+          ...safe.filter(step => step.at >= 500),
+        ]);
+        expect(run.route).toEqual([label1, label2]);
+        expect(run.finished).toBe(true);
+        expect(run.result?.sections).toEqual([]);
+      });
+    }
+  }
+}
