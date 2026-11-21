@@ -1,6 +1,6 @@
 import { DOG_EFFECT_COLORS, dogEffectStyle, type DogEffectColors } from '../content/dog-effects';
 import { TrickImpact } from './trick-impact';
-import { showTrickLanding } from './trick-landing';
+import { showTrickLanding, TrickNameFlow } from './trick-landing';
 import { h, clear, fmtInt } from './dom';
 import { renderBoard, renderResults } from './results';
 import { PRACTICE_STEPS, PracticeCoach, PracticeDemo, practiceGuide, practiceRate, type PracticePoint, type PracticeStepId } from './practice';
@@ -284,7 +284,7 @@ export class App {
           h('li', {}, '反対へ払うと勢いを弱められます。「両方」「犬だけ」「人だけ」は回転中でも即座に切り替えられます。'),
           h('li', {}, '手すりには上から乗ると滑り、前へ払うと跳び降ります。正面や側面に当たると止まります。'),
         ]),
-        h('p', {}, '技を決めて着地するたびに点が入ります。空中で回す相手や方向を変え、切り替える前と後の両方で実際に回ると連携点が入ります。3回連続で技を決めると100点を加えます。タイム点と技点はそれぞれ最大5,000点です。'),
+        h('p', {}, '技を決めて着地するたびに点が入ります。空中で回す相手や方向を変え、切り替える前と後の両方で実際に回ると連携点が入ります。3回連続で技を決めると100点を加えます。タイム点は最大5,000点です。技点は決めた分だけ加わります。'),
         h('p', {}, 'カーブは緑の印がある内側が近道。黄色の印がある外側はフードを拾って加速できます。分かれ道の標識には、先にある遊び方が書いてあります。'),
         h('p', {}, 'カウントダウン中にほかの犬が2組先に出ます。技の着地で落とすウンコは、踏むと2秒間減速します。'),
         h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
@@ -526,6 +526,7 @@ class GameRun {
   private readonly freePractice: boolean;
   private readonly freeStrokes = new Map<number, { id: number; atUs: number }>();
   private shownLanding: CenterText['landingText'];
+  private readonly trickNames: TrickNameFlow | null;
   private freeTarget: FreeTarget = 'common';
   private trails: HTMLCanvasElement;
   private impact: TrickImpact | null = null;
@@ -557,6 +558,7 @@ class GameRun {
   ) {
     this.colors = DOG_EFFECT_COLORS[identity.dogId];
     const freestyle = isFreestyleVersion(identity.rulesVersion);
+    this.trickNames = freestyle ? new TrickNameFlow() : null;
     this.freePractice = freestyle && identity.mode === 'practice';
     this.recognizer = new GestureRecognizer({}, 1, !freestyle);
     this.freePointer = freestyle ? new FreePointerController(undefined, true, false) : null;
@@ -607,6 +609,7 @@ class GameRun {
         ),
         H('streak', h('div', { class: 'streak', 'aria-label': '連続成功' }, '○○○')),
         H('boost', h('div', { class: 'boost hidden' })),
+        this.trickNames?.element,
         H('center', h('div', { class: 'center-text', 'data-testid': 'center-text', 'aria-live': 'polite' })),
         H('marks', h('div', { class: 'foot-marks' })),
         H('countdown', h('div', { class: 'countdown' })),
@@ -772,6 +775,7 @@ class GameRun {
     }
     this.session.pause(reason);
     this.center.setPaused(true, nowMs());
+    this.trickNames?.setPaused(true);
     this.app.audio.stopTrickLanding();
     this.freePointer?.clear();
     this.freeStrokes.clear();
@@ -801,6 +805,7 @@ class GameRun {
       this.pauseCover.classList.add('hidden');
       this.app.sound.setPaused(false, nowMs());
       this.center.setPaused(false, nowMs());
+      this.trickNames?.setPaused(false);
     } else {
       // 指が離れたら進む（再開の指は使い切り、次の新しいタッチから操作を受け取る）。
       setTimeout(() => !this.destroyed && this.session.paused && this.session.resumeRequested && this.afterResumeCheck(), 120);
@@ -814,6 +819,7 @@ class GameRun {
 
   private handleCues(cues: Cue[]): void {
     const t = nowMs();
+    for (const cue of cues) if (cue.landingText) this.trickNames?.push(cue.landingText, cue.trickTier ?? 1);
     this.center.push(cues, t);
     for (const cmd of this.app.sound.onCues(cues, t)) this.app.audio.play(cmd);
   }
@@ -922,7 +928,7 @@ class GameRun {
       const shown = sim.finished && sim.result ? sim.result.recordCs : Math.floor(renderUs / 10_000);
       this.hud.time.textContent = formatTime(shown).replace('秒', '');
     }
-    this.hud.trick.textContent = `技 ${fmtInt(trickScore(sim.score))}`;
+    this.hud.trick.textContent = `技 ${fmtInt(trickScore(sim.score, sim.id.rulesVersion))}`;
     const path = sim.course.paths.get(sim.pathId)!;
     const startU = sim.course.def.start.u;
     const prog = sim.course.goal ? Math.max(0, Math.min(1, (uAtS(path, sim.s) - startU) / sim.course.progressLength)) : 0;
@@ -937,7 +943,7 @@ class GameRun {
     const ct = this.center.current(t);
     const landing = ct ? this.center.landingText : undefined;
     const center = this.hud.center;
-    if (landing && this.shownLanding !== landing) showTrickLanding(center, landing);
+    if (landing && this.shownLanding !== landing) showTrickLanding(center, landing, !this.trickNames);
     if (!landing && center.textContent !== (ct ?? '')) center.textContent = ct ?? '';
     this.shownLanding = landing;
     center.dataset.trickTier = ct ? String(this.center.trickTier) : '0';

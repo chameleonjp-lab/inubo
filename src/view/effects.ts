@@ -212,7 +212,7 @@ export function pickCenterText(cues: Cue[]): { text: string | null; priority: Te
     if (!best || c.priority < best.priority! || (c.priority === best.priority &&
       (c.atUs > best.atUs || (c.atUs === best.atUs && (c.trickTier ?? 0) >= (best.trickTier ?? 0))))) best = c;
   }
-  const footMarks = cues.filter((c) => c !== best && (c.text || c.footMark)).map((c) => c.footMark ?? c.text!);
+  const footMarks = cues.filter((c) => c !== best && (c.footMark || (c.text && !c.landingText))).map((c) => c.footMark ?? c.text!);
   return { text: best?.text ?? null, priority: best?.priority ?? null, footMarks,
     ...(best?.trickTier ? { trickTier: best.trickTier, landingText: best.landingText } : {}) };
 }
@@ -240,13 +240,13 @@ export class CenterText {
     if (pick.text && pick.priority) {
       const active = this.text !== null && nowMs < this.untilMs;
       if (!active || pick.priority <= this.priority) {
-        if (active && this.text) this.footMarks.push({ text: this.text, untilMs: nowMs + 1800 });
+        if (active && this.text && !this.landingText) this.footMarks.push({ text: this.text, untilMs: nowMs + 1800 });
         this.text = pick.text;
         this.priority = pick.priority;
         this.trickTier = pick.trickTier ?? 0;
         this.landingText = pick.landingText;
         this.untilMs = nowMs + (pick.landingText?.durationMs ?? TRICK_LANDING[this.trickTier - 1]?.durationMs ?? (pick.priority === 1 ? 1100 : 1300));
-      } else {
+      } else if (!pick.landingText) {
         this.footMarks.push({ text: pick.text, untilMs: nowMs + 1800 });
       }
     }

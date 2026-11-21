@@ -133,9 +133,11 @@ test('V16 共有: 投稿画面を開けないときは、同じ文をコピー�
 test('V01 中断: 一時停止は景色を覆い、指を離して「再開」を押すまで進まない。裏へ回って戻っただけでは発進しない', async ({ page }) => {
   await page.goto('/');
   await page.click('[data-testid="start"]');
-  await page.waitForTimeout(4200);
+  // 描画が遅い環境ではカウントダウンが4.2秒より長くなる。
+  await expect.poll(async () => (await gameState(page))?.phase, { timeout: 15_000 }).toBe('running');
   await page.click('[data-testid="pause"]');
   await expect(page.locator('[data-testid="pause-cover"]')).toBeVisible();
+  await expect(page.getByTestId('trick-name-flow')).toHaveAttribute('data-paused', 'true');
   const a = await gameState(page);
   await page.waitForTimeout(800);
   const b = await gameState(page);
@@ -153,7 +155,8 @@ test('V01 中断: 一時停止は景色を覆い、指を離して「再開」�
   expect((await gameState(page))!.paused).toBe(true);
   await page.click('[data-testid="resume"]');
   await expect(page.locator('[data-testid="pause-cover"]')).toBeHidden();
-  await page.waitForTimeout(500);
+  await expect(page.getByTestId('trick-name-flow')).toHaveAttribute('data-paused', 'false');
+  await expect.poll(async () => (await gameState(page))?.simUs ?? 0).toBeGreaterThan(b!.simUs);
   const c = await gameState(page);
   expect(c!.paused).toBe(false);
   expect(c!.simUs).toBeGreaterThan(b!.simUs);

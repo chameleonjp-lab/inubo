@@ -1,5 +1,3 @@
-import { TIME_SCORE_MAX, TRICK_SCORE_MAX } from '../game/rules';
-
 const TITLES = [
   ['公園のはじめの一歩', 'のんびり散歩隊'],
   ['芝生を知る足音', '小道の見習い'],
@@ -34,8 +32,9 @@ const TITLES = [
 ] as const;
 
 export function resultCelebration(total: number) {
-  const max = TIME_SCORE_MAX + TRICK_SCORE_MAX;
-  const titleIndex = Math.min(TITLES.length * 2 - 1, Math.floor(Math.max(0, total) * TITLES.length * 2 / max));
+  // 最上段の称号を選ぶ目安。スコアそのものは変更しない。
+  const finaleScore = 10_000;
+  const titleIndex = Math.min(TITLES.length * 2 - 1, Math.floor(Math.max(0, total) * TITLES.length * 2 / finaleScore));
   const stageIndex = Math.floor(titleIndex / 2);
   return {
     stage: stageIndex + 1,
