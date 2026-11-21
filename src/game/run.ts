@@ -1,3 +1,4 @@
+import { advanceRivals, createRivals } from './rivals';
 import {
   COUNTDOWN_US,
   FALL_US,
@@ -27,7 +28,7 @@ import { blocksAt, findContacts, insideExpanded, orderContacts, sMmOf, type Cont
 import { breakStreak, createScore, exitSection, finishRun, settleLanding, type LandingContact } from './scoring';
 import { advanceCourseFlight, applyCourseRotation, launchCourseFlight, type CourseAirHit } from './free-flight';
 import { scoreFreeMotion } from './free-score';
-import { FREE_RULES_VERSION, isFreestyleVersion } from './free-motion';
+import { FREE_RULES_VERSION, SWITCH_FREE_RULES_VERSION, isFreestyleVersion } from './free-motion';
 import { leaveRail, loseRail, mountRail } from './rails';
 import { resolveTricks, type TrickResolution } from './tricks';
 import {
@@ -83,6 +84,7 @@ export function createRun(identity: RunIdentity, course: CourseRt, dog: DogSpec)
     lastCheckpoint: { pathId: p.id, s, x: 0, id: 'start' },
     fallUntilUs: null,
     effects: createEffects(),
+    rivals: identity.mode === 'competition' && identity.courseId === 'park' && identity.rulesVersion === FREE_RULES_VERSION ? createRivals(course) : null,
     consumed: {},
     guide: { active: false, forkId: null },
     jump: null,
@@ -133,6 +135,7 @@ export function advanceRun(run: SimState, untilUs: number, orderedInputs: Gestur
   const emit = makeEmit(run, out);
   enqueueFacts(run, orderedInputs);
   const target = Math.floor(untilUs / TICK_US) * TICK_US;
+  if (run.simUs < target && !run.finished) advanceRivals(run.rivals, COUNTDOWN_US + run.simUs);
   while (run.simUs < target && !run.finished) {
     const t0 = run.simUs;
     const t1 = t0 + TICK_US;
@@ -147,6 +150,7 @@ export function advanceRun(run: SimState, untilUs: number, orderedInputs: Gestur
       t = nextIn;
     }
     run.simUs = t1;
+    advanceRivals(run.rivals, COUNTDOWN_US + t1);
     onTick?.(run);
     // 空中で壁・柵・ゲートの上を越えた（E11）。演出用で、採点には使わない。
     if (!run.finished && run.mode === 'air' && run.pathId === pathBefore) {
@@ -329,11 +333,12 @@ function closeAirborneJump(run: SimState, contact: LandingContact, emit: Emit): 
     return;
   }
   const trick = scoreFreeMotion(flight.motion.history, contact.atUs - flight.takeoffUs, flight.heading,
-    run.id.rulesVersion === FREE_RULES_VERSION ? [...flight.motion.seen.values()] : []);
+    [FREE_RULES_VERSION, SWITCH_FREE_RULES_VERSION].includes(run.id.rulesVersion) ? [...flight.motion.seen.values()] : [],
+    run.id.rulesVersion === FREE_RULES_VERSION);
   settleLanding(run, contact, emit, { jump, score: {
     base: trick.points, points: trick.points, names: trick.points ? [trick.label] : [],
     composite: false, residualDeg: 0, tiltDeg: 0, tenths: 10, trickTier: trick.tier,
-    trickBase: trick.basePoints, switchBonus: trick.switchBonus, switchCount: trick.switchCount,
+    trickBase: trick.basePoints, switchBonus: trick.switchBonus, switchCount: trick.switchCount, directionCount: trick.directionCount,
     scoredTarget: trick.scoredTarget,
   } });
 }
@@ -532,7 +537,7 @@ function transition(run: SimState, t: number, emit: Emit): void {
   }
   // 道の最後の採点区間を、まだ抜けていなければここで抜ける。
   const last = p.sections[p.sections.length - 1];
-  if (last && !(run.exitedSection && run.exitedSection.key === last.key && t - run.exitedSection.atUs < 100_000)) {
+  if (run.id.rulesVersion !== FREE_RULES_VERSION && last && !(run.exitedSection && run.exitedSection.key === last.key && t - run.exitedSection.atUs < 100_000)) {
     recordSectionExit(run, last, t, emit);
   }
   const np = run.course.paths.get(toId)!;
@@ -755,6 +760,7 @@ export class RunSession {
   /** 秒読みが終わった瞬間に走行時計を 0 にして発進する。2回目以降は何もしない。 */
   begin(overflowUs = 0): boolean {
     if (this.phase !== 'countdown') return false;
+    advanceRivals(this.sim.rivals, COUNTDOWN_US);
     this.phase = 'running';
     this.runTargetUs = Math.max(0, overflowUs);
     this.onTick?.(this.sim);
@@ -802,7 +808,7 @@ export class RunSession {
       this.paused = true;
       // 描きかけの指は捨てる。計算済みの状態（物理・確定済みの角度）はそのまま保持する。
       this.pending = this.pending.filter((f) => f.kind === 'up').map((f) => ({ ...f, atUs: this.sim.simUs, cancelled: true }));
-      if (this.sim.id.rulesVersion === FREE_RULES_VERSION) {
+      if ([FREE_RULES_VERSION, SWITCH_FREE_RULES_VERSION].includes(this.sim.id.rulesVersion)) {
         this.sim.inputQueue.length = 0;
         for (const stroke of Object.values(this.sim.strokes)) {
           if (stroke.upUs !== null) continue;
@@ -857,6 +863,7 @@ export class RunSession {
     }
     if (this.phase === 'countdown') {
       this.countdownUs += delta;
+      advanceRivals(this.sim.rivals, Math.min(COUNTDOWN_US, this.countdownUs));
       const n = 3 - Math.floor(this.countdownUs / 1_000_000);
       if (n >= 1 && n !== this.countdownShown) {
         this.countdownShown = n;

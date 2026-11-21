@@ -12,11 +12,15 @@ import {
   sampleAt,
   supportGrade,
   supportHeight,
+  uAtS,
   worldXZ,
   type CourseRt,
   type PathRt,
   type Solid,
 } from '../game/track';
+import { rivalPose } from '../game/rivals';
+import { DOGS } from '../content/dogs';
+import { parkFreestyle, parkRouteLooks } from '../content/courses/park-freestyle';
 import { extrapolate } from '../game/run';
 import { maxSpeed } from '../game/motion';
 import { foodActive, poopActive } from '../game/items';
@@ -264,6 +268,10 @@ export class GameView {
   private ghostRig: Rig | null = null;
   private ghost: ReplayData | null = null;
   private shadow: THREE.Mesh;
+  private rivalRigs: Rig[] = [];
+  private rivalDropCursor = 0;
+  private rivalItemIds: string[] = [];
+  private airFX: { level: number; target: 'B' | 'D' | 'H'; combo: number } | null = null;
   private items = new Map<string, THREE.Object3D>();
   private gates = new Map<string, { bar: THREE.Group; lamp: THREE.Mesh; solid: Solid }>();
   private flags = new Map<string, THREE.Object3D>();
@@ -390,6 +398,17 @@ export class GameView {
   }
 
   resetEffects(): void {
+    for (const id of this.rivalItemIds) {
+      const item = this.items.get(id);
+      if (!item) continue;
+      item.removeFromParent();
+      disposeObjects(item);
+      this.items.delete(id);
+    }
+    this.rivalItemIds = [];
+    this.rivalDropCursor = 0;
+    for (const rig of this.rivalRigs) rig.root.visible = false;
+    this.airFX = null;
     this.particles.clear();
     this.dogTrail.clear();
     this.shoulderTrail.clear();
@@ -448,9 +467,11 @@ export class GameView {
 
   private buildPath(p: PathRt, th: (typeof THEMES)[keyof typeof THEMES], order: number): void {
     const step = 2;
+    const newPark = this.course?.def.version === parkFreestyle.version;
+    const routeLook = newPark ? parkRouteLooks[p.id] : undefined;
     // 合流部で重なる道は描画の優先順だけを調整し、路面高は走行判定にそろえる。
     const road = new THREE.Mesh(roadGeometry(p), new THREE.MeshLambertMaterial({
-      color: th.road, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetUnits: -order,
+      color: routeLook?.road ?? th.road, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetUnits: -order,
     }));
     this.courseGroup.add(road);
     // 端: 壁なら縁石、落下側なら縁取りだけ（川沿いは水が見える）。
@@ -476,8 +497,9 @@ export class GameView {
       g.setAttribute('position', new THREE.Float32BufferAttribute(cv, 3));
       g.setIndex(ci);
       g.computeVertexNormals();
-      this.courseGroup.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: edge === 'wall' ? th.curb : '#e9e2cf', side: THREE.DoubleSide })));
+      this.courseGroup.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: routeLook?.edge ?? (edge === 'wall' ? th.curb : '#e9e2cf'), side: THREE.DoubleSide })));
     }
+    if (newPark && !routeLook) this.buildCurveMarkings(p);
     // 階段
     for (const st of p.stairs) {
       for (let step = 0; step < st.steps; step++) {
@@ -519,8 +541,8 @@ export class GameView {
       const opts = p.next.options;
       const g = new THREE.Group();
       opts.forEach((o, i) => {
-        const tex = labelTexture(`${o.trick ? '★ ' : ''}${o.label}`, o.trick ? '#7a3b00' : '#1f2a37');
-        const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex }));
+        const tex = labelTexture(o.detail ?? `${o.trick ? '★ ' : ''}${o.label}`, parkRouteLooks[o.to] && o.detail ? parkRouteLooks[o.to].road : o.trick ? '#7a3b00' : '#1f2a37', o.detail ? '#111c26' : '#ffffff');
+        const plate = new THREE.Mesh(new THREE.PlaneGeometry(o.detail ? 3.25 : 2.4, 0.74), new THREE.MeshBasicMaterial({ map: tex }));
         const mid = (Math.max(o.xMin, -hwAt(p, p.length)) + Math.min(o.xMax, hwAt(p, p.length))) / 2;
         // 追従カメラより高く掲げ、近づいてくる犬に文字の表を向ける。
         plate.position.set(0, 5.2, mid);
@@ -548,6 +570,31 @@ export class GameView {
         this.courseGroup.add(pg);
         this.guideGroups.set(p.next.forkId, pg);
       }
+    }
+  }
+
+  private buildCurveMarkings(path: PathRt): void {
+    const inside: number[] = [];
+    const outside: number[] = [];
+    for (let s = 3; s < path.length - 2; s += 3.5) {
+      const curve = sampleAt(path, s).kappa;
+      if (Math.abs(curve) < 0.012) continue;
+      const sign = Math.sign(curve);
+      for (const [positions, side] of [[inside, sign], [outside, -sign]] as const) {
+        const corner = (at: number, offset: number): number[] => {
+          const [x, z] = worldXZ(path, at, side * (hwAt(path, at) - offset));
+          return [x, baseHeight(path, at) + 0.035, z];
+        };
+        const a = corner(s, 0.64), b = corner(s + 0.95, 1.12);
+        const c = corner(s + 1.25, 1.02), d = corner(s + 0.5, 0.64);
+        positions.push(...a, ...b, ...c, ...a, ...c, ...d);
+      }
+    }
+    for (const [positions, color] of [[inside, '#e3ff93'], [outside, '#ffd05e']] as const) {
+      if (!positions.length) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      this.courseGroup.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide })));
     }
   }
 
@@ -798,11 +845,15 @@ export class GameView {
     const flight = run.freeFlight;
     const spin = flight && run.jump ? this.fxSpin.read(flight.motion, `${run.id.runId}:${run.jump.jumpId}`, Math.max(flight.takeoffUs, renderUs)) : null;
     const fxFlags: FxFrameFlags = { reduced, weak: settings.light === 'weak', paused: this.fxPaused, alpha: 1, heading: pose.heading, groundY, spin };
+    if (!flight) this.airFX = null;
     if (!this.fxPaused) {
       for (const { ev, source } of this.fxReader.read(run, this.fxSelected)) {
+        if (ev.kind === 'F' && ev.target) this.airFX = { target: ev.target, level: ev.level, combo: this.airFX?.combo ?? 0 };
+        if (ev.kind === 'C' && this.airFX) this.airFX.combo = ev.level;
+        if (ev.kind === 'X' || ev.kind === 'L') this.airFX = null;
         this.fxSource.rig = this.rig;
         this.fxEngine.apply(ev, ev.contact ? { contact: ev.contact, yaw: ev.contact.yaw, grade: ev.contact.grade,
-          switchCount: Number(source?.data?.switchCount ?? 0), source: this.fxSource, sourceHeading: pose.heading } : {});
+          switchCount: Number(source?.data?.switchCount ?? 0) + Number(source?.data?.directionCount ?? 0), source: this.fxSource, sourceHeading: pose.heading } : {});
       }
     }
     this.fxSource.rig = this.rig;
@@ -901,9 +952,14 @@ export class GameView {
     }
     if (this.impact.visible && vnow > this.impactUntil) this.impact.visible = false;
 
+    this.frameRivals(run, vnow);
+
     // アイテム、ゲート、旗、道しるべの足跡
+    const progress = run.rivals ? uAtS(path, run.s) : 0;
     for (const [id, o] of this.items) {
-      o.visible = !run.consumed[id];
+      const rivalProgress = o.userData.rivalProgress as number | undefined;
+      o.visible = !run.consumed[id] && (rivalProgress === undefined || (rivalProgress > progress - 18 && rivalProgress < progress + 90));
+      if (!o.visible) continue;
       o.rotation.y += dt * 1.2;
       o.position.y = (o.userData.baseY as number) + Math.sin(vnow / 300 + o.position.x) * 0.05;
     }
@@ -981,6 +1037,56 @@ export class GameView {
       });
     }
     this.ghostFxSink.end();
+  }
+
+  projectTrack(pathId: string, s: number, x: number, y: number): { x: number; y: number } {
+    const path = this.course!.paths.get(pathId)!;
+    const [wx, wz] = worldXZ(path, s, x);
+    const p = new THREE.Vector3(wx, y, wz).project(this.cam.camera);
+    return { x: (p.x + 1) / 2, y: (1 - p.y) / 2 };
+  }
+
+  airImpact(run: SimState) {
+    if (!run.freeFlight || !this.airFX || !Object.values(run.freeFlight.motion.omega).some(v => length(v) > 2)) return null;
+    return this.airFX;
+  }
+
+  private frameRivals(run: SimState, nowMs: number): void {
+    const rivals = run.rivals;
+    if (!rivals) return;
+    if (this.rivalRigs.length === 0) {
+      this.rivalRigs = [
+        createRig(DOGS.corgi.look, '#8d42f4', '#fff079'),
+        createRig(DOGS.whippet.look, '#106692', '#30efb2'),
+      ];
+      this.scene.add(...this.rivalRigs.map(rig => rig.root));
+    }
+    for (const [index, rig] of this.rivalRigs.entries()) {
+      const pose = rivalPose(rivals.plans[index], rivals.elapsedUs);
+      rig.root.visible = !!pose;
+      if (!pose) continue;
+      const [x, z] = worldXZ(pose.path, pose.s, pose.x);
+      const y = baseHeight(pose.path, pose.s) + pose.height;
+      this.placeRig(rig, { x, y, z, heading: pose.heading,
+        body: quatAxisAngle(index ? [0, 0, 1] : [0, 1, 0], pose.angle), dog: [0, 0, 0, 1] });
+      animateRig(rig, { mode: pose.height > 0 ? 'air' : 'ground', speed: pose.speed, maxSpeed: 18,
+        grade: 0, lean: 0, feetDown: false, blocked: false, timeMs: nowMs, wag: false },
+        rivals.elapsedUs / 1e6 * (pose.speed > 0 ? 18 : 0));
+    }
+    const progress = uAtS(this.course!.paths.get(run.pathId)!, run.s);
+    while (this.rivalDropCursor < rivals.nextDrop) {
+      for (const item of rivals.drops[this.rivalDropCursor++].items) {
+        const path = run.course.paths.get(item.pathId)!;
+        this.buildItem(path, item.id, 'poop', item.s, item.x, item.y);
+        this.rivalItemIds.push(item.id);
+        const model = this.items.get(item.id)!;
+        model.scale.setScalar(1.36);
+        model.userData.rivalProgress = uAtS(path, item.s);
+        if (Math.abs(model.userData.rivalProgress - progress) < 65) {
+          this.particles.emit(9, model.position, new THREE.Color('#9d5a2c'), 3.8, 2.7);
+        }
+      }
+    }
   }
 
   private placeRig(rig: Rig, pose: Pose): void {

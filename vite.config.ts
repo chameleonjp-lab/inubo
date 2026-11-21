@@ -1,3 +1,4 @@
+import { FREE_RULES_VERSION } from './src/game/rules';
 import { defineConfig } from 'vitest/config';
 import { execFileSync } from 'node:child_process';
 
@@ -12,7 +13,7 @@ export default defineConfig(({ mode }) => ({
     __FREE_BUILD__: JSON.stringify(buildId),
   },
   plugins: mode === 'review' ? [{ name: 'review-info', generateBundle() {
-    this.emitFile({ type: 'asset', fileName: 'review-info.json', source: JSON.stringify({ sourceCommit, buildId, rulesVersion: 'rules-freestyle-1', stage: 'interaction' }, null, 2) });
+    this.emitFile({ type: 'asset', fileName: 'review-info.json', source: JSON.stringify({ sourceCommit, buildId, rulesVersion: FREE_RULES_VERSION, stage: 'interaction' }, null, 2) });
   } }] : [],
   build: {
     target: 'es2022',

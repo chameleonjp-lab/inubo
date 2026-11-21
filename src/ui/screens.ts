@@ -1,3 +1,4 @@
+import { TrickImpact } from './trick-impact';
 import { showTrickLanding } from './trick-landing';
 import { h, clear, fmtInt } from './dom';
 import { renderBoard, renderResults } from './results';
@@ -6,7 +7,7 @@ import { TrickLabScreen } from './trick-lab';
 import { formatTime, homeShareText, officialUrl, resultShareText, shareOnX, shareableResult } from './share';
 import { RunSession } from '../game/run';
 import { RULES_VERSION } from '../game/rules';
-import { FREE_RULES_VERSION, isFreestyleVersion, type FreeTarget } from '../game/free-motion';
+import { FREE_RULES_VERSION, SWITCH_FREE_RULES_VERSION, PREVIOUS_FREE_RULES_VERSION, isFreestyleVersion, type FreeTarget } from '../game/free-motion';
 import { Autopilot } from '../game/autopilot';
 import { trickScore } from '../game/scoring';
 import { sampleAt, uAtS } from '../game/track';
@@ -15,6 +16,7 @@ import { maxSpeed } from '../game/motion';
 import { GestureRecognizer } from '../input/gestures';
 import { FreePointerController } from '../input/free-pointer';
 import { COURSE_DEFS, getCourse } from '../content/courses/index';
+import { parkFreestyle } from '../content/courses/park-freestyle';
 import { DOGS, DOG_ORDER } from '../content/dogs';
 import { GameView } from '../view/scene';
 import { CenterText, UI_CUES, cueForEvent, type Cue } from '../view/effects';
@@ -183,11 +185,12 @@ export class App {
     this.game = null;
     this.root.classList.remove('in-game');
     const parkRecords = { courseId: PARK_ID, courseVersion: COURSE_DEFS[PARK_ID]!.version } as const;
-    // 旧版の記録は残すが、ホームでは現在の自由操作のみを見せる。
     const records = [
-      [FREE_RULES_VERSION, '自由操作の記録'],
-    ].flatMap(([rulesVersion, label]) => {
-      const key = { ...parkRecords, rulesVersion };
+      [FREE_RULES_VERSION, '公園の自己ベスト', parkFreestyle.version],
+      [SWITCH_FREE_RULES_VERSION, '前の自由操作の自己ベスト', parkRecords.courseVersion],
+      [PREVIOUS_FREE_RULES_VERSION, '初代の自由操作の自己ベスト', parkRecords.courseVersion],
+    ].flatMap(([rulesVersion, label, courseVersion]) => {
+      const key = { ...parkRecords, rulesVersion, courseVersion };
       const best = this.records.bestScore(key);
       const fast = this.records.bestTime(key);
       if (!best && !fast) return [];
@@ -279,7 +282,9 @@ export class App {
           h('li', {}, '反対へ払うと勢いを弱められます。「両方」「犬だけ」「人だけ」は回転中でも即座に切り替えられます。'),
           h('li', {}, '手すりには上から乗ると滑り、前へ払うと跳び降ります。正面や側面に当たると止まります。'),
         ]),
-        h('p', {}, '着地までの回転数と方向で技の名前と点が決まります。同じ区間で点になるのは、最初に決めた技のジャンプ1回です。3区間続けて成功すると100点を加えます。タイム点と技点はそれぞれ最大5,000点です。'),
+        h('p', {}, '技を決めて着地するたびに点が入ります。空中で回す相手や方向を変え、切り替える前と後の両方で実際に回ると連携点が入ります。3回連続で技を決めると100点を加えます。タイム点と技点はそれぞれ最大5,000点です。'),
+        h('p', {}, 'カーブは緑の印がある内側が近道。黄色の印がある外側はフードを拾って加速できます。分かれ道の標識には、先にある遊び方が書いてあります。'),
+        h('p', {}, 'カウントダウン中にほかの犬が2組先に出ます。技の着地で落とすウンコは、踏むと2秒間減速します。'),
         h('button', { class: 'btn', onclick: () => this.back() }, 'もどる'),
       ),
     );
@@ -374,7 +379,7 @@ export class App {
     this.game?.destroy();
     this.game = null;
     const courseId: CourseId = mode === 'practice' ? 'practice' : PARK_ID;
-    const course = getCourse(courseId);
+    const course = getCourse(courseId, rulesVersion === FREE_RULES_VERSION ? parkFreestyle.version : undefined);
     const name = this.profile.name.trim();
     const opt = this.rankingFor(courseId, rulesVersion) && this.ranking.canParticipate(name, mode, true);
     const identity: RunIdentity = {
@@ -521,6 +526,7 @@ class GameRun {
   private shownLanding: CenterText['landingText'];
   private freeTarget: FreeTarget = 'common';
   private trails: HTMLCanvasElement;
+  private impact: TrickImpact | null = null;
   private hud: Record<string, HTMLElement> = {};
   private center = new CenterText();
   private readonly recorder: ReplayRecorder;
@@ -551,10 +557,13 @@ class GameRun {
     this.recognizer = new GestureRecognizer({}, 1, !freestyle);
     this.freePointer = freestyle ? new FreePointerController(undefined, true, false) : null;
     this.recorder = new ReplayRecorder(freestyle ? FREE_REPLAY_STEP_MS : 100, () => this.freeTarget);
-    this.session = new RunSession(identity, getCourse(identity.courseId), DOGS[identity.dogId],
+    this.session = new RunSession(identity, getCourse(identity.courseId, identity.courseVersion), DOGS[identity.dogId],
       identity.mode === 'competition' ? state => this.recorder.sample(state) : undefined);
     this.setInputViewport(window.innerWidth, window.innerHeight);
     this.trails = h('canvas', { class: 'trails', 'data-testid': 'surface' });
+    const impactCanvas = identity.rulesVersion === FREE_RULES_VERSION
+      ? h('canvas', { class: 'trick-impact', 'aria-hidden': 'true', 'data-testid': 'trick-impact' }) : null;
+    if (impactCanvas) this.impact = new TrickImpact(impactCanvas);
     const H = (k: string, el: HTMLElement) => (this.hud[k] = el);
     this.pauseCover = h(
       'div',
@@ -579,6 +588,7 @@ class GameRun {
     this.el = h(
       'section',
       { class: 'screen game' },
+      impactCanvas,
       this.trails,
       h(
         'div',
@@ -604,7 +614,7 @@ class GameRun {
       this.pauseCover,
     );
     if (app.opts.autoplay && identity.mode === 'competition') {
-      const steps = getCourse(identity.courseId).def.autoRoutes[app.opts.autoplay];
+      const steps = getCourse(identity.courseId, identity.courseVersion).def.autoRoutes[app.opts.autoplay];
       if (steps) this.pilot = new Autopilot(steps);
     }
     if (app.opts.debug) this.hud.debug.classList.remove('hidden');
@@ -864,6 +874,18 @@ class GameRun {
     this.view.setFxSelectedTarget(this.freeTarget);
     this.view.setFxPaused(this.session.paused);
     this.view.frame(sim, renderUs, cues, this.app.settings, t, dtMs);
+    if (this.impact) {
+      for (const event of events) {
+        if (event.kind !== 'land' || event.data?.plain) continue;
+        const landing = cueForEvent(event)?.landingText;
+        if (landing?.fxTarget) this.impact.landAt(landing.fxTarget, landing.landingLevel,
+          this.view.projectTrack(event.pathId, event.sMm / 1000, event.x, event.y));
+      }
+      const air = this.view.airImpact(sim);
+      const pivot = air ? this.view.projectTrack(sim.pathId, sim.s, sim.x, sim.y + 0.9) : { x: 0.5, y: 0.5 };
+      this.impact.frame(window.innerWidth, window.innerHeight, this.session.paused ? 0 : dtMs,
+        this.app.settings.light === 'weak', air, pivot);
+    }
     // 連携が実際に成立した瞬間だけ、足元に短く「連携」を出す（ボタンの連打では出ない）。
     if (this.view.takeFxCombo()) this.center.footMarks.push({ text: '連携', untilMs: t + 700 });
     if (this.hud.freeStatus) {

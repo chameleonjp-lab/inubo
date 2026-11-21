@@ -30,13 +30,14 @@ export function renderResults(r: RunResult, courseName: string, saved: SaveOutco
       style: `--ornament-row:${row};--ornament-column:${Math.floor(pair / 6)}`,
     }, celebration.band < 3 ? '·' : celebration.band < 5 ? '✦' : pair % 3 === 0 ? '✧' : '✦');
   });
-  const sections = h(
+  const sections = r.sections.length ? h(
     'ol',
     { class: 'sections', 'aria-label': '区間ごとの技点' },
     r.sections.map((s, i) =>
       h('li', { class: `sec sec-${s.state}`, title: `区間${i + 1}` }, h('span', { class: 'sec-n' }, String(i + 1)), h('span', { class: 'sec-p' }, s.state === 'scored' ? fmtInt(s.points) : s.state === 'missed' ? '－' : '・')),
     ),
-  );
+  ) : null;
+  const techniques = r.sections.length === 0 ? r.jumps.filter(jump => jump.awarded > 0).sort((a, b) => b.awarded - a.awarded).slice(0, 3) : [];
   const near = r.nearMiss
     ? h('div', { class: 'near-miss', 'data-testid': 'near-miss' }, h('h3', {}, `惜しかった区間: ${r.nearMiss.sectionNumber}`), h('p', {}, r.nearMiss.hint))
     : null;
@@ -84,6 +85,9 @@ export function renderResults(r: RunResult, courseName: string, saved: SaveOutco
     ),
     h('p', { class: 'trick-detail' }, `ジャンプの技 ${fmtInt(r.jumpPoints)}・手すり ${fmtInt(r.railPoints)}・連続 ${fmtInt(r.streakBonus)}${r.trickRaw > r.trickScore ? `（上限 5,000 を適用）` : ''}`),
     sections,
+    techniques.length ? h('div', { class: 'result-techniques' },
+      h('h3', {}, '今回の高得点トリック'),
+      h('ol', {}, techniques.map(jump => h('li', {}, h('span', {}, jump.names.join('＋')), h('strong', {}, fmtInt(jump.awarded) + '点'))))) : null,
     near,
     stamp,
     challenge,

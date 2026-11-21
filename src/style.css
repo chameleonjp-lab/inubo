@@ -1034,3 +1034,17 @@ ol.sections {
 .trick-lab .pause-cover h2 {
   color: #ffffff;
 }
+
+.result-techniques { margin-block: 12px; }
+.result-techniques h3 { font-size: 1rem; }
+.result-techniques ol { padding: 0; list-style: none; }
+.result-techniques li { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #19374638; text-align: left; }
+.result-techniques strong { flex: none; color: #9c4100; }
+
+.trick-impact {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}

@@ -13,6 +13,7 @@ export interface FreeScore {
   basePoints: number;
   switchBonus: number;
   switchCount: number;
+  directionCount: number;
   tier: number;
   label: string;
   /** 技名と同じ判定で成立した実回転の対象（読み取り専用の表示情報。得点には使わない）。 */
@@ -73,8 +74,48 @@ export function scoreTargetSwitches(history: readonly FreeSpan[], inputs: readon
   return { count: capped, bonus: [0, 180, 400, 650, 900][capped] + (targets.size === 3 ? 150 : 0) };
 }
 
+/** 同じ対象で回す向きを変え、入力の向きへ実際に45度以上回ったときに数える。 */
+export function scoreDirectionSwitches(history: readonly FreeSpan[], inputs: readonly FreeMotionInput[], heading: number, atUs = Infinity): number {
+  const phases: { target: FreeTarget; direction: number; start: number; drag: number }[] = [];
+  const end = Math.min(atUs, history.at(-1)?.endUs ?? 0);
+  for (const input of inputs.filter(i => i.atUs < end).sort((a, b) => a.atUs - b.atUs || a.seq - b.seq)) {
+    const drag = length(input.rotation);
+    if (drag <= 1e-7) continue;
+    const direction = directionOf(input.rotation, heading);
+    const last = phases.at(-1);
+    if (last?.target === input.target && last.direction === direction) last.drag += drag;
+    else phases.push({ target: input.target, direction, start: input.atUs, drag });
+  }
+  let spanIndex = 0;
+  let last: typeof phases[number] | undefined;
+  let count = 0;
+  for (const [index, phase] of phases.entries()) {
+    const until = phases[index + 1]?.start ?? end;
+    if (phase.drag < 0.15 || until - phase.start < 35_000) continue;
+    while (history[spanIndex] && history[spanIndex].endUs <= phase.start) spanIndex++;
+    let degrees = 0;
+    for (let i = spanIndex; i < history.length && history[i].startUs < until; i++) {
+      const span = history[i];
+      const from = Math.max(span.startUs, phase.start);
+      const to = Math.min(span.endUs, until);
+      const omega = span.from.omega[phase.target];
+      if (to > from && directionOf(omega, heading) === phase.direction) {
+        degrees += length(omega) * Math.exp(-FREE_DECAY * (from - span.startUs) / 1e6) * rotationTime(to - from) / DEG;
+      }
+    }
+    if (degrees < 45) continue;
+    if (last?.target === phase.target && last.direction !== phase.direction) count++;
+    last = phase;
+  }
+  return Math.min(3, count);
+}
+
+export function directionBonus(count: number): number {
+  return [0, 250, 550, 900][count] ?? 0;
+}
+
 /** 着地までに犬・人が実際に回った向きと量を積算する。姿勢の最終角度には依存しない。 */
-export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number, heading: number, inputs: readonly FreeMotionInput[] = []): FreeScore {
+export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number, heading: number, inputs: readonly FreeMotionInput[] = [], withDirectionCombos = true): FreeScore {
   const dog = Array<number>(DIRECTION_NAMES.length).fill(0);
   const rider = Array<number>(DIRECTION_NAMES.length).fill(0);
   for (const { startUs, endUs, from } of history) {
@@ -92,7 +133,7 @@ export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number,
   const qualifiedTotal = (amounts: number[]) => amounts.filter(qualifies).reduce((sum, amount) => sum + amount, 0);
   const dogQualified = qualifiedTotal(dog), riderQualified = qualifiedTotal(rider);
   const measured = Math.max(dogQualified, riderQualified);
-  if (!directions.length || airtimeUs <= 0) return { dogDegrees, riderDegrees, points: 0, basePoints: 0, switchBonus: 0, switchCount: 0, tier: 0, label: '着地', scoredTarget: null };
+  if (!directions.length || airtimeUs <= 0) return { dogDegrees, riderDegrees, points: 0, basePoints: 0, switchBonus: 0, switchCount: 0, directionCount: 0, tier: 0, label: '着地', scoredTarget: null };
 
   const ceiling = 2 * FREE_MAX_DEG_PER_SEC * airtimeUs / 1e6;
   const halfTurns = Math.floor((measured + 1e-7) / HALF_TURN);
@@ -101,11 +142,13 @@ export function scoreFreeMotion(history: readonly FreeSpan[], airtimeUs: number,
   const variety = 1 + 0.08 * Math.min(directions.length - 1, 2);
   const basePoints = nearLimit ? 1_000 : Math.min(999, Math.max(1, Math.floor(980 * scoredDegrees * variety / ceiling)));
   const combo = scoreTargetSwitches(history, inputs);
-  const points = basePoints + combo.bonus;
+  const directionCount = withDirectionCombos ? scoreDirectionSwitches(history, inputs, heading) : 0;
+  const switchBonus = combo.bonus + directionBonus(directionCount);
+  const points = basePoints + switchBonus;
   const tier = TIER_MINIMUMS.filter(minimum => points >= minimum).length;
   const target = dogQualified > 0 && riderQualified > 0 ? 'common' : dogQualified > 0 ? 'dog' : 'rider';
   const pattern = matchFreeTrick(directions, halfTurns);
   const name = freeTrickName(target, pattern, directions.length === 1);
-  return { dogDegrees, riderDegrees, points, basePoints, switchBonus: combo.bonus, switchCount: combo.count, tier,
+  return { dogDegrees, riderDegrees, points, basePoints, switchBonus, switchCount: combo.count, directionCount, tier,
     label: displayTrickName(name, halfTurns / 2, tier), scoredTarget: target };
 }

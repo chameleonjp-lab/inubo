@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { RunSession } from '../src/game/run';
+import { FREE_RULES_VERSION } from '../src/game/free-motion';
 import type { Quat } from '../src/game/math';
 
 type TestGame = { session: RunSession; view: { rig: { dog: { quaternion: { toArray(): Quat } } } } };
@@ -49,6 +50,9 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       pointer('pointerdown', 2, right, y);
       pointer('pointermove', 2, left, y);
       await until(() => sim.simUs >= heldAt + 105_000);
+      const impactCanvas = document.querySelector<HTMLCanvasElement>('[data-testid="trick-impact"]')!;
+      const drewAir = impactCanvas.dataset.phase === 'air'
+        && impactCanvas.getContext('2d')!.getImageData(0, 0, impactCanvas.width, impactCanvas.height).data.some((value, i) => i % 4 === 3 && value > 90);
       const heldTurn = gap(before, q()), displayTurn = gap(before, view.rig.dog.quaternion.toArray());
       const held = Object.values(sim.strokes).some(stroke => stroke.freeTarget === 'common' && stroke.upUs === null);
       const premature = sim.score.jumps.length;
@@ -67,11 +71,12 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       await until(() => sim.score.jumps.length > 0);
       return {
         version: sim.id.rulesVersion, ranked: sim.id.rankingOptIn, held, heldTurn, displayTurn, drift, premature, speedBeforeReverse, speedAfterReverse,
-        landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
+        drewAir, landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
       };
     });
-    expect(observed.version).toBe('rules-freestyle-2');
+    expect(observed.version).toBe(FREE_RULES_VERSION);
     expect(observed.ranked).toBe(false);
+    expect(observed.drewAir).toBe(true);
     expect(observed.held).toBe(true);
     expect(observed.heldTurn).toBeGreaterThan(0.2);
     expect(observed.displayTurn).toBeGreaterThan(0.2);
@@ -92,6 +97,10 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     else await expect(score).toHaveText(/区間採点済み|加点なし/);
     await expect(name).toBeInViewport();
     await expect(score).toBeInViewport();
+    const [nameBox, scoreBox] = await Promise.all([name.boundingBox(), score.boundingBox()]);
+    expect(scoreBox!.x).toBeGreaterThan(nameBox!.x + 70);
+    expect(scoreBox!.height).toBeGreaterThan(37);
+    if (entry === 'start') await expect(page.getByTestId('trick-impact')).toHaveAttribute('data-phase', 'landing');
     await expect(title).toHaveAttribute('data-trick-tier', /^[1-5]$/);
     expect(errors).toEqual([]);
   });
@@ -146,6 +155,6 @@ test('ジャンプの指を保持したまま即回転し、ボタンを押し�
     return result;
   });
   expect(observed).toMatchObject({ common: true, dogPressed: 'true', riderPressed: 'true',
-    sameFinger: true, rules: 'rules-freestyle-2' });
+    sameFinger: true, rules: FREE_RULES_VERSION });
   expect(observed.rider.some(v => Math.abs(v) > 0.2)).toBe(true);
 });

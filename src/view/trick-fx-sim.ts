@@ -1,5 +1,5 @@
 import { GRAVITY, JUMP_VY, KICKER_VY, RAIL_JUMP_VY } from '../game/rules';
-import { FREE_DECAY, isFreestyleVersion, rotationTime, type FreeMotionState, type FreeTarget } from '../game/free-motion';
+import { FREE_DECAY, FREE_RULES_VERSION, isFreestyleVersion, rotationTime, type FreeMotionState, type FreeTarget } from '../game/free-motion';
 import { add3 } from '../game/free-math';
 import { length } from '../game/math';
 import type { FxSpinSample } from './trick-fx-engine';
@@ -21,6 +21,7 @@ export function flightViewOf(run: SimState): FxFlightView | null {
     motionTimeUs: flight.motion.timeUs,
     history: flight.motion.history,
     inputs: flight.motion.seen.values(),
+    directionCombos: run.id.rulesVersion === FREE_RULES_VERSION,
   };
 }
 

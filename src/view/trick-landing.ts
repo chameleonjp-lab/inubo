@@ -15,6 +15,7 @@ export interface TrickLandingText {
   full: boolean;
   switchBonus: number;
   switchCount: number;
+  directionCount: number;
   /** 着地の実回転の対象（B=両方、H=人、D=犬）。情報が無い記録では null。 */
   fxTarget: FxTarget | null;
   emphasisId: FxId | null;
@@ -27,7 +28,7 @@ export interface TrickLandingText {
 }
 
 export function trickLandingText(name: string, points: number, trickPoints: number, sectionUsed = false,
-  extra: { basePoints?: number; switchBonus?: number; switchCount?: number; fxTarget?: unknown } = {}): TrickLandingText {
+  extra: { basePoints?: number; switchBonus?: number; switchCount?: number; directionCount?: number; fxTarget?: unknown } = {}): TrickLandingText {
   const basePoints = extra.basePoints ?? trickPoints;
   const chosen = chooseLandingFx(isFxTarget(extra.fxTarget) ? extra.fxTarget : null, basePoints, trickPoints);
   return {
@@ -37,6 +38,7 @@ export function trickLandingText(name: string, points: number, trickPoints: numb
     full: basePoints === 1_000,
     switchBonus: Math.max(0, extra.switchBonus ?? 0),
     switchCount: Math.max(0, extra.switchCount ?? 0),
+    directionCount: Math.max(0, extra.directionCount ?? 0),
     fxTarget: chosen?.target ?? null,
     emphasisId: chosen?.emphasis.id ?? null,
     trailId: chosen?.trail.id ?? null,

@@ -1,6 +1,6 @@
 import { add3 } from '../game/free-math';
 import { DEG, length } from '../game/math';
-import { directionOf, scoreTargetSwitches } from '../game/free-score';
+import { directionBonus, directionOf, scoreDirectionSwitches, scoreTargetSwitches } from '../game/free-score';
 import { DIRECTION_NAMES } from '../game/free-trick-catalog';
 import { FREE_MAX_DEG_PER_SEC, rotationTime, type FreeMotionInput, type FreeSpan, type FreeTarget } from '../game/free-motion';
 import { chooseLandingFx, emphasisLevel, fxTargetOf, isFxTarget, trailLevel, visualDifficultyPoints } from './trick-fx';
@@ -55,6 +55,7 @@ export interface FxFlightView {
   motionTimeUs: number;
   history: readonly FreeSpan[];
   inputs: Iterable<FreeMotionInput>;
+  directionCombos?: boolean;
 }
 
 /** 上向きの初速と重力から、表示だけに使う予測滞空時間を求める（0.45〜1.8秒）。 */
@@ -232,7 +233,10 @@ export class FxTimeline {
     const measured = Math.max(qualifiedTotal(dog), qualifiedTotal(rider));
     const end = j.spanIndex + (open && open.startUs < tickUs ? 1 : 0);
     const inputs = j.accepted.filter(input => input.atUs <= tickUs);
-    const combo = scoreTargetSwitches(history.slice(0, end), inputs);
+    const spans = history.slice(0, end);
+    const targets = scoreTargetSwitches(spans, inputs);
+    const directionsSwitched = flight.directionCombos ? scoreDirectionSwitches(spans, inputs, flight.heading, tickUs) : 0;
+    const combo = { bonus: targets.bonus + directionBonus(directionsSwitched), count: targets.count + directionsSwitched };
     const elapsedUs = Math.min(j.predictedAirUs, Math.max(0, tickUs - j.takeoffUs));
     const mature = elapsedUs >= j.predictedAirUs * FX_AIR_MATURE_SHARE;
     if (!directions || elapsedUs <= 0) return { base: 0, bonus: combo.bonus, count: combo.count, mature };

@@ -212,7 +212,7 @@ export function startFreeReview(root: HTMLElement): void {
     // 空中の段階は走行の時計（arena の時刻）で決め、着地は一度だけ。
     if (!galleryId) {
       const flight = arena.phase === 'air' ? { jumpId, takeoffUs: 0, predictedAirUs: airUs, heading: 0, motionTimeUs: arena.motion.timeUs,
-        history: arena.motion.history, inputs: arena.motion.seen.values() } : null;
+        history: arena.motion.history, inputs: arena.motion.seen.values(), directionCombos: true } : null;
       const events = arena.phase === 'air' ? timeline.observe(arena.motion.timeUs, flight, target) : [];
       if (result && landedFor !== jumpId) {
         landedFor = jumpId;
@@ -245,7 +245,7 @@ export function startFreeReview(root: HTMLElement): void {
     if (result && stage) {
       if (shownResult !== result) {
         landingShown = trickLandingText(`着地｜${result.label}`, result.points, result.points, false, {
-          basePoints: result.basePoints, switchBonus: result.switchBonus, switchCount: result.switchCount, fxTarget: fxTargetOf(result.scoredTarget),
+          basePoints: result.basePoints, switchBonus: result.switchBonus, switchCount: result.switchCount, directionCount: result.directionCount, fxTarget: fxTargetOf(result.scoredTarget),
         });
         showTrickLanding(status, landingShown);
         shownResult = result;

@@ -1,3 +1,4 @@
+import type { RivalState } from './rivals';
 import type { CourseId, DogId, DogSpec } from '../content/types';
 import type { CourseRt } from './track';
 import type { Candidate, TrickResolution } from './tricks';
@@ -243,6 +244,7 @@ export interface SimState {
   lastCheckpoint: { pathId: string; s: number; x: number; id: string };
   fallUntilUs: number | null;
   effects: Effects;
+  rivals: RivalState | null;
   consumed: Record<string, true>;
   guide: { active: boolean; forkId: string | null };
   jump: JumpRec | null;
