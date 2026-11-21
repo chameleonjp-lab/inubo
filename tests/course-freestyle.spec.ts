@@ -71,14 +71,16 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       await until(() => sim.simUs >= reverseAt + 55_000);
       const speedAfterReverse = omega();
       await until(() => sim.score.jumps.length > 0);
+      const landingPhase = impactCanvas.dataset.phase;
       return {
         version: sim.id.rulesVersion, ranked: sim.id.rankingOptIn, held, heldTurn, displayTurn, drift, premature, speedBeforeReverse, speedAfterReverse,
-        drewAir, landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
+        drewAir, landingPhase, landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
       };
     });
     expect(observed.version).toBe(FREE_RULES_VERSION);
     expect(observed.ranked).toBe(false);
     expect(observed.drewAir).toBe(true);
+    expect(observed.landingPhase).toBe('landing');
     expect(observed.held).toBe(true);
     expect(observed.heldTurn).toBeGreaterThan(0.2);
     expect(observed.displayTurn).toBeGreaterThan(0.2);
@@ -101,8 +103,8 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     await expect(score).toBeInViewport();
     const [nameBox, scoreBox] = await Promise.all([name.boundingBox(), score.boundingBox()]);
     expect(scoreBox!.x).toBeGreaterThan(nameBox!.x + 70);
-    expect(scoreBox!.height).toBeGreaterThan(37);
-    if (entry === 'start') await expect(page.getByTestId('trick-impact')).toHaveAttribute('data-phase', 'landing');
+    // 拡大しながら表示されるので、変形の影響を受けない箱の高さを測る。
+    expect(await score.evaluate(element => (element as HTMLElement).offsetHeight)).toBeGreaterThan(37);
     await expect(title).toHaveAttribute('data-trick-tier', /^[1-5]$/);
     expect(errors).toEqual([]);
   });
