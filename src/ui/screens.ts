@@ -6,7 +6,7 @@ import { h, clear, fmtInt } from './dom';
 import { renderBoard, renderResults } from './results';
 import { PRACTICE_STEPS, PracticeCoach, PracticeDemo, practiceGuide, practiceRate, type PracticePoint, type PracticeStepId } from './practice';
 import { TrickLabScreen } from './trick-lab';
-import { formatTime, homeShareText, officialUrl, resultShareText, shareOnX, shareableResult } from './share';
+import { formatTime, homeShareText, officialUrl, resultShareText, shareOnX, shareTextWithLink, shareableResult, xShareUrl } from './share';
 import { RunSession } from '../game/run';
 import { RULES_VERSION } from '../game/rules';
 import { FREE_RULES_VERSION, SWITCH_FREE_RULES_VERSION, PREVIOUS_FREE_RULES_VERSION, isFreestyleVersion, type FreeTarget } from '../game/free-motion';
@@ -263,7 +263,7 @@ export class App {
           h('button', { class: 'btn small', onclick: () => this.showHowTo() }, tx('遊び方')),
           h('button', { class: 'btn small', 'data-testid': 'settings', onclick: () => this.showSettings() }, tx('設定')),
           hasRanking ? h('button', { class: 'btn small', onclick: () => this.showRanking() }, tx('ランキング')) : null,
-          h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(officialUrl()), shareFallback) }, tx('Xでシェア')),
+          h('button', { class: 'btn small x-share', onclick: () => void this.share(homeShareText(null), shareFallback) }, tx('Xでシェア')),
         ),
         shareFallback,
         records.length ? h('dl', { class: 'home-records', 'aria-label': tx('自己ベスト'), 'data-testid': 'home-records' }, records) : null,
@@ -378,6 +378,7 @@ export class App {
   }
 
   async share(text: string, fallbackEl: HTMLElement | null): Promise<void> {
+    const url = xShareUrl(officialUrl());
     const res = await shareOnX(text, {
       open: (u) => {
         const w = window.open(u, '_blank');
@@ -385,12 +386,12 @@ export class App {
         return w;
       },
       copy: (t) => navigator.clipboard.writeText(t),
-    });
+    }, url);
     if (res === 'opened' || !fallbackEl) return;
     fallbackEl.classList.remove('hidden');
     fallbackEl.replaceChildren(
       h('p', {}, language() === 'ja' ? (res === 'copied' ? '投稿画面を開けなかったので、同じ文をコピーしました。' : '投稿画面を開けませんでした。次の文を写して使ってください。') : tx('投稿用の文章')),
-      h('textarea', { readonly: true, rows: 4, 'data-testid': 'share-text' }, text),
+      h('textarea', { readonly: true, rows: 4, 'data-testid': 'share-text' }, shareTextWithLink(text, url)),
     );
   }
 
@@ -480,7 +481,7 @@ export class App {
       home: () => this.back(),
       share: () => {
         if (!shareableResult(result)) return;
-        void this.share(resultShareText(result, def.name, DOGS[result.dogId].name, officialUrl()), fallbackHolder.el);
+        void this.share(resultShareText(result, def.name, DOGS[result.dogId].name, null), fallbackHolder.el);
       },
       ranking: this.rankingFor(result.courseId, result.rulesVersion)
         ? (metric, onState) => {
