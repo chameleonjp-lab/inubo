@@ -1,3 +1,4 @@
+import { DOG_EFFECT_COLORS, dogEffectStyle, type DogEffectColors } from '../content/dog-effects';
 import { TrickImpact } from './trick-impact';
 import { showTrickLanding } from './trick-landing';
 import { h, clear, fmtInt } from './dom';
@@ -43,14 +44,14 @@ function traceLayout(w: number, h: number) {
   return { cx: w * (landscape ? 0.67 : 0.50), cy: h * (landscape ? 0.36 : 0.39), unit: Math.min(w, h) };
 }
 
-function drawReference(g: CanvasRenderingContext2D, points: readonly PracticePoint[], { cx, cy, unit }: ReturnType<typeof traceLayout>, faint: boolean): void {
+function drawReference(g: CanvasRenderingContext2D, points: readonly PracticePoint[], { cx, cy, unit }: ReturnType<typeof traceLayout>, faint: boolean, colors: DogEffectColors): void {
   g.beginPath();
   points.forEach(([x, y], i) => i ? g.lineTo(cx + x * unit, cy + y * unit) : g.moveTo(cx + x * unit, cy + y * unit));
   g.setLineDash([6, 6]);
-  g.strokeStyle = faint ? 'rgba(27, 44, 60, .45)' : '#27364b';
+  g.strokeStyle = colors.ink + (faint ? '73' : 'ff');
   g.lineWidth = 5;
   g.stroke();
-  g.strokeStyle = faint ? 'rgba(255, 248, 221, .7)' : '#fff8dd';
+  g.strokeStyle = colors.glint + (faint ? 'b3' : 'ff');
   g.lineWidth = 2.5;
   g.stroke();
   g.setLineDash([]);
@@ -205,6 +206,7 @@ export class App {
         {
           class: `card dog-card${id === this.dogId ? ' selected' : ''}`,
           'data-testid': `dog-${id}`,
+          style: dogEffectStyle(id),
           'aria-pressed': id === this.dogId ? 'true' : 'false',
           onclick: () => {
             this.dogId = id;
@@ -527,6 +529,7 @@ class GameRun {
   private freeTarget: FreeTarget = 'common';
   private trails: HTMLCanvasElement;
   private impact: TrickImpact | null = null;
+  private readonly colors: DogEffectColors;
   private hud: Record<string, HTMLElement> = {};
   private center = new CenterText();
   private readonly recorder: ReplayRecorder;
@@ -552,6 +555,7 @@ class GameRun {
     readonly identity: RunIdentity,
     private view: GameView,
   ) {
+    this.colors = DOG_EFFECT_COLORS[identity.dogId];
     const freestyle = isFreestyleVersion(identity.rulesVersion);
     this.freePractice = freestyle && identity.mode === 'practice';
     this.recognizer = new GestureRecognizer({}, 1, !freestyle);
@@ -563,7 +567,7 @@ class GameRun {
     this.trails = h('canvas', { class: 'trails', 'data-testid': 'surface' });
     const impactCanvas = identity.rulesVersion === FREE_RULES_VERSION
       ? h('canvas', { class: 'trick-impact', 'aria-hidden': 'true', 'data-testid': 'trick-impact' }) : null;
-    if (impactCanvas) this.impact = new TrickImpact(impactCanvas);
+    if (impactCanvas) this.impact = new TrickImpact(impactCanvas, this.colors);
     const H = (k: string, el: HTMLElement) => (this.hud[k] = el);
     this.pauseCover = h(
       'div',
@@ -587,7 +591,7 @@ class GameRun {
     }
     this.el = h(
       'section',
-      { class: 'screen game' },
+      { class: 'screen game', style: dogEffectStyle(identity.dogId) },
       impactCanvas,
       this.trails,
       h(
@@ -958,25 +962,29 @@ class GameRun {
     if (this.coach && !this.coach.done && !this.session.paused) {
       const layout = traceLayout(window.innerWidth, window.innerHeight);
       g.lineCap = g.lineJoin = 'round';
-      for (const stroke of practiceGuide(this.coach.step.id, this.session.sim.mode === 'air')) drawReference(g, stroke.points, layout, true);
+      for (const stroke of practiceGuide(this.coach.step.id, this.session.sim.mode === 'air')) drawReference(g, stroke.points, layout, true, this.colors);
     }
+    g.save();
     this.recognizer.pruneTrails(t, 700);
     for (const tr of this.recognizer.trailViews()) {
       const alpha = tr.ended ? Math.max(0, 1 - (t - tr.endedAtMs) / 700) : 1;
       g.lineWidth = 6;
       g.lineCap = 'round';
       g.lineJoin = 'round';
-      g.strokeStyle = `rgba(255,255,255,${0.55 * alpha})`;
+      g.strokeStyle = this.colors.glint;
+      g.globalAlpha = 0.55 * alpha;
       g.beginPath();
       tr.points.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
       g.stroke();
       if (tr.circleEnds.length) {
-        g.strokeStyle = `rgba(255,170,60,${0.8 * alpha})`;
+        g.strokeStyle = this.colors.main;
+        g.globalAlpha = 0.8 * alpha;
         g.beginPath();
         const end = tr.circleEnds[tr.circleEnds.length - 1];
         tr.points.slice(0, end + 1).forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
         g.stroke();
       }
+      g.globalAlpha = 1;
       if (this.app.opts.debug && tr.label) {
         g.fillStyle = 'rgba(0,0,0,.6)';
         g.font = '14px system-ui';
@@ -984,6 +992,7 @@ class GameRun {
         g.fillText(tr.label, last.x + 8, last.y - 8);
       }
     }
+    g.restore();
   }
 
   private startPracticeDemo(): void {
@@ -1043,8 +1052,8 @@ class GameRun {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, w, h);
     g.lineCap = g.lineJoin = 'round';
-    for (const { points, color, progress } of demo.traces) {
-      drawReference(g, points, layout, false);
+    for (const { points, progress } of demo.traces) {
+      drawReference(g, points, layout, false, this.colors);
 
       const n = points.length - 1;
       const pos = n * (reduced && progress > 0 ? 1 : progress);
@@ -1057,19 +1066,19 @@ class GameRun {
         g.beginPath();
         points.slice(0, i + 1).forEach(([px, py], j) => j ? g.lineTo(cx + px * unit, cy + py * unit) : g.moveTo(cx + px * unit, cy + py * unit));
         g.lineTo(endX, endY);
-        g.strokeStyle = '#27364b';
+        g.strokeStyle = this.colors.ink;
         g.lineWidth = 8;
         g.stroke();
-        g.strokeStyle = color;
+        g.strokeStyle = this.colors.partner;
         g.lineWidth = 5;
         g.stroke();
       }
       if (!reduced && progress < 1) {
         g.beginPath();
         g.arc(endX, endY, 8, 0, 2 * Math.PI);
-        g.fillStyle = color;
+        g.fillStyle = this.colors.partner;
         g.fill();
-        g.strokeStyle = '#27364b';
+        g.strokeStyle = this.colors.ink;
         g.lineWidth = 2;
         g.stroke();
       }
@@ -1134,7 +1143,7 @@ function boneGauge(f: number): SVGSVGElement {
   svg.setAttribute('height', '24');
   const clipId = `bone-${Math.random().toString(36).slice(2, 7)}`;
   svg.innerHTML = `<defs><clipPath id="${clipId}"><rect x="0" y="0" width="${Math.max(0, Math.min(1, f)) * 120}" height="30"/></clipPath></defs>
-    <path d="M14 6a7 7 0 0 1 12 3h68a7 7 0 1 1 6 8 7 7 0 1 1-6 8H26a7 7 0 1 1-12-3 7 7 0 1 1 0-16z" fill="#fff8e1" stroke="#7a5a1a" stroke-width="2"/>
-    <path clip-path="url(#${clipId})" d="M14 6a7 7 0 0 1 12 3h68a7 7 0 1 1 6 8 7 7 0 1 1-6 8H26a7 7 0 1 1-12-3 7 7 0 1 1 0-16z" fill="#f5a623"/>`;
+    <path d="M14 6a7 7 0 0 1 12 3h68a7 7 0 1 1 6 8 7 7 0 1 1-6 8H26a7 7 0 1 1-12-3 7 7 0 1 1 0-16z" style="fill:var(--effect-glint);stroke:var(--effect-shade)" stroke-width="2"/>
+    <path clip-path="url(#${clipId})" d="M14 6a7 7 0 0 1 12 3h68a7 7 0 1 1 6 8 7 7 0 1 1-6 8H26a7 7 0 1 1-12-3 7 7 0 1 1 0-16z" style="fill:var(--effect-main)"/>`;
   return svg;
 }

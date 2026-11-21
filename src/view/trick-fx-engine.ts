@@ -1,6 +1,7 @@
+import type { DogEffectColors } from '../content/dog-effects';
 import { ANCHOR_KEYS, anchorBody, fxProgram, type AnchorKey, type BodyAnchorKey, type FxProgram, type FxStep } from './trick-fx-81';
 import type { FxBody, FxDrawContext, FxDrawerTable } from './trick-fx-context';
-import { FX_RGB, PointRing, clamp01, copyV, lenV, normV, rotateV, setV, vec, type Quat, type Rgb, type Vec } from './trick-fx-math';
+import { FX_RGB, PointRing, hexToLinearRgb, clamp01, copyV, lenV, normV, rotateV, setV, vec, type FxPalette, type FxTone, type Quat, type Rgb, type Vec } from './trick-fx-math';
 import { AIR_DRAWERS } from './trick-fx-ops-air';
 import { LAND_DRAWERS } from './trick-fx-ops-land';
 import { FxPen, type FxSink } from './trick-fx-pen';
@@ -82,6 +83,7 @@ interface Instance {
 export class FxEngine {
   /** 描画専用の時計（ms）。停止中は進まない。 */
   clockMs = 0;
+  private palette: FxPalette = FX_RGB;
   private list: Instance[] = [];
   private pool: PointRing[] = [];
   private pos = new Float64Array(N * 3);
@@ -111,6 +113,20 @@ export class FxEngine {
   get instanceCount(): number { return this.list.length; }
   /** 直近に連携が実際に成立した時刻（描画の時計）。 */
   get lastComboMs(): number { return this.comboAtMs; }
+
+  setColors(colors: DogEffectColors): void {
+    const light = hexToLinearRgb(colors.light);
+    const glint = hexToLinearRgb(colors.glint);
+    this.palette = {
+      dog: hexToLinearRgb(colors.main),
+      rider: hexToLinearRgb(colors.partner),
+      amber: light,
+      ice: [(light[0] + glint[0]) / 2, (light[1] + glint[1]) / 2, (light[2] + glint[2]) / 2],
+      white: glint,
+    };
+  }
+
+  tone(tone: FxTone): Rgb { return this.palette[tone]; }
 
   clear(): void {
     for (const inst of this.list) this.release(inst);
@@ -453,9 +469,9 @@ class Ctx implements FxDrawContext {
   angle(body: FxBody): number { return this.engine.turnedOf(body); }
   quat(body: FxBody): Quat | null { return this.engine.quatOf(body); }
   center(body: FxBody, out: Vec): boolean { return this.engine.centerOf(body, out); }
+  tone(tone: FxTone): Rgb { return this.engine.tone(tone); }
   color(step: FxStep, key: AnchorKey | null): Rgb {
-    if (step.color !== 'body') return FX_RGB[step.color];
-    return key && anchorBody(key) === 'rider' ? FX_RGB.rider : FX_RGB.dog;
+    return this.tone(step.color === 'body' ? (key && anchorBody(key) === 'rider' ? 'rider' : 'dog') : step.color);
   }
   once(index: number): boolean {
     const bit = 1 << index;

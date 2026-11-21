@@ -6,8 +6,11 @@
   transform: none;
 }
 .trick-landing-card {
-  --fx-a: #ff702e;
-  --fx-b: #24cfff;
+  --fx-a: var(--effect-main, #ff702e);
+  --fx-b: var(--effect-partner, #24cfff);
+  --fx-ink: var(--effect-ink, #132335);
+  --fx-shade: var(--effect-shade, #223c53);
+  --fx-glint: var(--effect-glint, #fff);
   position: relative;
   width: 100%;
   height: 100%;
@@ -15,8 +18,8 @@
   color: #fff;
   -webkit-text-stroke: 0;
 }
-.trick-landing-card[data-fx-target='H'] { --fx-a: #467aff; --fx-b: #a6efff; }
-.trick-landing-card[data-fx-target='D'] { --fx-a: #f66e24; --fx-b: #ffdd55; }
+.trick-landing-card[data-fx-target='H'] { --fx-a: var(--effect-partner, #467aff); --fx-b: var(--effect-glint, #a6efff); }
+.trick-landing-card[data-fx-target='D'] { --fx-a: var(--effect-main, #f66e24); --fx-b: var(--effect-light, #ffdd55); }
 .trick-landing-title {
   position: absolute;
   top: 2%;
@@ -27,12 +30,12 @@
   width: fit-content;
   max-width: min(87%, 560px);
   padding: 10px 26px 12px 15px;
-  background: linear-gradient(110deg, #132335fa 64%, #223c53ef);
+  background: linear-gradient(110deg, color-mix(in srgb, var(--fx-ink) 98%, transparent) 64%, color-mix(in srgb, color-mix(in srgb, var(--fx-ink) 75%, var(--fx-shade)) 94%, transparent));
   border-left: 6px solid var(--fx-a);
   clip-path: polygon(0 0, 100% 0, calc(100% - 15px) 100%, 0 100%);
 }
 .trick-landing-name {
-  color: white;
+  color: var(--fx-glint);
   font-weight: 950;
   font-size: clamp(18px, 4.2vmin, 28px);
   line-height: 1.18;
@@ -59,15 +62,15 @@
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   text-align: right;
-  background: #101e32ee;
+  background: color-mix(in srgb, var(--fx-ink) 93%, transparent);
   border-right: 5px solid var(--fx-b);
   transform: skew(-7deg);
-  box-shadow: 0 2px 0 #0a1729, 0 0 calc(4px + var(--fx-level) * 1.4px) var(--fx-b);
+  box-shadow: 0 2px 0 var(--fx-ink), 0 0 calc(4px + var(--fx-level) * 1.4px) var(--fx-b);
 }
 .trick-landing-score.is-numeric {
   font-size: clamp(35px, calc(8.3vmin + var(--fx-level) * 1.55px), 72px);
   letter-spacing: -0.08em;
-  text-shadow: 0 2px 0 #293955;
+  text-shadow: 0 2px 0 var(--fx-shade);
 }
 .trick-landing-score small {
   font-size: 0.37em;
@@ -78,22 +81,22 @@
   padding: 4px 8px;
   font-size: clamp(11px, 3vmin, 15px);
   line-height: 1.24;
-  color: #182439;
-  background: #fff0a7;
+  color: var(--fx-ink);
+  background: var(--effect-light, #fff0a7);
   font-weight: 900;
   text-align: right;
   text-shadow: none;
 }
 .trick-landing-combo {
-  background: #141e34f5;
-  color: #fff;
+  background: color-mix(in srgb, var(--fx-ink) 96%, transparent);
+  color: var(--fx-glint);
   border-right: 3px solid var(--fx-a);
 }
 .trick-landing-combo strong, .trick-landing-combo small { display: block; }
-.trick-landing-combo small { color: #e2ebfa; font-size: 0.83em; }
+.trick-landing-combo small { color: var(--fx-glint); font-size: 0.83em; }
 [data-trick-tier='4'] .trick-landing-title,
 [data-trick-tier='5'] .trick-landing-title {
-  background: linear-gradient(110deg, #231330 55%, #3f294b 85%, #6d345c);
+  background: linear-gradient(110deg, var(--fx-ink) 55%, color-mix(in srgb, var(--fx-ink) 65%, var(--fx-shade)) 85%, var(--fx-shade));
   border-left-width: 9px;
 }
 @media (orientation: landscape) and (max-height: 500px) {

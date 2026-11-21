@@ -19,6 +19,7 @@ import {
   type Solid,
 } from '../game/track';
 import { rivalPose } from '../game/rivals';
+import { DOG_EFFECT_COLORS } from '../content/dog-effects';
 import { DOGS } from '../content/dogs';
 import { parkFreestyle, parkRouteLooks } from '../content/courses/park-freestyle';
 import { extrapolate } from '../game/run';
@@ -36,7 +37,7 @@ import { FollowCamera } from './camera';
 import { animateRig, createRig, type Rig } from './models';
 import { poseOf, replayPoseAt, type Pose, type ReplayData } from './replay';
 import type { Cue } from './effects';
-import type { DogLook } from '../content/types';
+import type { DogId, DogLook } from '../content/types';
 import type { SimState } from '../game/types';
 import type { Settings } from '../storage/records';
 
@@ -50,6 +51,16 @@ const THEMES = {
   river: { sky: '#cfe9f7', ground: '#94c47a', road: '#d6c8a4', curb: '#a99a78', fog: [70, 300] },
   plaza: { sky: '#e3eef6', ground: '#a8d08d', road: '#e2dccb', curb: '#c2b9a1', fog: [70, 280] },
 } as const;
+
+function sceneColors(dogId: DogId) {
+  const { main, partner, light, glint, ink, shade, dust } = DOG_EFFECT_COLORS[dogId];
+  return {
+    main: new THREE.Color(main), partner: new THREE.Color(partner), light: new THREE.Color(light),
+    glint: new THREE.Color(glint), ink: new THREE.Color(ink), shade: new THREE.Color(shade), dust: new THREE.Color(dust),
+  };
+}
+
+const SCENE_COLORS = { shiba: sceneColors('shiba'), corgi: sceneColors('corgi'), whippet: sceneColors('whippet') };
 
 function rand(seed: number): () => number {
   let s = seed >>> 0;
@@ -290,6 +301,7 @@ export class GameView {
   private sun: THREE.DirectionalLight;
   /** 81種類の空中・着地演出。決める側（fxReader）と描く側（fxEngine）を分ける。 */
   private fxReader = new FxRunReader();
+  private effectDog: DogId | null = null;
   private fxEngine = new FxEngine();
   private fxSink: ThreeFxSink;
   private fxSource = new RigFxSource();
@@ -392,8 +404,28 @@ export class GameView {
     this.ghostFxIndex = 0;
     this.ghostFxLastUs = -1;
     if (replay && look) {
+      this.ghostFx.setColors(DOG_EFFECT_COLORS[replay.dogId]);
       this.ghostRig = createRig(look, '#ffffff', '#ffffff', true);
       this.scene.add(this.ghostRig.root);
+    }
+  }
+
+  private setEffectDog(dogId: DogId): void {
+    if (this.effectDog === dogId) return;
+    this.effectDog = dogId;
+    const { main, partner, light, glint, shade } = SCENE_COLORS[dogId];
+    this.fxEngine.setColors(DOG_EFFECT_COLORS[dogId]);
+    (this.dogTrail.line.material as THREE.LineBasicMaterial).color.copy(main);
+    (this.shoulderTrail.line.material as THREE.LineDashedMaterial).color.copy(partner);
+    (this.impact.material as THREE.LineBasicMaterial).color.copy(glint);
+    (this.windLines.material as THREE.LineBasicMaterial).color.copy(light);
+    if (this.goalTape) (this.goalTape.material as THREE.MeshBasicMaterial).color.copy(light);
+    for (const flag of this.flags.values()) {
+      ((flag.children[0] as THREE.Mesh).material as THREE.MeshLambertMaterial).color.copy(main);
+    }
+    for (const group of this.guideGroups.values()) {
+      const paw = group.children[0] as THREE.Mesh | undefined;
+      if (paw) (paw.material as THREE.MeshBasicMaterial).color.copy(shade);
     }
   }
 
@@ -440,6 +472,7 @@ export class GameView {
   setCourse(course: CourseRt): void {
     if (this.course === course) return;
     this.course = course;
+    this.effectDog = null;
     disposeObjects(this.courseGroup);
     this.courseGroup.clear();
     this.items.clear();
@@ -557,7 +590,7 @@ export class GameView {
         if (!o.trick) continue;
         const tp = this.course!.paths.get(o.to)!;
         const pg = new THREE.Group();
-        const tex = pawTexture('#7b4a12');
+        const tex = pawTexture('#ffffff');
         const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
         for (let s = 2; s < tp.length - 2; s += 1.6) {
           const paw = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), m);
@@ -799,6 +832,8 @@ export class GameView {
   frame(run: SimState, renderUs: number, cues: Cue[], settings: Settings, nowMs: number, dtMs: number, wag = false): void {
     const course = this.course;
     if (!course || !this.rig) return;
+    this.setEffectDog(run.id.dogId);
+    const colors = SCENE_COLORS[run.id.dogId];
     // 一時停止中は、粒・足跡・旗・アイテムの動き・演出の時計をまとめて止める（停止していた時間は後から進めない）。
     if (this.fxPaused && this.pauseStartMs === null) this.pauseStartMs = nowMs;
     if (!this.fxPaused && this.pauseStartMs !== null) { this.pausedTotalMs += nowMs - this.pauseStartMs; this.pauseStartMs = null; }
@@ -864,14 +899,14 @@ export class GameView {
 
     const at = new THREE.Vector3(pose.x, pose.y, pose.z);
     const fwd = new THREE.Vector3(Math.cos(pose.heading), 0, Math.sin(pose.heading));
-    const sand = new THREE.Color('#d9c38f');
+    const sand = colors.dust;
     for (const c of cues) {
       switch (c.visual) {
         case 'sandBurst':
         case 'kickMark':
         case 'kickMarkBig':
           this.particles.emit(Math.round((c.visual === 'kickMarkBig' ? 26 : 12) * lightK + 4), at, sand, c.visual === 'kickMarkBig' ? 3 : 2, 2);
-          this.prints.add(new THREE.Vector3(pose.x, groundY + 0.03, pose.z), pose.heading, new THREE.Color('#6b5a3a'), vnow, c.visual === 'kickMarkBig' ? 2.2 : 1.4);
+          this.prints.add(new THREE.Vector3(pose.x, groundY + 0.03, pose.z), pose.heading, colors.shade, vnow, c.visual === 'kickMarkBig' ? 2.2 : 1.4);
           break;
         case 'sandRing':
           this.particles.emit(Math.round(16 * lightK + 4), new THREE.Vector3(pose.x, groundY + 0.05, pose.z), sand, 2.5, 0.6);
@@ -884,13 +919,13 @@ export class GameView {
             [-0.35, 0.12],
           ]) {
             const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-            this.prints.add(new THREE.Vector3(pose.x, groundY + 0.03, pose.z).addScaledVector(fwd, dx).addScaledVector(right, dz), pose.heading, new THREE.Color('#ffd23f'), vnow, 0.9);
+            this.prints.add(new THREE.Vector3(pose.x, groundY + 0.03, pose.z).addScaledVector(fwd, dx).addScaledVector(right, dz), pose.heading, colors.light, vnow, 0.9);
           }
           break;
         case 'pawTrails':
           // 複合成功: 2本の軌跡が足跡の形で重なる（R64）。
           for (const pt of [...this.dogTrail.points(), ...this.shoulderTrail.points()].filter((_, i) => i % 4 === 0)) {
-            this.prints.add(new THREE.Vector3(pt.x, Math.max(groundY + 0.04, pt.y), pt.z), pose.heading, new THREE.Color('#ff7ab6'), vnow, 1.1);
+            this.prints.add(new THREE.Vector3(pt.x, Math.max(groundY + 0.04, pt.y), pt.z), pose.heading, colors.partner, vnow, 1.1);
           }
           break;
         case 'impactLines':
@@ -908,20 +943,20 @@ export class GameView {
         }
         case 'tape':
           if (this.goalTape) this.goalTape.visible = false;
-          this.particles.emit(Math.round(40 * lightK + 6), at.clone().add(new THREE.Vector3(0, 1.5, 0)), new THREE.Color('#ffef5a'), 4, 3, 1.2);
+          this.particles.emit(Math.round(40 * lightK + 6), at.clone().add(new THREE.Vector3(0, 1.5, 0)), colors.glint, 4, 3, 1.2);
           break;
         case 'tailWag':
           this.wagUntil = vnow + 1200;
           break;
       }
-      if (c.effect === 'E18' && c.visual === 'boostGauge') this.particles.emit(10, at, new THREE.Color('#ffb347'), 2, 1.5);
+      if (c.effect === 'E18' && c.visual === 'boostGauge') this.particles.emit(10, at, colors.main, 2, 1.5);
     }
     // 手すりの接点の光（滑走中だけ、速いほど多い）
     if (run.mode === 'rail') {
       const n = Math.max(1, Math.round(speed * 0.6 * lightK));
-      this.particles.emit(n, new THREE.Vector3(pose.x, pose.y + 0.02, pose.z), new THREE.Color('#ffe066'), 1.5 + speed * 0.15, 1.2, 0.35);
+      this.particles.emit(n, new THREE.Vector3(pose.x, pose.y + 0.02, pose.z), colors.light, 1.5 + speed * 0.15, 1.2, 0.35);
     }
-    // 走るほど砂つぶと足跡（R61）。糞を踏んだ間は茶色い足跡（R68）。
+    // 走るほど砂つぶと足跡（R61）。糞を踏んだ間は濃い足跡（R68）。
     const slowed = poopActive(run.effects, run.simUs);
     if (run.mode === 'ground' && speed > 0.5) {
       if (Math.random() < Math.min(1, speed / 10) * 0.6 * lightK) this.particles.emit(1, new THREE.Vector3(pose.x, groundY + 0.05, pose.z), sand, 0.8, 0.8, 0.4);
@@ -929,7 +964,7 @@ export class GameView {
         this.lastPrintS = run.s;
         const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
         const sideOff = (Math.round(run.s / 0.9) % 2 ? 0.12 : -0.12);
-        this.prints.add(new THREE.Vector3(pose.x, groundY + 0.025, pose.z).addScaledVector(right, sideOff), pose.heading, slowed ? new THREE.Color('#6b4423') : new THREE.Color('#bba57a'), vnow, slowed ? 1 : 0.7);
+        this.prints.add(new THREE.Vector3(pose.x, groundY + 0.025, pose.z).addScaledVector(right, sideOff), pose.heading, slowed ? colors.ink : colors.shade, vnow, slowed ? 1 : 0.7);
       }
     }
     // 加速中は犬の後ろに風の線（R67）
@@ -1083,7 +1118,7 @@ export class GameView {
         model.scale.setScalar(1.36);
         model.userData.rivalProgress = uAtS(path, item.s);
         if (Math.abs(model.userData.rivalProgress - progress) < 65) {
-          this.particles.emit(9, model.position, new THREE.Color('#9d5a2c'), 3.8, 2.7);
+          this.particles.emit(9, model.position, SCENE_COLORS[item.id.startsWith('rival-0-') ? 'corgi' : 'whippet'].shade, 3.8, 2.7);
         }
       }
     }
@@ -1129,9 +1164,9 @@ export class GameView {
   private lab: TrickLabStage | null = null;
 
   /** 技の練習の場面へ切り替える。描画装置・犬種・服装・照明の設定は競技と共有する。 */
-  setTrickLabStage(fixture: LabFixtureId, edge: LabEdge | null, look: DogLook, clothes: string, helmet: string): void {
+  setTrickLabStage(fixture: LabFixtureId, edge: LabEdge | null, look: DogLook, clothes: string, helmet: string, dogId: DogId): void {
     if (!this.lab) this.lab = new TrickLabStage();
-    this.lab.setRider(look, clothes, helmet);
+    this.lab.setRider(look, clothes, helmet, DOG_EFFECT_COLORS[dogId]);
     this.lab.setFixture(fixture, edge);
   }
 

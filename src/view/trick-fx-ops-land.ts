@@ -1,6 +1,6 @@
 import { anchorBody, type AnchorKey, type FxStep } from './trick-fx-81';
 import type { FxDrawContext, FxDrawerTable } from './trick-fx-context';
-import { FX_RGB, addScaled, clamp01, copyV, distV, easeOut, envelope, lerpV, setV, vec, type Rgb, type Vec } from './trick-fx-math';
+import { addScaled, clamp01, copyV, distV, easeOut, envelope, lerpV, setV, vec, type Rgb, type Vec } from './trick-fx-math';
 import type { DecalShape } from './trick-fx-pen';
 
 const A = vec(), B = vec(), C = vec(), D = vec(), F = vec(), R = vec(), S = vec(), T = vec();
@@ -63,7 +63,7 @@ export const LAND_DRAWERS: FxDrawerTable = {
     const centers: [Vec, Rgb][] = [];
     if (p.twoCenters) {
       contactOf(ctx, y, C);
-      centers.push([addScaled(A, C, R, -p.twoCenters), FX_RGB.dog], [addScaled(B, C, R, p.twoCenters), FX_RGB.rider]);
+      centers.push([addScaled(A, C, R, -p.twoCenters), ctx.tone('dog')], [addScaled(B, C, R, p.twoCenters), ctx.tone('rider')]);
     } else {
       step.at.forEach((key, i) => {
         const out = [A, B, C, D][i];
@@ -125,8 +125,8 @@ export const LAND_DRAWERS: FxDrawerTable = {
     const n = (step.n ?? 30) * (ctx.weak ? 0.35 : 1) * Math.min(1, alpha / 0.6);
     const both = step.color === 'body';
     const fan = p.fan ?? 1;
-    ctx.pen.burst(n / 2, C, both ? FX_RGB.dog : ctx.color(step, null), 2.4, p.up ?? 0.6, 0.7, -R.x, -R.z, fan);
-    ctx.pen.burst(n / 2, C, both ? FX_RGB.rider : ctx.color(step, null), 2.4, p.up ?? 0.6, 0.7, R.x, R.z, fan);
+    ctx.pen.burst(n / 2, C, both ? ctx.tone('dog') : ctx.color(step, null), 2.4, p.up ?? 0.6, 0.7, -R.x, -R.z, fan);
+    ctx.pen.burst(n / 2, C, both ? ctx.tone('rider') : ctx.color(step, null), 2.4, p.up ?? 0.6, 0.7, R.x, R.z, fan);
   },
 
   /** 二つの波紋。highlight は重なる所を白く、merge は中央へ寄って一つになる。 */
@@ -139,16 +139,16 @@ export const LAND_DRAWERS: FxDrawerTable = {
     lift(ctx, addScaled(B, C, R, apart));
     const r = step.size * (0.2 + 0.8 * easeOut(u));
     const k = (1 - u) * Math.min(1, t / 80);
-    ctx.pen.groundArc(A, r, FX_RGB.dog, alpha * k);
-    ctx.pen.groundArc(B, r, FX_RGB.rider, alpha * k);
-    if (p.merge && u > 0.6) ctx.pen.groundArc(C, r * 1.1, FX_RGB.white, alpha * k);
+    ctx.pen.groundArc(A, r, ctx.tone('dog'), alpha * k);
+    ctx.pen.groundArc(B, r, ctx.tone('rider'), alpha * k);
+    if (p.merge && u > 0.6) ctx.pen.groundArc(C, r * 1.1, ctx.tone('white'), alpha * k);
     const d = distV(A, B);
     if (p.highlight && d < 2 * r && d > 1e-3) {
       // 二つの円が交わる点だけを白く光らせる。
       const h = Math.sqrt(Math.max(0, r * r - (d / 2) ** 2));
       for (const sgn of [-1, 1]) {
         addScaled(S, C, F, sgn * h);
-        ctx.pen.dot(S, 0.09, FX_RGB.white, alpha * k);
+        ctx.pen.dot(S, 0.09, ctx.tone('white'), alpha * k);
       }
     }
   },
@@ -226,7 +226,7 @@ export const LAND_DRAWERS: FxDrawerTable = {
       for (let k = 0; k < p.sparks; k++) {
         const a = ctx.yaw + k / p.sparks * TAU;
         setV(S, C.x + Math.cos(a) * (0.3 + spreadU), y + 0.05, C.z + Math.sin(a) * (0.3 + spreadU));
-        ctx.pen.dot(S, 0.07, FX_RGB.ice, alpha * env * (1 - spreadU));
+        ctx.pen.dot(S, 0.07, ctx.tone('ice'), alpha * env * (1 - spreadU));
       }
     }
   },
@@ -356,8 +356,8 @@ export const LAND_DRAWERS: FxDrawerTable = {
       setV(B, C.x + size * 0.25, C.y, C.z);
       setV(S, Math.cos(ctx.yaw), 0, Math.sin(ctx.yaw));
       setV(T, 0, 1, 0);
-      ctx.pen.arc(A, S, T, size * 0.4, size * 0.4, 0, TAU, 24, FX_RGB.dog, alpha * k);
-      ctx.pen.arc(B, S, T, size * 0.4, size * 0.4, 0, TAU, 24, FX_RGB.rider, alpha * k);
+      ctx.pen.arc(A, S, T, size * 0.4, size * 0.4, 0, TAU, 24, ctx.tone('dog'), alpha * k);
+      ctx.pen.arc(B, S, T, size * 0.4, size * 0.4, 0, TAU, 24, ctx.tone('rider'), alpha * k);
       ctx.pen.star(C, size * 0.25, c, alpha * k);
       return;
     }
@@ -366,15 +366,15 @@ export const LAND_DRAWERS: FxDrawerTable = {
     if (shape === 3) {
       addScaled(A, C, R, -size * 0.3);
       addScaled(B, C, R, size * 0.3);
-      ctx.pen.groundArc(A, size * 0.45, FX_RGB.dog, alpha * k);
-      ctx.pen.groundArc(B, size * 0.45, FX_RGB.rider, alpha * k);
+      ctx.pen.groundArc(A, size * 0.45, ctx.tone('dog'), alpha * k);
+      ctx.pen.groundArc(B, size * 0.45, ctx.tone('rider'), alpha * k);
       ctx.pen.decal(C, ctx.yaw, 3, size * 0.5, c, alpha * k);
       return;
     }
-    ctx.pen.decal(C, ctx.yaw, 0, size * 0.8, shape === 2 ? FX_RGB.dog : c, alpha * k);
+    ctx.pen.decal(C, ctx.yaw, 0, size * 0.8, shape === 2 ? ctx.tone('dog') : c, alpha * k);
     if (shape === 2) {
       addScaled(A, C, F, size * 0.55);
-      ctx.pen.decal(A, ctx.yaw, 3, size * 0.55, FX_RGB.rider, alpha * k);
+      ctx.pen.decal(A, ctx.yaw, 3, size * 0.55, ctx.tone('rider'), alpha * k);
     }
     ctx.pen.groundArc(C, size * 0.75, c, alpha * k * 0.8);
   },

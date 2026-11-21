@@ -1,3 +1,5 @@
+import { DOG_EFFECT_COLORS } from '../src/content/dog-effects';
+import { DOG_ORDER } from '../src/content/dogs';
 import { expect, test } from '@playwright/test';
 import type { RunSession } from '../src/game/run';
 import { FREE_RULES_VERSION } from '../src/game/free-motion';
@@ -69,14 +71,28 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
       await until(() => sim.simUs >= reverseAt + 55_000);
       const speedAfterReverse = omega();
       await until(() => sim.score.jumps.length > 0);
+      const landingPhase = impactCanvas.dataset.phase;
+      const titleElement = document.querySelector<HTMLElement>('[data-testid="center-text"]')!;
+      const nameElement = titleElement.querySelector<HTMLElement>('[data-testid="landing-trick-name"]')!;
+      const scoreElement = titleElement.querySelector<HTMLElement>('[data-testid="landing-trick-score"]')!;
+      for (const animation of titleElement.getAnimations({ subtree: true })) animation.finish();
+      const nameBox = nameElement.getBoundingClientRect();
+      const scoreBox = scoreElement.getBoundingClientRect();
+      const inViewport = (box: DOMRect) => box.right > 0 && box.left < innerWidth && box.bottom > 0 && box.top < innerHeight;
+      const landingLayout = {
+        name: nameElement.textContent, score: scoreElement.textContent, tier: titleElement.dataset.trickTier,
+        separation: scoreBox.left - nameBox.left, scoreHeight: scoreElement.offsetHeight,
+        nameInViewport: inViewport(nameBox), scoreInViewport: inViewport(scoreBox),
+      };
       return {
         version: sim.id.rulesVersion, ranked: sim.id.rankingOptIn, held, heldTurn, displayTurn, drift, premature, speedBeforeReverse, speedAfterReverse,
-        drewAir, landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
+        drewAir, landingPhase, landingLayout, landing: sim.score.jumps[0], fixedTricks: sim.events.filter(event => event.kind === 'trickStart').length,
       };
     });
     expect(observed.version).toBe(FREE_RULES_VERSION);
     expect(observed.ranked).toBe(false);
     expect(observed.drewAir).toBe(true);
+    expect(observed.landingPhase).toBe('landing');
     expect(observed.held).toBe(true);
     expect(observed.heldTurn).toBeGreaterThan(0.2);
     expect(observed.displayTurn).toBeGreaterThan(0.2);
@@ -87,21 +103,14 @@ for (const [entry, viewport] of [['start', { width: 402, height: 700 }], ['pract
     expect(observed.fixedTricks).toBe(0);
     expect(observed.landing).toMatchObject({ names: [expect.stringMatching(/犬と人の右/)], tenths: 10 });
     expect(observed.landing.points).toBeGreaterThan(0);
-    const title = page.getByTestId('center-text');
-    const name = page.getByTestId('landing-trick-name');
-    const score = page.getByTestId('landing-trick-score');
-    await expect(name).toHaveText(observed.landing.names[0]);
-    await expect(score).toBeVisible();
+    const layout = observed.landingLayout;
+    expect(layout.name).toBe(observed.landing.names[0]);
     const awarded = entry === 'practice' ? observed.landing.points : observed.landing.awarded;
-    if (awarded > 0) await expect(score).toContainText('＋' + awarded.toLocaleString('ja-JP'));
-    else await expect(score).toHaveText(/区間採点済み|加点なし/);
-    await expect(name).toBeInViewport();
-    await expect(score).toBeInViewport();
-    const [nameBox, scoreBox] = await Promise.all([name.boundingBox(), score.boundingBox()]);
-    expect(scoreBox!.x).toBeGreaterThan(nameBox!.x + 70);
-    expect(scoreBox!.height).toBeGreaterThan(37);
-    if (entry === 'start') await expect(page.getByTestId('trick-impact')).toHaveAttribute('data-phase', 'landing');
-    await expect(title).toHaveAttribute('data-trick-tier', /^[1-5]$/);
+    expect(layout.score).toContain('＋' + awarded.toLocaleString('ja-JP'));
+    expect(layout.tier).toMatch(/^[1-5]$/);
+    expect(layout.nameInViewport && layout.scoreInViewport).toBe(true);
+    expect(layout.separation).toBeGreaterThan(70);
+    expect(layout.scoreHeight).toBeGreaterThan(37);
     expect(errors).toEqual([]);
   });
 }
@@ -157,4 +166,43 @@ test('ジャンプの指を保持したまま即回転し、ボタンを押し�
   expect(observed).toMatchObject({ common: true, dogPressed: 'true', riderPressed: 'true',
     sameFinger: true, rules: FREE_RULES_VERSION });
   expect(observed.rider.some(v => Math.abs(v) > 0.2)).toBe(true);
+});
+
+test('犬種を変更すると着地の文字と画面全体の光の色が切り替わる', async ({ page }) => {
+  for (const dogId of DOG_ORDER) {
+    await page.goto('/');
+    await page.getByTestId(`dog-${dogId}`).click();
+    await page.getByTestId('start').click();
+    const { main, partner } = DOG_EFFECT_COLORS[dogId];
+    const rgb = (hex: string) => hex.slice(1).match(/../g)!.map(s => parseInt(s, 16));
+    const mainRgb = rgb(main), partnerRgb = rgb(partner);
+    const colors = await page.evaluate(async (first) => {
+      const { session } = (window as unknown as { __inubo: { app: { game: TestGame } } }).__inubo.app.game;
+      session.begin();
+      const atUs = session.sim.simUs + 20_000;
+      session.submit(session.runId, [
+        { kind: 'down', strokeId: 121, atUs },
+        { kind: 'forward', strokeId: 121, atUs: atUs + 1 },
+        { kind: 'freeRotate', strokeId: 121, atUs: atUs + 20_000, seq: 1, target: 'common', rotation: [0, 1.6, 0] },
+        { kind: 'up', strokeId: 121, atUs: atUs + 40_000, cancelled: false },
+      ]);
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="trick-impact"]')!;
+      const context = canvas.getContext('2d')!;
+      const deadline = performance.now() + 9_000;
+      while (performance.now() < deadline) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        if (canvas.dataset.phase !== 'landing') continue;
+        const score = document.querySelector('[data-testid="landing-trick-score"]');
+        if (!score) continue;
+        const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] > 90 && first.every((channel, j) => Math.abs(data[i + j] - channel) < 5)) {
+            return getComputedStyle(score).color;
+          }
+        }
+      }
+      return null;
+    }, mainRgb);
+    expect(colors, dogId).toBe(`rgb(${partnerRgb.join(', ')})`);
+  }
 });

@@ -1,14 +1,9 @@
+import type { DogEffectColors } from '../content/dog-effects';
 import type { FxTarget } from '../view/trick-fx';
 
 type Point = { x: number; y: number };
 type Air = { target: FxTarget; level: number; combo: number };
 type Landing = { target: FxTarget; level: number; point: Point; at: number };
-
-const PALETTES: Record<FxTarget, readonly [string, string]> = {
-  B: ['#ff631f', '#23d9ff'],
-  D: ['#ff822f', '#ffe367'],
-  H: ['#3674ff', '#9feaff'],
-};
 
 const TAU = 2 * Math.PI;
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -21,7 +16,7 @@ export class TrickImpact {
   private land: Landing | null = null;
   private drawn = false;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(private readonly canvas: HTMLCanvasElement, private readonly colors: DogEffectColors) {
     this.g = canvas.getContext('2d');
   }
 
@@ -52,8 +47,15 @@ export class TrickImpact {
     g.globalAlpha = 1;
   }
 
+  private accents(target: FxTarget): readonly [string, string] {
+    const { main, partner, light, glint } = this.colors;
+    if (target === 'D') return [main, light];
+    if (target === 'H') return [partner, glint];
+    return [main, partner];
+  }
+
   private drawAir(g: CanvasRenderingContext2D, w: number, h: number, pivot: Point, air: Air, alpha: number): void {
-    const [first, second] = PALETTES[air.target];
+    const [first, second] = this.accents(air.target);
     const power = Math.min(1, (air.level + Math.min(3, air.combo)) / 10);
     const unit = Math.min(w, h);
     const x = Math.max(w * 0.2, Math.min(w * 0.8, pivot.x * w));
@@ -71,7 +73,7 @@ export class TrickImpact {
       g.beginPath();
       g.ellipse(x, y, r, r * (0.54 + noise(i + 7) * 0.3), i * 0.78, angle, angle + 1.4 + power * 1.3);
       g.stroke();
-      g.strokeStyle = '#ffffff';
+      g.strokeStyle = this.colors.glint;
       g.lineWidth = 1 + power * 1.9;
       g.stroke();
     }
@@ -82,7 +84,7 @@ export class TrickImpact {
       const outer = power > 0.42 && i % 3 === 0;
       const reach = outer ? Math.hypot(w, h) * 0.62 : unit * (0.21 + power * 0.36);
       const r = lerp(unit * 0.12, reach, t);
-      g.fillStyle = i % 5 === 0 ? '#ffffff' : i % 2 ? first : second;
+      g.fillStyle = i % 5 === 0 ? this.colors.glint : i % 2 ? first : second;
       g.globalAlpha = alpha * Math.sin(Math.PI * t) * (outer ? 0.9 : 0.75);
       this.shard(g, x + Math.cos(angle) * r, y + Math.sin(angle) * r, angle,
         (outer ? 26 : 9) + power * (outer ? 72 : 20), (outer ? 2.4 : 3) + noise(i + 9) * power * 6);
@@ -94,7 +96,7 @@ export class TrickImpact {
     const age = this.time - landing.at;
     const life = 350 + landing.level * 42;
     const t = Math.min(1, age / life);
-    const [first, second] = PALETTES[landing.target];
+    const [first, second] = this.accents(landing.target);
     const x = Math.max(w * 0.15, Math.min(w * 0.85, landing.point.x * w));
     const y = Math.max(h * 0.30, Math.min(h * 0.79, landing.point.y * h));
     const unit = Math.min(w, h);
@@ -114,7 +116,7 @@ export class TrickImpact {
       g.lineWidth = Math.max(2, thickness);
       g.globalAlpha = alpha * fade * (0.83 - i * 0.08);
       g.stroke();
-      g.strokeStyle = '#ffffff';
+      g.strokeStyle = this.colors.glint;
       g.lineWidth = Math.max(1, thickness * 0.25);
       g.stroke();
     }
@@ -124,7 +126,7 @@ export class TrickImpact {
       const r = unit * 0.05 + reach * (0.37 + noise(i + 40) * 0.63) * (1 - (1 - t) ** 3);
       const px = x + Math.cos(angle) * r, py = y + Math.sin(angle) * r * (0.68 + power * 0.3);
       g.globalAlpha = alpha * fade * (0.55 + 0.4 * noise(i));
-      g.fillStyle = i % 4 === 0 ? '#fff' : i % 2 ? first : second;
+      g.fillStyle = i % 4 === 0 ? this.colors.glint : i % 2 ? first : second;
       this.shard(g, px, py, angle, (12 + 49 * power) * (0.5 + noise(i + 4)) * fade, (3 + 9 * power) * noise(i + 8) + 2);
     }
   }

@@ -59,15 +59,13 @@ interface DemoStroke {
   points: readonly PracticePoint[];
   startUs: number;
   durationUs: number;
-  color: string;
 }
 
-const GOLD = '#ffd34f';
 const AIR_STROKE_START_US = 550_000;
 
-function line(a: PracticePoint, b: PracticePoint, startUs: number, durationUs: number, color = GOLD): DemoStroke {
+function line(a: PracticePoint, b: PracticePoint, startUs: number, durationUs: number): DemoStroke {
   const points = Array.from({ length: 17 }, (_, i): PracticePoint => [a[0] + (b[0] - a[0]) * i / 16, a[1] + (b[1] - a[1]) * i / 16]);
-  return { points, startUs, durationUs, color };
+  return { points, startUs, durationUs };
 }
 
 function circle(cx: number, cy: number, r: number): DemoStroke {
@@ -75,7 +73,7 @@ function circle(cx: number, cy: number, r: number): DemoStroke {
     const a = Math.PI / 2 + i * Math.PI / 12;
     return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
   });
-  return { points, startUs: AIR_STROKE_START_US, durationUs: 350_000, color: GOLD };
+  return { points, startUs: AIR_STROKE_START_US, durationUs: 350_000 };
 }
 
 const JUMP_STROKE = line([0.23, 0.18], [0.23, -0.12], 180_000, 340_000);

@@ -73,6 +73,7 @@ test('完走 → 結果: 総合点を大きく、その下にタイム・タイ�
   const celebration = page.getByTestId('result-celebration');
   const stage = Math.min(30, 1 + Math.floor(total * 30 / 10_000));
   await expect(celebration).toHaveAttribute('data-result-stage', String(stage));
+  expect(await celebration.evaluate(element => getComputedStyle(element).getPropertyValue('--effect-main').trim())).toBe('#aa62ff');
   await expect(celebration.locator('.result-ornament')).toHaveCount(stage);
   const title = page.getByTestId('result-title');
   await expect(title).toHaveText(/\S/);
