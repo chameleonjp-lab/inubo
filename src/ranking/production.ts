@@ -1,7 +1,7 @@
 import { BOARD_LIMIT, type BoardQuery, type BoardRow, type FinishPayload, type SendStatus, type StartSnapshot, type Transport } from './client';
 import { FREE_RULES_VERSION } from '../game/rules';
 
-type Endpoint = 'inubo_ranking_start' | 'inubo_ranking_finish' | 'inubo_ranking_board';
+type Endpoint = 'inubo_ranking_start' | 'inubo_ranking_finish' | 'inubo_ranking_board' | 'start_inubo_guest_play_v1';
 
 const networkError = () => new Error('ランキングに接続できませんでした。');
 
@@ -68,6 +68,9 @@ export function createProductionTransport(): Transport | null {
   }
 
   return {
+    async postGuestStart(runId) {
+      return sendStatus(await request('start_inubo_guest_play_v1', { p_run_id: runId }));
+    },
     async postStart(s) {
       return sendStatus(await request('inubo_ranking_start', { ...runFields(s), p_display_name: s.displayName, p_consent: s.consent }));
     },
