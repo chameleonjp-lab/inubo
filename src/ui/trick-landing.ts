@@ -36,7 +36,7 @@ export function showTrickLanding(element: HTMLElement, landing: TrickLandingText
 }
 
 const MAX_TRICK_NAMES = 5;
-const SCROLL_PX_PER_MS = 0.185;
+const SCROLL_PX_PER_MS = 0.3145;
 const TRICK_NAME_GAP = 14;
 
 interface FlyingTrick {

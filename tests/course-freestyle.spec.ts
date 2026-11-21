@@ -262,17 +262,18 @@ test('技名は上半分の5段を右から左へ流れ、6個目で1段目を�
     const startX = first.getBoundingClientRect().left;
     a.currentTime = duration * 0.55;
     const laterX = first.getBoundingClientRect().left;
+    const scrollPxPerMs = (startX - laterX) / (duration * 0.55);
     const inUpperHalf = flow.getBoundingClientRect().bottom <= innerHeight / 2;
     game.handleCues(cues.slice(5));
     game.session.sim.score.jumpPoints = 6_300;
-    return { order, levelsDiffer, background, startX, laterX, inUpperHalf, after: labels().map(el => el.textContent) };
+    return { order, levelsDiffer, background, startX, scrollPxPerMs, inUpperHalf, after: labels().map(el => el.textContent) };
   }, samples);
   expect(observed.order).toEqual(['トリック1', 'トリック2', 'トリック3', 'トリック4', 'トリック5']);
   expect(observed.after).toEqual(['トリック6', 'トリック2', 'トリック3', 'トリック4', 'トリック5']);
   expect(observed.levelsDiffer && observed.inUpperHalf).toBe(true);
   expect(observed.background).toBe('rgba(0, 0, 0, 0)');
   expect(observed.startX).toBeGreaterThan(390);
-  expect(observed.laterX).toBeLessThan(observed.startX);
+  expect(observed.scrollPxPerMs).toBeCloseTo(0.185 * 1.7, 4);
   await expect(page.getByTestId('hud-trick')).toHaveText('技 6,300');
 });
 

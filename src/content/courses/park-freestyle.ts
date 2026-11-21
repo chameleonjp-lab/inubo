@@ -39,7 +39,7 @@ export const parkFreestyle: CourseDef = {
     ? { ...path, next: { ...path.next, options: path.next.options.map(tagRoute) } }
     : path),
   objects: [
-    ...park.objects.filter(object => object.id !== 'k-3').map(object => {
+    ...park.objects.filter(object => object.id !== 'k-3' && object.id !== 'rail-v3-01').map(object => {
       if (object.kind === 'food' && object.path === 'f2-short') return { ...object, x: -0.35 };
       if (object.kind === 'rail') return { ...object, h0: 0.8, h1: 0.8,
         ...(object.id === 'r-long' ? { u0: 446, u1: 472 } : {}) };

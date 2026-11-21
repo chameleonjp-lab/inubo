@@ -65,7 +65,12 @@ test('公園の分岐とカーブに、それぞれ通る意味の違いがあ�
   expect(course.opportunities).toEqual([]);
   expect(course.paths.get('f1-slope')!.solids).toEqual([]);
   expect(course.paths.get('f1-stairs')!.solids.filter(s => s.kind === 'kicker')).toHaveLength(2);
-  expect(course.paths.get('f1-rail')!.rails.some(rail => rail.s1 - rail.s0 > 25)).toBe(true);
+  expect(course.paths.get('f1-rail')!.rails.map(rail => rail.id).sort()).toEqual([
+    'r-stair', 'rail-stair-bridge', 'rail-v3-02',
+  ]);
+  expect(course.solidsById.has('rail-v3-01')).toBe(false);
+  const bridge = course.railsById.get('rail-stair-bridge')!;
+  expect(bridge.s1 - bridge.s0).toBeGreaterThan(25);
   expect(course.paths.get('f2-short')!.items.filter(item => item.kind === 'food' && Math.abs(item.x) < 0.5)).toHaveLength(4);
   expect(course.paths.get('f2-rail')!.solids.some(s => s.kind === 'kicker' && s.height >= 0.9)).toBe(true);
   const start = course.paths.get('start')!;
